@@ -369,48 +369,13 @@ def _extract_isin(url: str) -> str:
     return m.group(1) if m else ""
 
 
-def _fetch_morningstar_url(isin: str) -> str:
-    """Risolve ISIN → URL scheda Morningstar Italia.
-    Usa l'API interna SecuritySearch.ashx (restituisce JSON con SecId).
-    Fallback: search page con ISIN (apre comunque la pagina corretta)."""
-    if not isin:
-        return ""
-    try:
-        r = requests.get(
-            "https://www.morningstar.it/it/util/SecuritySearch.ashx",
-            params={"q": isin, "t": "FO", "limit": "1",
-                    "langId": "it", "currencyId": "EUR"},
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                              "AppleWebKit/537.36 Chrome/120.0.0.0",
-                "Accept": "application/json, text/javascript, */*",
-                "Referer": "https://www.morningstar.it/",
-            },
-            timeout=6)
-        if r.status_code == 200 and r.text.strip().startswith("["):
-            data = r.json()
-            if isinstance(data, list) and data:
-                sec_id = data[0].get("id", "")
-                if sec_id:
-                    return (f"https://www.morningstar.it/it/funds/snapshot/"
-                            f"snapshot.aspx?id={sec_id}")
-    except Exception:
-        pass
-    # Fallback: pagina di ricerca — trova comunque il fondo
-    return (f"https://www.morningstar.it/it/funds/SecuritySearchResults.aspx"
-            f"?search={isin}&SearchType=ALL")
-
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_fund_data(index_url: str) -> dict:
-    """Fetch overview + analysis + Morningstar URL for one fund. Cached 1h."""
+    """Fetch overview + analysis for one fund. Cached 1h."""
     result = {"url": index_url}
     isin = _extract_isin(index_url)
     if isin:
         result["isin"] = isin
-        ms_url = _fetch_morningstar_url(isin)
-        if ms_url:
-            result["ms_url"] = ms_url
     html_idx = _fetch_html(index_url)
     if html_idx: result["overview"] = _parse_overview(html_idx)
     html_ana = _fetch_html(_to_ana_url(index_url))
@@ -801,21 +766,21 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Spacer(1,12))
 
     # ── RISK TABLE ───────────────────────────────────────────
-    risk_keys = ["vol_1y","vol_3y","vol_5y","var_1y","sharpe_3y","sortino_1y"]
+    risk_keys = ["vol_1y","vol_3y","vol_5y","neg_vol_1y","sharpe_3y","sortino_1y"]
     ptf_r = ptf_wavg(risk_keys)
 
     risk_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
-                ["Fondo","Peso","Vol. 1A","Vol. 3A","Vol. 5A","VaR 1A","Sharpe 3A","Sortino 1A"]]
+                ["Fondo","Peso","Vol. 1A","Vol. 3A","Vol. 5A","Vol. Neg. 1A","Sharpe 3A","Sortino 1A"]]
 
     ptf_risk_row = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph("<b>100%</b>", WH),
-        Paragraph(ptf_r.get("vol_1y","N/D"),    WH),
-        Paragraph(ptf_r.get("vol_3y","N/D"),    WH),
-        Paragraph(ptf_r.get("vol_5y","N/D"),    WH),
-        Paragraph(ptf_r.get("var_1y","N/D"),    WH),
-        Paragraph(ptf_r.get("sharpe_3y","N/D"), WH),
-        Paragraph(ptf_r.get("sortino_1y","N/D"),WH),
+        Paragraph(ptf_r.get("vol_1y","N/D"),     WH),
+        Paragraph(ptf_r.get("vol_3y","N/D"),     WH),
+        Paragraph(ptf_r.get("vol_5y","N/D"),     WH),
+        Paragraph(ptf_r.get("neg_vol_1y","N/D"), WH),
+        Paragraph(ptf_r.get("sharpe_3y","N/D"),  WH),
+        Paragraph(ptf_r.get("sortino_1y","N/D"), WH),
     ]
 
     risk_rows = [risk_hdr, ptf_risk_row]
@@ -826,8 +791,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         risk_rows.append([
             Paragraph(row["nome"][:48], SM),
             Paragraph(f"{row[wcol]*100:.1f}%", SM),
-            Paragraph(gv_r("vol_1y"),    SM), Paragraph(gv_r("vol_3y"),    SM), Paragraph(gv_r("vol_5y"),    SM),
-            Paragraph(gv_r("var_1y"),    SM), Paragraph(gv_r("sharpe_3y"), SM), Paragraph(gv_r("sortino_1y"),SM),
+            Paragraph(gv_r("vol_1y"),     SM), Paragraph(gv_r("vol_3y"),     SM), Paragraph(gv_r("vol_5y"),    SM),
+            Paragraph(gv_r("neg_vol_1y"), SM), Paragraph(gv_r("sharpe_3y"),  SM), Paragraph(gv_r("sortino_1y"),SM),
         ])
 
     risk_tbl = Table(risk_rows,
@@ -871,7 +836,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Paragraph("Schede Analitiche dei Fondi", T))
     story.append(Paragraph(
         f"Profilo {profile.title()}  ·  Fonte: FIDA FondiDoc  ·  {datetime.date.today().strftime('%d %B %Y')}", SU))
-    story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=10))
+    story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=6))
+    story.append(Paragraph(
+        '🔍 <link href="https://www.morningstar.it/it/funds/SecuritySearchResults.aspx">'
+        '<u>Motore di ricerca Morningstar</u></link>', LK))
+    story.append(Spacer(1, 10))
 
     for idx, (_, row) in enumerate(d_sorted.iterrows()):
         fd  = (fund_data or {}).get(row["nome"], {})
@@ -892,17 +861,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         isin = fd.get("isin", "") or isin_map.get(row["nome"], "")
         isin_str = f"  ·  ISIN: <b>{isin}</b>" if isin else ""
 
-        # Link Morningstar risolto (URL diretto scheda fondo)
-        ms_url = fd.get("ms_url", "")
-
         hdr_rows = [
             [Paragraph(f"<b>{row['nome']}</b>", FS)],
             [Paragraph(f"Peso: <b>{row[wcol]*100:.1f}%</b>  ·  {row['categoria']}{isin_str}", FK)],
             [Paragraph(meta_extra or "—", FK)],
         ]
-        if ms_url:
-            hdr_rows.append([Paragraph(
-                f'<link href="{ms_url}"><u>↗ Scheda Morningstar</u></link>', LK)])
 
         hdr_tbl = Table(hdr_rows, colWidths=[17*cm])
         hdr_tbl.setStyle(TableStyle([
