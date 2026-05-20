@@ -307,6 +307,72 @@ def read_text_file(fb: bytes, fname: str) -> str:
     return fb.decode("utf-8", errors="ignore")
 
 
+def _parse_schede_alloc(pdf_bytes_list: list, funds_df: pd.DataFrame) -> dict:
+    """
+    Legge i PDF delle schede prodotto e tenta di estrarre l'asset allocation
+    per ogni fondo, riconoscendolo tramite ISIN.
+    Returns: {isin: {"Azionari": float%, "Obbligazionari": float%, ...}}
+    """
+    if not pdf_bytes_list or not _HAS_PYPDF:
+        return {}
+    ISIN_RE  = re.compile(r'\b([A-Z]{2}[A-Z0-9]{10})\b')
+    known    = set(funds_df["isin"].dropna().astype(str).unique())
+    result   = {}
+
+    # Pattern per ogni macro-categoria (ricerca su testo lowercase)
+    CAT_PAT = {
+        "Azionari": [
+            r"azion\w*\s*[\:\-]?\s*([\d]{1,3}(?:[,\.]\d+)?)\s*%",
+            r"equity\s*[\:\-]?\s*([\d]{1,3}(?:[,\.]\d+)?)\s*%",
+            r"([\d]{1,3}(?:[,\.]\d+)?)\s*%\s*(?:azion\w*|equity)",
+        ],
+        "Obbligazionari": [
+            r"obbligazion\w*\s*[\:\-]?\s*([\d]{1,3}(?:[,\.]\d+)?)\s*%",
+            r"(?:bond|reddito\s+fisso|fixed\s+income)\s*[\:\-]?\s*([\d]{1,3}(?:[,\.]\d+)?)\s*%",
+            r"([\d]{1,3}(?:[,\.]\d+)?)\s*%\s*(?:obbligazion\w*|bond)",
+        ],
+        "Monetari": [
+            r"monetar\w*\s*[\:\-]?\s*([\d]{1,3}(?:[,\.]\d+)?)\s*%",
+            r"(?:liquidit[àa]|money\s+market)\s*[\:\-]?\s*([\d]{1,3}(?:[,\.]\d+)?)\s*%",
+        ],
+        "Alternativi": [
+            r"alternativ\w*\s*[\:\-]?\s*([\d]{1,3}(?:[,\.]\d+)?)\s*%",
+            r"commodity\s*[\:\-]?\s*([\d]{1,3}(?:[,\.]\d+)?)\s*%",
+        ],
+    }
+
+    for fb in pdf_bytes_list:
+        text = _extract_text_from_pdf(fb)
+        if not text:
+            continue
+        # Trova ISIN noti in questo PDF
+        found = [i for i in ISIN_RE.findall(text) if i in known]
+        if not found:
+            continue
+        isin = found[0]  # Usa il primo ISIN noto trovato
+        t    = text.lower()
+        alloc = {}
+        for cat, patterns in CAT_PAT.items():
+            for pat in patterns:
+                m = re.search(pat, t)
+                if m:
+                    try:
+                        v = float(m.group(1).replace(",", "."))
+                        if 0 < v <= 100:
+                            alloc[cat] = v
+                            break
+                    except Exception:
+                        pass
+        if alloc:
+            # Normalizza se la somma supera 100
+            tot = sum(alloc.values())
+            if tot > 102:
+                alloc = {k: round(v * 100 / tot, 1) for k, v in alloc.items()}
+            result[isin] = alloc
+
+    return result
+
+
 # ════════════════════════════════════════════════════════════
 # DATA FETCHERS — Morningstar + FondiDoc
 # ════════════════════════════════════════════════════════════
@@ -503,11 +569,19 @@ def _score_funds(funds_df, signals, mifid_df=None):
     return df.sort_values("_score", ascending=False).reset_index(drop=True)
 
 
-def construct_portfolios(funds_df, market_text, mifid_df=None, api_key=""):
+def construct_portfolios(funds_df, market_text, mifid_df=None, api_key="", libero_override=None):
     if api_key and _HAS_ANTHROPIC:
-        try: return _construct_ai(funds_df, market_text, mifid_df, api_key)
-        except Exception as e: st.warning(f"AI fallita ({e}) — uso rules-based.")
-    return _construct_rules(funds_df, market_text, mifid_df)
+        try:
+            result = _construct_ai(funds_df, market_text, mifid_df, api_key)
+        except Exception as e:
+            st.warning(f"AI fallita ({e}) — uso rules-based.")
+            result = _construct_rules(funds_df, market_text, mifid_df)
+    else:
+        result = _construct_rules(funds_df, market_text, mifid_df)
+    # Sovrascrive il Portafoglio Libero con la selezione manuale dell'utente
+    if libero_override and libero_override.get("funds"):
+        result["libero"] = libero_override
+    return result
 
 
 def _construct_rules(funds_df, market_text, mifid_df=None):
@@ -607,19 +681,29 @@ def _construct_ai(funds_df, market_text, mifid_df, api_key):
 # METRICS
 # ════════════════════════════════════════════════════════════
 
-def calc_metrics(ptf_funds: list, fund_data: dict) -> dict:
+def calc_metrics(ptf_funds: list, fund_data: dict, schede_alloc: dict = None) -> dict:
     keys = ["ytd","perf_1y","perf_3y","perf_5y","vol_1y","vol_3y","var_1y","sharpe_3y","neg_vol_1y","sortino_1y"]
     tot = {k:0.0 for k in keys}; wt = {k:0.0 for k in keys}; macro_alloc = {}
     for f in ptf_funds:
-        w = f["peso"]/100.0
-        ana = fund_data.get(f["nome"],{}).get("fondidoc",{}).get("analysis",{})
+        w    = f["peso"] / 100.0
+        nome = f["nome"]
+        isin = f.get("isin","")
+        ana  = fund_data.get(nome,{}).get("fondidoc",{}).get("analysis",{})
         for k in keys:
             try:
                 num = float(str(ana.get(k,"")).replace("%","").replace(",",".").strip())
-                tot[k]+=num*w; wt[k]+=w
+                tot[k] += num*w; wt[k] += w
             except: pass
-        mc = f.get("macro_cat","Altro")
-        macro_alloc[mc] = macro_alloc.get(mc,0.0)+f["peso"]
+        # Asset allocation: usa scheda prodotto se disponibile, altrimenti macro_cat
+        if schede_alloc and isin and isin in schede_alloc:
+            for cat, pct in schede_alloc[isin].items():
+                macro_alloc[cat] = macro_alloc.get(cat, 0.0) + f["peso"] * pct / 100.0
+            allocated = sum(schede_alloc[isin].values())
+            if allocated < 98:  # Se non copre 100%, il resto va ad "Altro"
+                macro_alloc["Altro"] = macro_alloc.get("Altro", 0.0) + f["peso"] * (100 - allocated) / 100.0
+        else:
+            mc = f.get("macro_cat","Altro")
+            macro_alloc[mc] = macro_alloc.get(mc, 0.0) + f["peso"]
     result = {k: (f"{tot[k]/wt[k]:+.2f}%" if wt[k]>0.01 else "N/D") for k in keys}
     result["macro_alloc"] = macro_alloc
     return result
@@ -691,7 +775,7 @@ def _pie_macro(macro_alloc):
 # PDF GENERATOR
 # ════════════════════════════════════════════════════════════
 
-def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None):
+def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None, schede_alloc=None):
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=2*cm, rightMargin=2*cm,
@@ -774,7 +858,7 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None)
         ptf = portfolios.get(ptf_key,{})
         if not ptf or not ptf.get("funds"): continue
         funds_list = ptf["funds"]; rationale = ptf.get("rationale","")
-        metrics = calc_metrics(funds_list, fund_data)
+        metrics = calc_metrics(funds_list, fund_data, schede_alloc)
 
         story += [accent(), Spacer(1,14),
                   Paragraph("AZIMUT INVESTMENTS  ·  PORTFOLIO BUILDER", EY), Spacer(1,4),
@@ -1076,21 +1160,94 @@ def main():
             mc_df.columns = ["Categoria","Fondi"]
             st.dataframe(mc_df, height=320, use_container_width=True, hide_index=True)
 
+    # ── CONFIGURA PORTAFOGLIO LIBERO ────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown('<p class="sec-title">⚙️ Portafoglio Libero — selezione e pesi</p>', unsafe_allow_html=True)
+
+    # Calcola top-25 di default per la selezione iniziale
+    _sig_def   = _market_signals(market_text)
+    _scored_def = _score_funds(funds_df, _sig_def, mifid_df if not mifid_df.empty else None)
+    _default25  = _scored_def.head(25)["nome"].tolist()
+    all_nomi    = funds_df["nome"].tolist()
+
+    # Inizializza session state
+    if "libero_sel" not in st.session_state:
+        st.session_state["libero_sel"] = _default25
+    if "libero_w_df" not in st.session_state:
+        st.session_state["libero_w_df"] = None
+
+    with st.expander("Seleziona fondi e imposta i pesi per il Portafoglio Libero", expanded=True):
+        sel = st.multiselect(
+            "Cerca e seleziona fondi dall'universo:",
+            options=all_nomi,
+            default=[n for n in st.session_state["libero_sel"] if n in all_nomi],
+            key="libero_ms",
+            help="Puoi cercare per nome. La selezione default è il top-25 per score rispetto al contesto mercati."
+        )
+        st.session_state["libero_sel"] = sel
+
+        if sel:
+            n_sel = len(sel)
+            # Ricostruisci il DataFrame pesi se la selezione è cambiata
+            prev_df = st.session_state.get("libero_w_df")
+            if prev_df is None or set(prev_df["Fondo"].tolist()) != set(sel):
+                eq_w = round(100.0 / n_sel, 2)
+                # Mantieni pesi esistenti dove possibile
+                prev_map = dict(zip(prev_df["Fondo"], prev_df["Peso (%)"])) if prev_df is not None else {}
+                rows = [{"Fondo": n, "Peso (%)": prev_map.get(n, eq_w)} for n in sel]
+                st.session_state["libero_w_df"] = pd.DataFrame(rows)
+
+            edited = st.data_editor(
+                st.session_state["libero_w_df"],
+                key="libero_de",
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Fondo":    st.column_config.TextColumn("Fondo", disabled=True, width="large"),
+                    "Peso (%)": st.column_config.NumberColumn(
+                        "Peso (%)", min_value=0.0, max_value=100.0, step=0.5, format="%.1f"),
+                }
+            )
+            st.session_state["libero_w_df"] = edited
+
+            total_w = float(edited["Peso (%)"].sum())
+            ca, cb, cc = st.columns([1, 1, 3])
+            diff = total_w - 100.0
+            ca.metric("Totale pesi", f"{total_w:.1f}%",
+                      delta=f"{diff:+.1f}%" if abs(diff) > 0.1 else None,
+                      delta_color="inverse")
+            if abs(diff) > 0.5:
+                cb.warning("⚠️ Non somma 100%")
+            else:
+                cb.success("✅ Pesi OK")
+            if cc.button("⚖️  Normalizza a 100%", key="btn_norm_lib"):
+                if total_w > 0:
+                    norm = edited.copy()
+                    norm["Peso (%)"] = (norm["Peso (%)"] / total_w * 100).round(2)
+                    st.session_state["libero_w_df"] = norm
+                    st.rerun()
+        else:
+            st.info("Seleziona almeno un fondo per configurare il Portafoglio Libero.")
+
+    # ── GENERA ──────────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown('<p class="sec-title">Generazione Portafogli</p>', unsafe_allow_html=True)
 
-    btn_col, info_col = st.columns([1,2])
+    btn_col, info_col = st.columns([1, 2])
     with info_col:
         engine = "AI (Claude)" if (api_key and _HAS_ANTHROPIC) else "Rules-based"
-        n_sch = len(fund_sheets)
+        n_sch  = len(fund_sheets)
+        n_lib  = len(st.session_state.get("libero_sel") or [])
+        has_alloc = n_sch > 0
         st.markdown(f"""<div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:1rem 1.25rem;'>
           <div style='font-size:.8rem;color:#1d4ed8;font-weight:600;margin-bottom:.4rem;'>Il report PDF include:</div>
           <div style='font-size:.82rem;color:#1e40af;line-height:1.9;'>
             ✓ Copertina con contesto di mercato<br>
-            ✓ <b>Portafoglio Articolato</b> — diversificato, grafici + metriche<br>
-            ✓ <b>Portafoglio Short</b> — alta convinzione, 4-6 fondi<br>
-            ✓ <b>Portafoglio Libero</b> — top 25 fondi per score<br>
-            ✓ Schede analitiche (FondiDoc + Morningstar + classificazioni)<br>
+            ✓ <b>Portafoglio Articolato</b> — 12 fondi diversificati + metriche<br>
+            ✓ <b>Portafoglio Short</b> — 6 fondi alta convinzione<br>
+            ✓ <b>Portafoglio Libero</b> — {n_lib} fondi selezionati manualmente<br>
+            ✓ Schede analitiche (FondiDoc + Morningstar)<br>
+            {'✓ <b>Asset allocation da schede prodotto (' + str(n_sch) + ' PDF)</b>' if has_alloc else '○ Asset allocation da macro-categoria (nessuna scheda caricata)'}<br>
             {'✓ <b>Allegati: ' + str(n_sch) + ' schede prodotto PDF</b>' if n_sch else ''}<br>
             <span style='color:#3b82f6;'>⚙️ Motore: <b>{engine}</b></span>
           </div></div>""", unsafe_allow_html=True)
@@ -1098,11 +1255,36 @@ def main():
     with btn_col:
         if st.button("🚀  Genera Portafogli + PDF", use_container_width=True, type="primary"):
 
-            # 1. Costruisci portafogli (solo scoring, nessuna HTTP)
-            with st.spinner("🧠 Costruzione portafogli…"):
-                portfolios = construct_portfolios(funds_df, market_text, mifid_df, api_key)
+            # 1. Costruisci override Portafoglio Libero dalla selezione manuale
+            libero_override = None
+            w_df = st.session_state.get("libero_w_df")
+            if w_df is not None and not w_df.empty:
+                lib_funds = []
+                for _, rw in w_df.iterrows():
+                    nome = rw["Fondo"]; peso = float(rw["Peso (%)"])
+                    if peso <= 0: continue
+                    fd_r = funds_df[funds_df["nome"] == nome]
+                    if fd_r.empty: continue
+                    r = fd_r.iloc[0]
+                    lib_funds.append({"nome": nome, "isin": r.get("isin",""),
+                                      "macro_cat": r.get("macro_cat","Altro"),
+                                      "color": r.get("color","#94A3B8"), "peso": peso})
+                if lib_funds:
+                    tot_w = sum(f["peso"] for f in lib_funds)
+                    if tot_w > 0:
+                        lib_funds = [{**f, "peso": round(f["peso"]*100/tot_w, 2)} for f in lib_funds]
+                    libero_override = {
+                        "funds": lib_funds,
+                        "rationale": (f"Portafoglio Libero: {len(lib_funds)} fondi selezionati manualmente "
+                                      f"con pesi personalizzati.")
+                    }
 
-            # 2. Raccogli i fondi unici nei portafogli
+            # 2. Costruisci portafogli (scoring + libero override)
+            with st.spinner("🧠 Costruzione portafogli…"):
+                portfolios = construct_portfolios(funds_df, market_text, mifid_df,
+                                                  api_key, libero_override)
+
+            # 3. Raccogli fondi unici nei portafogli
             ptf_nomi = set()
             for pk in ["articolato","short","libero"]:
                 for f in portfolios.get(pk,{}).get("funds",[]):
@@ -1110,15 +1292,25 @@ def main():
             ptf_df = funds_df[funds_df["nome"].isin(ptf_nomi)].reset_index(drop=True)
             n_fetch = len(ptf_df)
 
-            # 3. Scarica dati solo per i fondi selezionati
-            prog = st.progress(0, text=f"Recupero dati per {n_fetch} fondi selezionati…")
+            # 4. Scarica dati FondiDoc/Morningstar solo per i fondi selezionati
+            prog = st.progress(0, text=f"Recupero dati per {n_fetch} fondi…")
             fund_data = fetch_all(ptf_df, lambda v: prog.progress(v, text=f"Fetch {int(v*100)}%…"))
             prog.progress(1.0, text=f"✅ Dati recuperati ({n_fetch} fondi)")
 
+            # 5. Leggi schede prodotto per asset allocation granulare
+            schede_alloc = {}
+            if fund_sheets:
+                with st.spinner(f"📄 Lettura {len(fund_sheets)} schede prodotto per asset allocation…"):
+                    schede_alloc = _parse_schede_alloc(fund_sheets, ptf_df)
+                if schede_alloc:
+                    st.success(f"✅ Asset allocation estratta da {len(schede_alloc)} schede prodotto")
+                else:
+                    st.info("ℹ️ Nessun dato di asset allocation trovato nelle schede PDF — uso macro-categoria")
+
             with st.spinner("📄 Generazione PDF…"):
                 try:
-                    # Passa ptf_df (fondi selezionati) invece di funds_df
-                    pdf_bytes = generate_pdf(portfolios, ptf_df, fund_data, market_text, fund_sheets)
+                    pdf_bytes = generate_pdf(portfolios, ptf_df, fund_data, market_text,
+                                             fund_sheets, schede_alloc)
                     prog.empty()
 
                     # Anteprima
@@ -1127,23 +1319,27 @@ def main():
                     tabs = st.tabs(["📊 Articolato","⚡ Short","🎨 Libero"])
                     for tab, pk in zip(tabs, ["articolato","short","libero"]):
                         with tab:
-                            ptf = portfolios.get(pk,{});
+                            ptf = portfolios.get(pk, {})
                             if not ptf or not ptf.get("funds"): st.info("Nessun dato."); continue
                             if ptf.get("rationale"): st.info(ptf["rationale"])
-                            m = calc_metrics(ptf["funds"], fund_data)
+                            m = calc_metrics(ptf["funds"], fund_data, schede_alloc)
                             mc2 = st.columns(6)
                             for col2,(k2,lb) in zip(mc2,[("ytd","YTD"),("perf_1y","1A"),("perf_3y","3A"),
                                                           ("perf_5y","5A"),("var_1y","VaR 1A"),("sharpe_3y","Sharpe 3A")]):
                                 col2.metric(lb, m.get(k2,"N/D"))
-                            st.dataframe(pd.DataFrame(ptf["funds"])[["nome","macro_cat","peso"]].rename(
-                                columns={"nome":"Fondo","macro_cat":"Categoria","peso":"Peso %"}),
+                            disp_cols = [c for c in ["nome","isin","macro_cat","peso"] if c in pd.DataFrame(ptf["funds"]).columns]
+                            st.dataframe(
+                                pd.DataFrame(ptf["funds"])[disp_cols].rename(
+                                    columns={"nome":"Fondo","isin":"ISIN","macro_cat":"Categoria","peso":"Peso %"}),
                                 hide_index=True, use_container_width=True)
 
                     st.markdown("---")
                     st.download_button("📥   Scarica Report PDF Completo", data=pdf_bytes,
                                        file_name=f"Azimut_Builder_{datetime.date.today().strftime('%Y%m%d')}.pdf",
                                        mime="application/pdf", use_container_width=True)
-                    st.success(f"✅ PDF pronto — {n_f} fondi, 3 portafogli{', ' + str(len(fund_sheets)) + ' allegati' if fund_sheets else ''}")
+                    st.success(f"✅ PDF pronto — {n_fetch} fondi selezionati, 3 portafogli"
+                               f"{', asset alloc da schede' if schede_alloc else ''}"
+                               f"{', ' + str(len(fund_sheets)) + ' allegati' if fund_sheets else ''}")
                 except Exception as e:
                     import traceback
                     st.error(f"Errore PDF: {e}")
