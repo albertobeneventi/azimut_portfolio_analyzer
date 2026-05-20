@@ -624,9 +624,9 @@ def _extract_market_view(text: str) -> dict:
     ]
     themes = [lbl for keys, lbl in THEMES if any(k in vt for k in keys)]
 
-    # ── sommario: prime frasi significative del documento ────
-    lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 50]
-    summary = " ".join(lines[:3])[:500]
+    # ── sommario: prime frasi significative della sezione view ─
+    sum_lines = [l.strip() for l in view_text.split("\n") if len(l.strip()) > 40]
+    summary = " ".join(sum_lines[:6])[:1800]
 
     return {
         "signals":     {"eq": eq_score, "bd": bd_score, "regions": regions, "risk": risk},
@@ -921,7 +921,15 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
             sign = "+" if n>0 else ""
             return Paragraph(f'<font color="{c}"><b>{sign}{n:.1f}%</b></font>', SM)
         except: return Paragraph(str(val) if val else "—", SM)
-    def txt(v): return Paragraph(str(v) if v else "—", SM)
+    def txt(v):
+        s = str(v) if v else ""
+        if not s or s in ("—","nan","None","N/D"):
+            return Paragraph(f'<font color="{LGT}">—</font>', SM)
+        return Paragraph(s, SM)
+    def kv(v):  # KPI value: mostra n.d. più discreto se mancante
+        if not v or v in ("N/D","—","nan","None"):
+            return f'<font color="{LGT}" size="9">n.d.</font>'
+        return f'<font size="13"><b>{v}</b></font>'
 
     # ════════════════════════════════════════════════════════
     # PAG 1 — COPERTINA
@@ -973,10 +981,25 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
     story += [ptf_sum, Spacer(1,10)]
 
     if market_text and market_text.strip():
-        story += [Paragraph("Sintesi del Contesto di Mercato", T2),
-                  Paragraph((market_view or {}).get("summary","") or
-                             market_text.strip()[:500].replace("\n"," "), IT),
-                  Spacer(1,6)]
+        story += [Paragraph("Contesto di Mercato", T2), Spacer(1,4)]
+        # Trova la sezione contest view (o usa tutto il testo)
+        _mt = market_text.strip()
+        _sec = _mt
+        for _mk in ["contest view","market view","view di mercato","posizionamento tattico",
+                    "posizionamento","asset allocation view","investment view"]:
+            _ix = _mt.lower().find(_mk)
+            if _ix >= 0:
+                _sec = _mt[_ix:_ix+2400].strip()
+                break
+        else:
+            _sec = _mt[:2400]
+        # Formatta in paragrafi leggibili
+        _paras = [p.strip() for p in re.split(r'\n{1,}', _sec) if len(p.strip()) > 12]
+        for _p in _paras[:12]:
+            story.append(Paragraph(
+                _p[:350].replace("&","&amp;").replace("<","&lt;").replace(">","&gt;"), IT))
+            story.append(Spacer(1,3))
+        story.append(Spacer(1,6))
 
     if advisor_note and advisor_note.strip():
         note_style = S("g_note_box", fontName="Helvetica", fontSize=8,
@@ -1000,99 +1023,123 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
     story.append(PageBreak())
 
     # ════════════════════════════════════════════════════════
-    # PAG 2 — QUADRO DI MERCATO (solo se market_view disponibile)
+    # PAG 2 — QUADRO DI MERCATO (sempre se c'è testo mercato)
     # ════════════════════════════════════════════════════════
     mv = market_view or {}
-    if mv.get("asset_views") or mv.get("themes"):
+    if market_text and market_text.strip():
         story += [
             accent_bar(), Spacer(1,8),
             Paragraph("AZIMUT INVESTMENTS  ·  PORTFOLIO BUILDER", EY), Spacer(1,3),
             Paragraph("Quadro di Mercato", T1),
-            Paragraph(f"Estratto dal documento di contesto  ·  {datetime.date.today().strftime('%d %B %Y')}", SU),
+            Paragraph(f"Analisi del documento di contesto  ·  {datetime.date.today().strftime('%d %B %Y')}", SU),
             color_bar("#C9A84C"), Spacer(1,10),
         ]
 
-        # Tabella posizionamento asset class + temi chiave affiancati
-        left_parts = []
+        from reportlab.platypus import KeepInFrame
+        left_parts  = []
         right_parts = []
 
+        # ── COLONNA SINISTRA: testo completo del documento ──────
+        # Trova e mostra la sezione "contest view" (o tutto il testo)
+        _full = market_text.strip()
+        _mv_sec = _full
+        for _mk2 in ["contest view","market view","view di mercato","posizionamento tattico",
+                     "posizionamento","asset allocation view","investment view"]:
+            _ix2 = _full.lower().find(_mk2)
+            if _ix2 >= 0:
+                _mv_sec = _full[_ix2:_ix2+4500].strip()
+                break
+        else:
+            _mv_sec = _full[:4500]
+
+        left_parts.append(Paragraph("<b>Documento di Contesto</b>", T2))
+        left_parts.append(Spacer(1,6))
+        _paras2 = [p.strip() for p in re.split(r'\n{1,}', _mv_sec) if len(p.strip()) > 12]
+        for _p2 in _paras2[:20]:
+            left_parts.append(Paragraph(
+                _p2[:400].replace("&","&amp;").replace("<","&lt;").replace(">","&gt;"), SM))
+            left_parts.append(Spacer(1,4))
+
+        # ── COLONNA DESTRA: analisi strutturata ──────────────────
+        # Posizionamento asset class
         if mv.get("asset_views"):
+            right_parts.append(Paragraph("<b>Posizionamento Asset Class</b>", T2))
+            right_parts.append(Spacer(1,4))
             ac_hdr = [Paragraph("<b>Asset Class</b>",HDR),
-                      Paragraph("<b>Posizionamento</b>",HDR),
-                      Paragraph("<b>Segnale</b>",HDR)]
+                      Paragraph("<b>Vista</b>",HDR),
+                      Paragraph("<b>Forza</b>",HDR)]
             ac_rows = [ac_hdr]
             for av in mv["asset_views"]:
-                strength = av.get("pos",0) + av.get("neg",0)
-                dots = min(strength, 5)
-                sig = "●"*dots + "○"*(5-dots)
+                dots = min(av.get("pos",0) + av.get("neg",0), 5)
+                sig  = "●"*dots + "○"*(5-dots)
                 ac_rows.append([
                     Paragraph(av["asset"], SM),
                     Paragraph(f'<font color="{av["color"]}"><b>{av["view"]}</b></font>', SM),
                     Paragraph(f'<font color="{av["color"]}">{sig}</font>', SM),
                 ])
-            ac_tbl = Table(ac_rows, colWidths=[3.5*cm, 3.5*cm, 2.2*cm])
+            ac_tbl = Table(ac_rows, colWidths=[2.8*cm, 3.0*cm, 1.6*cm])
             ac_tbl.setStyle(TableStyle([
                 ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor(NAV)),
                 ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
-                ("FONTSIZE",(0,0),(-1,-1),7.5),("PADDING",(0,0),(-1,-1),5),
+                ("FONTSIZE",(0,0),(-1,-1),7),("PADDING",(0,0),(-1,-1),4),
                 ("LINEBELOW",(0,0),(-1,-1),0.4,rl_colors.HexColor("#E2E8F0")),
                 ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
             ]))
-            left_parts.append(Paragraph("<b>Posizionamento per Asset Class</b>", T2))
-            left_parts.append(Spacer(1,4))
-            left_parts.append(ac_tbl)
+            right_parts.append(ac_tbl)
+            right_parts.append(Spacer(1,10))
 
-        if mv.get("geo_views"):
-            left_parts.append(Spacer(1,10))
-            left_parts.append(Paragraph("<b>Regioni preferite</b>", T2))
-            left_parts.append(Spacer(1,4))
-            geo_rows = [[Paragraph("<b>Regione</b>",HDR), Paragraph("<b>Menzioni</b>",HDR)]]
-            for gv_item in mv["geo_views"][:6]:
-                geo_rows.append([
-                    Paragraph(gv_item["region"], SM),
-                    Paragraph("●" * min(gv_item["cnt"],5), SM),
-                ])
-            geo_tbl = Table(geo_rows, colWidths=[4*cm, 5.2*cm])
-            geo_tbl.setStyle(TableStyle([
-                ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor(NAV)),
-                ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
-                ("FONTSIZE",(0,0),(-1,-1),7.5),("PADDING",(0,0),(-1,-1),5),
-                ("LINEBELOW",(0,0),(-1,-1),0.4,rl_colors.HexColor("#E2E8F0")),
-            ]))
-            left_parts.append(geo_tbl)
-
-        # Colonna destra: propensione rischio + temi
-        risk_lbl   = {"low":"Risk-Off / Difensivo","high":"Risk-On / Aggressivo","neutral":"Bilanciato / Neutrale"}
-        risk_col   = {"low":"#C0392B","high":"#1A7A4A","neutral":"#475569"}
-        risk_val   = mv.get("risk","neutral")
+        # Propensione rischio
+        risk_lbl = {"low":"Risk-Off / Difensivo","high":"Risk-On / Aggressivo","neutral":"Bilanciato / Neutrale"}
+        risk_col = {"low":"#C0392B","high":"#1A7A4A","neutral":"#475569"}
+        risk_val = mv.get("risk","neutral")
         right_parts.append(Paragraph("<b>Propensione al Rischio</b>", T2))
         right_parts.append(Spacer(1,4))
         risk_box = Table([[Paragraph(
-            f'<font color="{risk_col[risk_val]}" size="14"><b>{risk_lbl[risk_val]}</b></font>', BD)]],
-            colWidths=[7.5*cm])
+            f'<font color="{risk_col[risk_val]}" size="11"><b>{risk_lbl[risk_val]}</b></font>', BD)]],
+            colWidths=[7.2*cm])
         risk_box.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F8FAFC")),
-            ("BOX",(0,0),(-1,-1),1.5,rl_colors.HexColor(risk_col[risk_val])),
-            ("PADDING",(0,0),(-1,-1),10),("ALIGN",(0,0),(-1,-1),"CENTER"),
+            ("BOX",(0,0),(-1,-1),2,rl_colors.HexColor(risk_col[risk_val])),
+            ("PADDING",(0,0),(-1,-1),9),("ALIGN",(0,0),(-1,-1),"CENTER"),
         ]))
-        right_parts.append(risk_box)
+        right_parts += [risk_box, Spacer(1,10)]
 
+        # Temi identificati
         if mv.get("themes"):
-            right_parts.append(Spacer(1,10))
-            right_parts.append(Paragraph("<b>Temi Chiave Identificati</b>", T2))
+            right_parts.append(Paragraph("<b>Temi Chiave</b>", T2))
             right_parts.append(Spacer(1,4))
             for th in mv["themes"]:
                 right_parts.append(Paragraph(f"▸  {th}", SM))
                 right_parts.append(Spacer(1,3))
+            right_parts.append(Spacer(1,8))
 
-        # Layout a due colonne
-        from reportlab.platypus import KeepInFrame
-        left_frame  = KeepInFrame(9*cm, 22*cm, left_parts,  mode="shrink")
-        right_frame = KeepInFrame(7.5*cm, 22*cm, right_parts, mode="shrink")
-        two_col = Table([[left_frame, right_frame]], colWidths=[9.4*cm, 8*cm])
+        # Aree geografiche
+        if mv.get("geo_views"):
+            right_parts.append(Paragraph("<b>Regioni citate</b>", T2))
+            right_parts.append(Spacer(1,4))
+            geo_rows = [[Paragraph("<b>Regione</b>",HDR), Paragraph("<b>Rilevanza</b>",HDR)]]
+            for gv_item in mv["geo_views"][:6]:
+                geo_rows.append([
+                    Paragraph(gv_item["region"], SM),
+                    Paragraph("●" * min(gv_item["cnt"],5) + "○"*(5-min(gv_item["cnt"],5)), SM),
+                ])
+            geo_tbl = Table(geo_rows, colWidths=[3*cm, 4.2*cm])
+            geo_tbl.setStyle(TableStyle([
+                ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor(NAV)),
+                ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
+                ("FONTSIZE",(0,0),(-1,-1),7),("PADDING",(0,0),(-1,-1),4),
+                ("LINEBELOW",(0,0),(-1,-1),0.4,rl_colors.HexColor("#E2E8F0")),
+            ]))
+            right_parts.append(geo_tbl)
+
+        # Layout a due colonne (sinistra più larga per il testo)
+        left_frame  = KeepInFrame(9.8*cm, 24*cm, left_parts,  mode="shrink")
+        right_frame = KeepInFrame(7.2*cm, 24*cm, right_parts, mode="shrink")
+        two_col = Table([[left_frame, right_frame]], colWidths=[10.0*cm, 7.4*cm])
         two_col.setStyle(TableStyle([
             ("VALIGN",(0,0),(-1,-1),"TOP"),
-            ("LEFTPADDING",(1,0),(1,0),14),
+            ("LEFTPADDING",(1,0),(1,0),12),
+            ("LINEAFTER",(0,0),(0,-1),0.5,rl_colors.HexColor("#E2E8F0")),
         ]))
         story.append(two_col)
         story.append(PageBreak())
@@ -1135,13 +1182,12 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
             story += [rat, Spacer(1,7)]
 
         # Strip KPI
-        mk = Table([[kpi_cell(metrics.get("ytd","N/D"),"YTD"),
-                     kpi_cell(metrics.get("perf_1y","N/D"),"1 Anno"),
-                     kpi_cell(metrics.get("perf_3y","N/D"),"3 Anni"),
-                     kpi_cell(metrics.get("perf_5y","N/D"),"5 Anni"),
-                     kpi_cell(metrics.get("var_1y","N/D"),"VaR 1A"),
-                     kpi_cell(metrics.get("sharpe_3y","N/D"),"Sharpe 3A"),
-                     kpi_cell(metrics.get("neg_vol_1y","N/D"),"Vol.Neg. 1A")]],
+        def _kpi(k, lbl):
+            v = metrics.get(k,"")
+            return Paragraph(f'{kv(v)}<br/><font size="7" color="{MED}">{lbl}</font>', BD)
+        mk = Table([[_kpi("ytd","YTD"), _kpi("perf_1y","1 Anno"), _kpi("perf_3y","3 Anni"),
+                     _kpi("perf_5y","5 Anni"), _kpi("var_1y","VaR 1A"),
+                     _kpi("sharpe_3y","Sharpe 3A"), _kpi("neg_vol_1y","Vol.Neg. 1A")]],
                    colWidths=[W/7]*7)
         mk.setStyle(TableStyle([
             ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
