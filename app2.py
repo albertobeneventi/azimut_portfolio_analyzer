@@ -514,34 +514,56 @@ def _construct_rules(funds_df, market_text, mifid_df=None):
     signals = _market_signals(market_text)
     scored  = _score_funds(funds_df, signals, mifid_df)
 
-    def _fund_entry(r):
+    def _fe(r):
         return {"nome":r["nome"],"isin":r.get("isin",""),
                 "macro_cat":r.get("macro_cat","Altro"),"color":r.get("color","#94A3B8")}
 
-    # Articolato: max 12 fondi, diversificato per categoria
-    cats = scored["macro_cat"].unique(); art = []
-    per_cat = max(2, 12 // max(len(cats),1))
+    # ── Articolato: 12 fondi, bilanciati per macro-categoria ──
+    cats = [c for c in scored["macro_cat"].unique() if c != "Altro"]
+    if "Altro" in scored["macro_cat"].values: cats.append("Altro")
+    art = []; seen_art = set()
+    per_cat = max(1, 12 // max(len(cats), 1))
+    # Prima passa: prendi i migliori per categoria
     for cat in cats:
-        for _,r in scored[scored["macro_cat"]==cat].head(per_cat).iterrows():
+        for _, r in scored[scored["macro_cat"] == cat].head(per_cat).iterrows():
             if len(art) >= 12: break
-            art.append({**_fund_entry(r),"peso":round(100/min(12,len(scored)),1)})
-    art = _norm_w(art[:12])
+            if r["nome"] not in seen_art:
+                art.append({**_fe(r), "peso": 1.0}); seen_art.add(r["nome"])
+    # Seconda passa: riempi fino a 12 con i migliori rimasti
+    for _, r in scored.iterrows():
+        if len(art) >= 12: break
+        if r["nome"] not in seen_art:
+            art.append({**_fe(r), "peso": 1.0}); seen_art.add(r["nome"])
+    art = _norm_w(art)
 
-    # Short: top 5 per score
-    short = [_norm_w([{**_fund_entry(r),"peso":20.0} for _,r in scored.head(5).iterrows()])]
-    short = _norm_w([{**_fund_entry(r),"peso":20.0} for _,r in scored.head(5).iterrows()])
+    # ── Short: top 6 per score ────────────────────────────────
+    short = _norm_w([{**_fe(r), "peso": 1.0} for _, r in scored.head(6).iterrows()])
 
-    # Libero: tutti, pesi uguali
-    n = len(funds_df)
-    libero = _norm_w([{**_fund_entry(r),"peso":round(100/max(n,1),1)} for _,r in scored.iterrows()])
+    # ── Libero: top 25 per score, pesi uguali ─────────────────
+    # (non tutti i fondi: sarebbe inutile e il PDF esploderebbe)
+    MAX_LIBERO = 25
+    libero = _norm_w([{**_fe(r), "peso": 1.0} for _, r in scored.head(MAX_LIBERO).iterrows()])
 
-    eq_label = ("Sovrappeso azionario" if signals["eq"]>0
-                else "Sovrappeso obbligazionario" if signals["bd"]>0 else "Allocazione bilanciata")
+    eq_label = ("Sovrappeso azionario" if signals["eq"] > 0
+                else "Sovrappeso obbligazionario" if signals["bd"] > 0 else "Allocazione bilanciata")
+    univ = len(funds_df)
     return {
-        "articolato": {"funds":art,   "rationale":f"Portafoglio su {len(art)} fondi. {eq_label}. "
-                        f"Regioni preferite: {', '.join(signals['regions']) or 'globale'}."},
-        "short":      {"funds":short, "rationale":f"Alta convinzione: {len(short)} fondi più allineati alla view di mercato."},
-        "libero":     {"funds":libero,"rationale":f"Tutti i {len(libero)} fondi dell'universo a pesi uguali — personalizzare."},
+        "articolato": {
+            "funds": art,
+            "rationale": (f"Portafoglio diversificato su {len(art)} fondi — {eq_label}. "
+                          f"Regioni preferite: {', '.join(signals['regions']) or 'globale'}. "
+                          f"Selezionati dall'universo di {univ} fondi.")
+        },
+        "short": {
+            "funds": short,
+            "rationale": (f"Alta convinzione: i {len(short)} fondi più allineati alla view di mercato "
+                          f"({eq_label.lower()}).")
+        },
+        "libero": {
+            "funds": libero,
+            "rationale": (f"Top {len(libero)} fondi per punteggio di coerenza con la view di mercato, "
+                          f"pesi uguali — personalizzabile. Universo totale: {univ} fondi.")
+        },
     }
 
 
@@ -1067,24 +1089,36 @@ def main():
             ✓ Copertina con contesto di mercato<br>
             ✓ <b>Portafoglio Articolato</b> — diversificato, grafici + metriche<br>
             ✓ <b>Portafoglio Short</b> — alta convinzione, 4-6 fondi<br>
-            ✓ <b>Portafoglio Libero</b> — tutti i {n_f} fondi<br>
+            ✓ <b>Portafoglio Libero</b> — top 25 fondi per score<br>
             ✓ Schede analitiche (FondiDoc + Morningstar + classificazioni)<br>
             {'✓ <b>Allegati: ' + str(n_sch) + ' schede prodotto PDF</b>' if n_sch else ''}<br>
             <span style='color:#3b82f6;'>⚙️ Motore: <b>{engine}</b></span>
           </div></div>""", unsafe_allow_html=True)
 
     with btn_col:
-        if st.button("🚀  Carica Dati + Genera PDF", use_container_width=True, type="primary"):
-            prog = st.progress(0, text="Recupero dati FondiDoc + Morningstar…")
-            fund_data = fetch_all(funds_df, lambda v: prog.progress(v, text=f"Fetch: {int(v*100)}%…"))
-            prog.progress(1.0, text="✅ Dati recuperati")
+        if st.button("🚀  Genera Portafogli + PDF", use_container_width=True, type="primary"):
 
+            # 1. Costruisci portafogli (solo scoring, nessuna HTTP)
             with st.spinner("🧠 Costruzione portafogli…"):
                 portfolios = construct_portfolios(funds_df, market_text, mifid_df, api_key)
 
+            # 2. Raccogli i fondi unici nei portafogli
+            ptf_nomi = set()
+            for pk in ["articolato","short","libero"]:
+                for f in portfolios.get(pk,{}).get("funds",[]):
+                    ptf_nomi.add(f["nome"])
+            ptf_df = funds_df[funds_df["nome"].isin(ptf_nomi)].reset_index(drop=True)
+            n_fetch = len(ptf_df)
+
+            # 3. Scarica dati solo per i fondi selezionati
+            prog = st.progress(0, text=f"Recupero dati per {n_fetch} fondi selezionati…")
+            fund_data = fetch_all(ptf_df, lambda v: prog.progress(v, text=f"Fetch {int(v*100)}%…"))
+            prog.progress(1.0, text=f"✅ Dati recuperati ({n_fetch} fondi)")
+
             with st.spinner("📄 Generazione PDF…"):
                 try:
-                    pdf_bytes = generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets)
+                    # Passa ptf_df (fondi selezionati) invece di funds_df
+                    pdf_bytes = generate_pdf(portfolios, ptf_df, fund_data, market_text, fund_sheets)
                     prog.empty()
 
                     # Anteprima
