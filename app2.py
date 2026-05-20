@@ -875,7 +875,7 @@ def _pie_macro(macro_alloc):
 # PDF GENERATOR
 # ════════════════════════════════════════════════════════════
 
-def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None, schede_alloc=None, market_view=None):
+def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None, schede_alloc=None, market_view=None, advisor_note=""):
     # ── STILI ────────────────────────────────────────────────
     NAV="#0D1B2A"; GLD="#C9A84C"; MED="#64748B"; LGT="#94A3B8"; SLT="#1E293B"
     buf = io.BytesIO()
@@ -975,7 +975,27 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
     if market_text and market_text.strip():
         story += [Paragraph("Sintesi del Contesto di Mercato", T2),
                   Paragraph((market_view or {}).get("summary","") or
-                             market_text.strip()[:500].replace("\n"," "), IT)]
+                             market_text.strip()[:500].replace("\n"," "), IT),
+                  Spacer(1,6)]
+
+    if advisor_note and advisor_note.strip():
+        note_style = S("g_note_box", fontName="Helvetica", fontSize=8,
+                       textColor=rl_colors.HexColor("#1E293B"), leading=12,
+                       leftIndent=10, rightIndent=10, spaceBefore=4, spaceAfter=4)
+        note_lbl   = S("g_note_lbl", fontName="Helvetica-Bold", fontSize=7,
+                       textColor=rl_colors.HexColor("#7C3AED"), leading=10,
+                       leftIndent=10, spaceAfter=2)
+        note_rows = [[Paragraph("✏️  NOTE DEL CONSULENTE", note_lbl)],
+                     [Paragraph(advisor_note.strip().replace("\n","<br/>"), note_style)]]
+        note_tbl  = Table(note_rows, colWidths=[W])
+        note_tbl.setStyle(TableStyle([
+            ("BOX",    (0,0),(-1,-1), 1.2, rl_colors.HexColor("#7C3AED")),
+            ("LINEABOVE",(0,0),(-1,0), 3,  rl_colors.HexColor("#7C3AED")),
+            ("BACKGROUND",(0,0),(-1,-1), rl_colors.HexColor("#F5F3FF")),
+            ("TOPPADDING",(0,0),(-1,-1), 6),
+            ("BOTTOMPADDING",(0,0),(-1,-1), 6),
+        ]))
+        story += [note_tbl, Spacer(1,6)]
 
     story.append(PageBreak())
 
@@ -1303,10 +1323,6 @@ def main():
         file_mercato = st.file_uploader("TXT/PDF con view di mercato",
                                          type=["txt","pdf","md"], key="u_mercato", label_visibility="collapsed")
         st.markdown("---")
-        st.markdown("<span style='color:#4a6582;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;'>CLASSIFICAZIONE MIFID</span>", unsafe_allow_html=True)
-        file_mifid = st.file_uploader("Excel/CSV/PDF — nome/ISIN + punteggio 1-7",
-                                       type=["xlsx","xls","csv","pdf"], key="u_mifid", label_visibility="collapsed")
-        st.markdown("---")
         st.markdown("<span style='color:#4a6582;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;'>SCHEDE PRODOTTO (PDF allegati)</span>", unsafe_allow_html=True)
         files_schede = st.file_uploader("PDF schede singoli fondi (multipli)",
                                          type=["pdf"], accept_multiple_files=True,
@@ -1319,6 +1335,23 @@ def main():
         else:
             api_key = ""
             st.caption("💡 Installa `anthropic` per portafogli AI-powered.")
+        st.markdown("---")
+        st.markdown("<span style='color:#4a6582;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;'>NOTE PER IL REPORT</span>", unsafe_allow_html=True)
+        st.caption("Testo libero incluso nella copertina del PDF.")
+        advisor_note = st.text_area(
+            "Note",
+            key="u_note",
+            label_visibility="collapsed",
+            height=130,
+            placeholder=(
+                "Esempi di cosa scrivere:\n"
+                "• Profilo del cliente: es. «Investitore prudente, orizzonte 3 anni»\n"
+                "• Obiettivo: es. «Protezione del capitale con crescita moderata»\n"
+                "• Vincoli: es. «Escludere settore energia fossile, max 20% azionario USA»\n"
+                "• Contesto specifico: es. «Proposta in seguito a ribilanciamento Q2 2026»\n"
+                "• Avvertenze: es. «Il cliente ha già esposizione immobiliare diretta»"
+            ),
+        )
 
     # ── HEADER ──────────────────────────────────────────────
     st.markdown(f"""<div class="az-header">
@@ -1333,9 +1366,9 @@ def main():
         st.markdown("""
 **Flusso di lavoro:**
 1. 📁 **Fondi potenziali** *(mensile)* — Excel/CSV **oppure PDF** (es. factbook): gli ISIN vengono estratti automaticamente
-2. 📰 **Contesto mercati** *(più frequente)* — view PDF/TXT → guida la costruzione dei portafogli
-3. 📋 **Classificazione MIFID** — Excel/CSV **oppure PDF**: ISIN + punteggio SRRI/MIFID 1-7
-4. 📎 **Schede prodotto** — PDF allegati al report finale
+2. 📰 **Contesto mercati** *(più frequente)* — view PDF/TXT con la contest view → guida la costruzione dei portafogli
+3. 📎 **Schede prodotto** *(opzionale)* — PDF dei singoli fondi: estratta automaticamente l'asset allocation granulare
+4. ✏️ **Note** *(opzionale)* — testo libero incluso nella copertina del PDF (profilo cliente, obiettivi, vincoli)
 5. 🚀 **Genera** → 3 portafogli (Articolato · Short · Libero) con rendimenti, asset allocation, VaR, Sharpe
         """)
         return
@@ -1352,8 +1385,6 @@ def main():
             market_text = read_text_file(file_mercato.read(), file_mercato.name)
 
     mifid_df = pd.DataFrame()
-    if file_mifid:
-        mifid_df = parse_mifid_file(file_mifid.read(), file_mifid.name)
 
     fund_sheets = [f.read() for f in files_schede] if files_schede else []
 
@@ -1361,10 +1392,10 @@ def main():
     n_f = len(funds_df); n_isin = (funds_df["isin"]!="").sum()
     c1,c2,c3,c4 = st.columns(4)
     for col,v,l,s in [
-        (c1, str(n_f),  "Fondi universo",  f"{funds_df['macro_cat'].nunique()} categorie"),
-        (c2, str(n_isin),"Con ISIN",        "dati da FondiDoc + Morningstar"),
-        (c3, str(len(mifid_df)) if not mifid_df.empty else "—","Fondi MIFID","classificati"),
-        (c4, "✓" if market_text else "—","View mercato","caricata" if market_text else "non caricata"),
+        (c1, str(n_f),    "Fondi universo",  f"{funds_df['macro_cat'].nunique()} categorie"),
+        (c2, str(n_isin), "Con ISIN",        "dati da FondiDoc + Morningstar"),
+        (c3, str(len(fund_sheets)) if fund_sheets else "—", "Schede PDF", "caricate" if fund_sheets else "nessuna caricata"),
+        (c4, "✓" if market_text else "—", "View mercato", "caricata" if market_text else "non caricata"),
     ]: col.markdown(f'<div class="kpi"><div class="kpi-label">{l}</div><div class="kpi-value">{v}</div><div class="kpi-sub">{s}</div></div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1540,7 +1571,8 @@ def main():
                 try:
                     market_view = _extract_market_view(market_text) if market_text else None
                     pdf_bytes = generate_pdf(portfolios, ptf_df, fund_data, market_text,
-                                             fund_sheets, schede_alloc, market_view)
+                                             fund_sheets, schede_alloc, market_view,
+                                             advisor_note=advisor_note)
                     prog.empty()
 
                     # Anteprima quadro mercato
