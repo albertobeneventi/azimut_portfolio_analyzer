@@ -527,7 +527,8 @@ def _mpl_annual_bar(annual_perf: dict, fund_name: str) -> io.BytesIO | None:
 # ════════════════════════════════════════════════════════════
 
 def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
-                 ptf_name: str, fund_data: dict = None) -> bytes:
+                 ptf_name: str, fund_data: dict = None,
+                 fida_df: pd.DataFrame = None) -> bytes:
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -546,6 +547,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     FT = S("FT", fontName="Helvetica-Oblique",fontSize=7, textColor=rl_colors.HexColor("#94A3B8"), leading=10)
     FS = S("FS", fontName="Helvetica-Bold",  fontSize=13, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=4,spaceAfter=2)
     FK = S("FK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#64748B"), spaceAfter=2)
+    LK = S("LK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1B4FBB"), spaceAfter=2)
     # HDR: sempre bianco+grassetto — per celle intestazione su sfondo scuro
     # (TEXTCOLOR di TableStyle NON sovrascrive il colore dei Paragraph — serve lo stile dedicato)
     HDR= S("HDR",fontName="Helvetica-Bold",  fontSize=7.5,textColor=rl_colors.white, leading=11)
@@ -553,6 +555,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story = []
     d_act = df[df[wcol]>0.001].copy()
     n_fondi = len(d_act)
+
+    # ISIN lookup per link Morningstar
+    isin_map = {}
+    if fida_df is not None and not fida_df.empty and "isin" in fida_df.columns:
+        isin_map = {r["nome"]: r["isin"] for _, r in fida_df.iterrows()
+                    if r.get("isin") and str(r.get("isin","")).strip()}
     w_az  = (d_act[wcol]*d_act["az_pct"]).sum()*100
     w_obb = (d_act[wcol]*d_act["obb_pct"]).sum()*100
 
@@ -595,20 +603,20 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Paragraph("Allocazione del Portafoglio", SC))
     pie_buf   = _mpl_portfolio_pie(d_act, wcol, profile)
     macro_buf = _mpl_macro_pie(d_act, wcol)
+    # Pie fondi — larghezza piena
+    story.append(RLImage(pie_buf, width=15*cm, height=7*cm))
+    # Pie asset allocation — centrato sotto
     if macro_buf:
-        charts_row = Table(
-            [[RLImage(pie_buf, width=10*cm, height=7*cm),
-              RLImage(macro_buf, width=7*cm, height=7*cm)]],
-            colWidths=[10*cm, 7*cm]
+        story.append(Spacer(1, 6))
+        macro_centered = Table(
+            [[RLImage(macro_buf, width=9*cm, height=6.5*cm)]],
+            colWidths=[17*cm]
         )
-        charts_row.setStyle(TableStyle([
-            ("VALIGN", (0,0), (-1,-1), "TOP"),
+        macro_centered.setStyle(TableStyle([
+            ("ALIGN",   (0,0), (-1,-1), "CENTER"),
             ("PADDING", (0,0), (-1,-1), 0),
-            ("LEFTPADDING", (1,0), (1,-1), 6),
         ]))
-        story.append(charts_row)
-    else:
-        story.append(RLImage(pie_buf, width=14.5*cm, height=8.5*cm))
+        story.append(macro_centered)
 
     story.append(PageBreak())
 
@@ -821,13 +829,24 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         nav_str  = f"NAV {gv('nav')} € ({gv('last_update')})" if gv('nav') != "N/D" else ""
         rating_s = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("N/D","—") else ""
 
-        # ── Intestazione fondo (3 righe × 1 colonna) ─────────
+        # ── Intestazione fondo (3-4 righe × 1 colonna) ──────
         meta_extra = "  ·  ".join(x for x in [srri_str, rating_s, nav_str] if x)
-        hdr_tbl = Table([
+
+        # Link Morningstar tramite ISIN
+        isin = isin_map.get(row["nome"], "")
+        ms_url = (f"https://www.morningstar.it/it/funds/SecuritySearchResults.aspx"
+                  f"?search={isin}&SearchType=ALL") if isin else ""
+
+        hdr_rows = [
             [Paragraph(f"<b>{row['nome']}</b>", FS)],
             [Paragraph(f"Peso: <b>{row[wcol]*100:.1f}%</b>  ·  {row['categoria']}", FK)],
             [Paragraph(meta_extra or "—", FK)],
-        ], colWidths=[17*cm])
+        ]
+        if ms_url:
+            hdr_rows.append([Paragraph(
+                f'<link href="{ms_url}"><u>↗ Scheda Morningstar</u></link>', LK)])
+
+        hdr_tbl = Table(hdr_rows, colWidths=[17*cm])
         hdr_tbl.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,-1), rl_colors.HexColor("#F0F4F9")),
             ("LEFTPADDING",(0,0),(-1,-1), 10),
@@ -1082,7 +1101,9 @@ def main():
             progress_bar.progress(1.0, text="✅ Dati ricevuti — Genero PDF…")
 
             try:
-                pdf_bytes = generate_pdf(df_act, wcol, profile, ptf_label, fund_data)
+                fida_df = raw.get("FIDA", pd.DataFrame())
+                pdf_bytes = generate_pdf(df_act, wcol, profile, ptf_label, fund_data,
+                                         fida_df=fida_df)
                 fname = f"Azimut_{ptf_label.replace(' ','_')}_{profile}_{datetime.date.today().strftime('%Y%m%d')}.pdf"
                 progress_bar.empty()
                 st.download_button(
