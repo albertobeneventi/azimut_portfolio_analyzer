@@ -776,108 +776,146 @@ def _pie_macro(macro_alloc):
 # ════════════════════════════════════════════════════════════
 
 def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None, schede_alloc=None):
+    # ── STILI ────────────────────────────────────────────────
+    NAV="#0D1B2A"; GLD="#C9A84C"; MED="#64748B"; LGT="#94A3B8"; SLT="#1E293B"
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
-                            leftMargin=2*cm, rightMargin=2*cm,
-                            topMargin=2.2*cm, bottomMargin=2.2*cm)
+                            leftMargin=1.8*cm, rightMargin=1.8*cm,
+                            topMargin=1.8*cm,  bottomMargin=1.8*cm)
     ss = getSampleStyleSheet()
     def S(n,**kw): return ParagraphStyle(n, parent=ss["Normal"], **kw)
-    T   = S("T2",  fontName="Helvetica-Bold",  fontSize=22, textColor=rl_colors.HexColor("#0D1B2A"), spaceAfter=4, leading=28)
-    EY  = S("EY2", fontName="Helvetica",       fontSize=8,  textColor=rl_colors.HexColor("#94A3B8"), spaceAfter=4, letterSpacing=1.5)
-    SU  = S("SU2", fontName="Helvetica",       fontSize=10, textColor=rl_colors.HexColor("#64748B"), spaceAfter=4)
-    SC  = S("SC2", fontName="Helvetica-Bold",  fontSize=11, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=14, spaceAfter=8)
-    BD  = S("BD2", fontName="Helvetica",       fontSize=8.5,textColor=rl_colors.HexColor("#1E293B"), leading=13)
-    SM  = S("SM2", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11)
-    IT  = S("IT2", fontName="Helvetica-Oblique",fontSize=8.5,textColor=rl_colors.HexColor("#475569"), leading=13)
-    FT2 = S("FT2", fontName="Helvetica-Oblique",fontSize=7, textColor=rl_colors.HexColor("#94A3B8"), leading=10)
-    HDR = S("HDR2",fontName="Helvetica-Bold",  fontSize=7.5,textColor=rl_colors.white, leading=11)
-    WH2 = S("WH2", fontName="Helvetica-Bold",  fontSize=8,  textColor=rl_colors.white, leading=11)
-    NOTE= S("NT2", fontName="Helvetica-Oblique",fontSize=6.5,textColor=rl_colors.HexColor("#94A3B8"), leading=9)
-    LK2 = S("LK2", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1B4FBB"), spaceAfter=2)
-    FS2 = S("FS2", fontName="Helvetica-Bold",  fontSize=12, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=4, spaceAfter=2)
-    FK2 = S("FK2", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#64748B"), spaceAfter=2)
+    T1  = S("g_T1", fontName="Helvetica-Bold",    fontSize=20,  textColor=rl_colors.HexColor(NAV), spaceAfter=3,  leading=24)
+    T2  = S("g_T2", fontName="Helvetica-Bold",    fontSize=12,  textColor=rl_colors.HexColor(NAV), spaceBefore=10,spaceAfter=4)
+    EY  = S("g_EY", fontName="Helvetica",         fontSize=7,   textColor=rl_colors.HexColor(LGT), spaceAfter=2,  letterSpacing=2)
+    SU  = S("g_SU", fontName="Helvetica",         fontSize=9,   textColor=rl_colors.HexColor(MED), spaceAfter=3)
+    BD  = S("g_BD", fontName="Helvetica",         fontSize=8.5, textColor=rl_colors.HexColor(SLT), leading=13)
+    SM  = S("g_SM", fontName="Helvetica",         fontSize=7,   textColor=rl_colors.HexColor(SLT), leading=10)
+    IT  = S("g_IT", fontName="Helvetica-Oblique", fontSize=8,   textColor=rl_colors.HexColor("#475569"), leading=12)
+    HDR = S("g_HR", fontName="Helvetica-Bold",    fontSize=7,   textColor=rl_colors.white,          leading=10)
+    FS  = S("g_FS", fontName="Helvetica-Bold",    fontSize=8.5, textColor=rl_colors.HexColor(NAV),  spaceAfter=1, leading=12)
+    FK  = S("g_FK", fontName="Helvetica",         fontSize=7,   textColor=rl_colors.HexColor(MED),  spaceAfter=1, leading=10)
+    NOTE= S("g_NT", fontName="Helvetica-Oblique", fontSize=6,   textColor=rl_colors.HexColor(LGT),  leading=8)
+    FT  = S("g_FT", fontName="Helvetica-Oblique", fontSize=6,   textColor=rl_colors.HexColor(LGT),  leading=9)
+    LK  = S("g_LK", fontName="Helvetica",         fontSize=7,   textColor=rl_colors.HexColor("#1B4FBB"), spaceAfter=1)
 
     story = []
+    W = 17.4*cm   # larghezza utile
 
-    def accent():
-        return Table([[""]], colWidths=[17*cm], rowHeights=[10], style=TableStyle([
-            ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#0D1B2A")),
-            ("LINEBELOW",(0,0),(-1,-1),3,rl_colors.HexColor("#C9A84C")),
-        ]))
-
-    def kpi_cell(v,l):
-        return Paragraph(f'<font size="17"><b>{v}</b></font><br/>'
-                         f'<font size="7.5" color="#64748B">{l}</font>', BD)
-
+    # ── helper ───────────────────────────────────────────────
+    def accent_bar(color=NAV):
+        return Table([[""]], colWidths=[W], rowHeights=[8],
+                     style=TableStyle([("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor(color)),
+                                       ("LINEBELOW",(0,0),(-1,-1),3,rl_colors.HexColor(GLD))]))
+    def color_bar(color):
+        return Table([[""]], colWidths=[W], rowHeights=[3],
+                     style=TableStyle([("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor(color))]))
+    def light_rule():
+        return HRFlowable(width="100%",thickness=0.5,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=6)
+    def kpi_cell(v, l):
+        return Paragraph(f'<font size="13"><b>{v}</b></font><br/>'
+                         f'<font size="7" color="{MED}">{l}</font>', BD)
     def pv(val):
         try:
-            num = float(str(val).replace("%","").replace(",",".").replace("+",""))
-            c = "#1A7A4A" if num>0 else ("#C0392B" if num<0 else "#475569")
-            return Paragraph(f'<font color="{c}"><b>{val}</b></font>', SM)
-        except: return Paragraph(str(val), SM)
+            n = float(str(val).replace("%","").replace(",",".").replace("+","").strip())
+            c = "#1A7A4A" if n>0 else ("#C0392B" if n<0 else "#475569")
+            sign = "+" if n>0 else ""
+            return Paragraph(f'<font color="{c}"><b>{sign}{n:.1f}%</b></font>', SM)
+        except: return Paragraph(str(val) if val else "—", SM)
+    def txt(v): return Paragraph(str(v) if v else "—", SM)
 
-    # ── PAG 1: COPERTINA ────────────────────────────────────
-    story += [accent(), Spacer(1,14),
-              Paragraph("AZIMUT INVESTMENTS  ·  PORTFOLIO BUILDER", EY), Spacer(1,4),
-              Paragraph("Proposta di Portafoglio", T),
-              Paragraph(f"AI-Assisted  ·  {datetime.date.today().strftime('%d %B %Y')}", SU),
-              HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=14)]
-
-    n_f = len(funds_df)
+    # ════════════════════════════════════════════════════════
+    # PAG 1 — COPERTINA
+    # ════════════════════════════════════════════════════════
+    n_f    = len(funds_df)
     macros = funds_df["macro_cat"].value_counts()
     top_m  = macros.index[0] if len(macros)>0 else "—"
-    kpi_row = Table([[kpi_cell(str(n_f),"Fondi universo"),
+    n_art  = len(portfolios.get("articolato",{}).get("funds",[]))
+    n_sh   = len(portfolios.get("short",{}).get("funds",[]))
+    n_lib  = len(portfolios.get("libero",{}).get("funds",[]))
+
+    story += [
+        accent_bar(), Spacer(1,14),
+        Paragraph("AZIMUT INVESTMENTS  ·  PORTFOLIO BUILDER", EY), Spacer(1,4),
+        Paragraph("Proposta di Portafoglio", T1),
+        Paragraph(datetime.date.today().strftime("%d %B %Y"), SU),
+        HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=10),
+    ]
+
+    # KPI copertina
+    kpi_cov = Table([[kpi_cell(str(n_f),"Fondi universo"),
                       kpi_cell(str(len(macros)),"Macro categorie"),
-                      kpi_cell(top_m[:12],"Categoria principale"),
+                      kpi_cell(top_m[:15],"Categoria principale"),
                       kpi_cell(datetime.date.today().strftime("%m/%Y"),"Data report")]],
-                    colWidths=[4.25*cm]*4)
-    kpi_row.setStyle(TableStyle([
+                    colWidths=[W/4]*4)
+    kpi_cov.setStyle(TableStyle([
         ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
         ("INNERGRID",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
         ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F8FAFC")),
-        ("PADDING",(0,0),(-1,-1),12),("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ("PADDING",(0,0),(-1,-1),10),("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
     ]))
-    story.append(kpi_row)
-    story.append(Spacer(1,14))
+    story += [kpi_cov, Spacer(1,10)]
+
+    # Sommario 3 portafogli
+    ptf_sum_data = [
+        [Paragraph("<b>Portafoglio</b>",HDR), Paragraph("<b>Fondi</b>",HDR), Paragraph("<b>Strategia</b>",HDR)],
+        [Paragraph("Articolato",SM), Paragraph(str(n_art),SM), Paragraph("Diversificato per macro-categoria",SM)],
+        [Paragraph("Short",SM),      Paragraph(str(n_sh), SM), Paragraph("Alta convinzione — top score",SM)],
+        [Paragraph("Libero",SM),     Paragraph(str(n_lib),SM), Paragraph("Selezione manuale con pesi personalizzati",SM)],
+    ]
+    ptf_sum = Table(ptf_sum_data, colWidths=[3.5*cm,2*cm,11.9*cm])
+    ptf_sum.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor(NAV)),
+        ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
+        ("FONTSIZE",(0,0),(-1,-1),7),("PADDING",(0,0),(-1,-1),5),
+        ("LINEBELOW",(0,0),(-1,-1),0.4,rl_colors.HexColor("#E2E8F0")),
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+    ]))
+    story += [ptf_sum, Spacer(1,10)]
 
     if market_text and market_text.strip():
-        story.append(Paragraph("Contesto di Mercato", SC))
-        excerpt = market_text.strip()[:900]+("…" if len(market_text.strip())>900 else "")
-        story.append(Paragraph(excerpt.replace("\n","<br/>"), IT))
+        story += [Paragraph("Contesto di Mercato", T2),
+                  Paragraph(market_text.strip()[:600].replace("\n","<br/>"), IT)]
 
     story.append(PageBreak())
 
-    # ── PAG 2+: I TRE PORTAFOGLI ────────────────────────────
-    ptf_meta = [
+    # ════════════════════════════════════════════════════════
+    # PAG 2-4 — UN PORTAFOGLIO PER PAGINA
+    # tabella fondi + torta asset allocation affiancati
+    # ════════════════════════════════════════════════════════
+    PTF_COLORS = {"articolato":"#1B4FBB","short":"#065F46","libero":"#7C3AED"}
+
+    for ptf_key, ptf_label, ptf_color in [
         ("articolato","Portafoglio Articolato","#1B4FBB"),
         ("short",     "Portafoglio Short",     "#065F46"),
         ("libero",    "Portafoglio Libero",     "#7C3AED"),
-    ]
-
-    for ptf_key, ptf_label, ptf_color in ptf_meta:
+    ]:
         ptf = portfolios.get(ptf_key,{})
         if not ptf or not ptf.get("funds"): continue
-        funds_list = ptf["funds"]; rationale = ptf.get("rationale","")
-        metrics = calc_metrics(funds_list, fund_data, schede_alloc)
+        funds_list = ptf["funds"]
+        rationale  = ptf.get("rationale","")
+        metrics    = calc_metrics(funds_list, fund_data, schede_alloc)
 
-        story += [accent(), Spacer(1,14),
-                  Paragraph("AZIMUT INVESTMENTS  ·  PORTFOLIO BUILDER", EY), Spacer(1,4),
-                  Paragraph(ptf_label, T),
-                  Paragraph(f"{len(funds_list)} fondi  ·  {datetime.date.today().strftime('%d %B %Y')}", SU),
-                  HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=10)]
+        # Header pagina
+        story += [
+            accent_bar(), Spacer(1,8),
+            Paragraph("AZIMUT INVESTMENTS  ·  PORTFOLIO BUILDER", EY), Spacer(1,3),
+            Paragraph(ptf_label, T1),
+            Paragraph(f"{len(funds_list)} fondi  ·  {datetime.date.today().strftime('%d %B %Y')}", SU),
+            color_bar(ptf_color), Spacer(1,6),
+        ]
 
-        # Rationale box
+        # Rationale (max 1 riga compatta)
         if rationale:
-            rt = Table([[Paragraph(rationale, IT)]], colWidths=[17*cm])
-            rt.setStyle(TableStyle([
-                ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F0F7FF")),
-                ("PADDING",(0,0),(-1,-1),10),
+            rat = Table([[Paragraph(rationale[:220], IT)]], colWidths=[W])
+            rat.setStyle(TableStyle([
+                ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F8FAFC")),
+                ("PADDING",(0,0),(-1,-1),7),
+                ("BOX",(0,0),(-1,-1),0.5,rl_colors.HexColor("#E2E8F0")),
                 ("LINEBELOW",(0,0),(-1,-1),2,rl_colors.HexColor(ptf_color)),
-                ("BOX",(0,0),(-1,-1),0.5,rl_colors.HexColor("#BFDBFE")),
             ]))
-            story += [rt, Spacer(1,10)]
+            story += [rat, Spacer(1,7)]
 
-        # KPI metriche portafoglio
+        # Strip KPI
         mk = Table([[kpi_cell(metrics.get("ytd","N/D"),"YTD"),
                      kpi_cell(metrics.get("perf_1y","N/D"),"1 Anno"),
                      kpi_cell(metrics.get("perf_3y","N/D"),"3 Anni"),
@@ -885,167 +923,158 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
                      kpi_cell(metrics.get("var_1y","N/D"),"VaR 1A"),
                      kpi_cell(metrics.get("sharpe_3y","N/D"),"Sharpe 3A"),
                      kpi_cell(metrics.get("neg_vol_1y","N/D"),"Vol.Neg. 1A")]],
-                   colWidths=[2.43*cm]*7)
+                   colWidths=[W/7]*7)
         mk.setStyle(TableStyle([
             ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
             ("INNERGRID",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
             ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F8FAFC")),
-            ("PADDING",(0,0),(-1,-1),10),("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+            ("PADDING",(0,0),(-1,-1),8),("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
         ]))
-        story += [mk, Spacer(1,10)]
+        story += [mk, Spacer(1,8)]
 
-        # Grafici
-        story.append(RLImage(_pie_funds(funds_list, ptf_label), width=15*cm, height=6.5*cm))
-        mb = _pie_macro(metrics.get("macro_alloc",{}))
-        if mb: story += [Spacer(1,6), RLImage(mb, width=15*cm, height=5*cm)]
-        story.append(Spacer(1,10))
-
-        # Tabella fondi
-        hdr_row = [Paragraph(f"<b>{t}</b>",HDR) for t in
-                   ["Fondo","ISIN","Categoria","Peso","YTD","1A","3A","5A","VaR 1A","Sharpe 3A"]]
-        rows_data = [hdr_row]
+        # Tabella fondi + torta affiancati
+        hdr = [Paragraph(f"<b>{t}</b>",HDR) for t in
+               ["Fondo","ISIN","Categoria","Peso","YTD","1A","3A","5A","VaR 1A","Sharpe"]]
+        rows = [hdr]
         for f in funds_list:
             nome = f["nome"]
             ana  = fund_data.get(nome,{}).get("fondidoc",{}).get("analysis",{})
             def gf(k): return ana.get(k,"—")
-            rows_data.append([
-                Paragraph(nome[:42], SM), Paragraph(f.get("isin","—"), SM),
-                Paragraph(f.get("macro_cat","—")[:22], SM),
-                Paragraph(f"<b>{f['peso']:.1f}%</b>", SM),
-                pv(gf("ytd")), pv(gf("perf_1y")), pv(gf("perf_3y")), pv(gf("perf_5y")),
-                pv(gf("var_1y")), Paragraph(gf("sharpe_3y"), SM),
+            rows.append([
+                txt(nome[:36]),       txt(f.get("isin","—")),
+                txt(f.get("macro_cat","—")[:16]),
+                Paragraph(f"<b>{f['peso']:.1f}%</b>",SM),
+                pv(gf("ytd")),        pv(gf("perf_1y")),
+                pv(gf("perf_3y")),    pv(gf("perf_5y")),
+                txt(gf("var_1y")),    txt(gf("sharpe_3y")),
             ])
-        ft = Table(rows_data,
-                   colWidths=[4.1*cm,2.0*cm,2.2*cm,1.2*cm,1.3*cm,1.3*cm,1.3*cm,1.3*cm,1.3*cm,1.3*cm],
+        ft = Table(rows,
+                   colWidths=[3.5*cm,1.85*cm,1.85*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm],
                    repeatRows=1)
         ft.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor("#0D1B2A")),
-            ("FONTSIZE",(0,0),(-1,-1),7.5),("PADDING",(0,0),(-1,-1),4),
+            ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor(NAV)),
+            ("FONTSIZE",(0,0),(-1,-1),6.8),("PADDING",(0,0),(-1,-1),3),
             ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
-            ("LINEBELOW",(0,0),(-1,-1),0.4,rl_colors.HexColor("#E2E8F0")),
+            ("LINEBELOW",(0,0),(-1,-1),0.3,rl_colors.HexColor("#E2E8F0")),
             ("ALIGN",(3,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
         ]))
-        story.append(KeepTogether([ft]))
-        story += [Spacer(1,6),
-                  Paragraph("◆ Metriche portafoglio = media ponderata sui fondi con dati disponibili (FondiDoc). "
-                             "YTD/1A/3A/5A: rendimenti %. VaR 1A: Value at Risk annuale. Sharpe 3A: indice di Sharpe. "
-                             "Dati a titolo indicativo.", NOTE),
+
+        mb = _pie_macro(metrics.get("macro_alloc",{}))
+        if mb:
+            pie_img = RLImage(mb, width=5.8*cm, height=4.2*cm)
+            tbl_w = W - 6.0*cm
+            # Ricostruisci tabella fondi con larghezza ridotta
+            ft2 = Table(rows,
+                        colWidths=[3.0*cm,1.6*cm,1.5*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm],
+                        repeatRows=1)
+            ft2.setStyle(ft._tblStyle)
+            side = Table([[ft2, pie_img]], colWidths=[tbl_w, 6.0*cm])
+            side.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),
+                                      ("LEFTPADDING",(1,0),(1,0),6)]))
+            story.append(side)
+        else:
+            story.append(ft)
+
+        story += [Spacer(1,4),
+                  Paragraph("◆ Metriche = media ponderata sui fondi con dati FondiDoc. A titolo indicativo.",NOTE),
                   PageBreak()]
 
-    # ── SCHEDE SINGOLI FONDI ────────────────────────────────
-    story += [accent(), Spacer(1,14),
-              Paragraph("AZIMUT INVESTMENTS  ·  PORTFOLIO BUILDER", EY), Spacer(1,4),
-              Paragraph("Schede Analitiche Fondi", T),
-              Paragraph(f"Universo completo  ·  Fonte: FondiDoc + Morningstar  ·  {datetime.date.today().strftime('%d %B %Y')}", SU),
-              HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=6),
-              Paragraph('🔍 <link href="https://www.morningstar.it/it/funds/SecuritySearchResults.aspx">'
-                        '<u>Motore di ricerca Morningstar</u></link>', LK2),
-              Spacer(1,10)]
+    # ════════════════════════════════════════════════════════
+    # SCHEDE ANALITICHE — solo Articolato + Short (max ~15 fondi)
+    # Formato compatto: 4 righe per fondo, ~6 fondi per pagina
+    # ════════════════════════════════════════════════════════
+    art_nomi   = {f["nome"] for f in portfolios.get("articolato",{}).get("funds",[])}
+    short_nomi = {f["nome"] for f in portfolios.get("short",{}).get("funds",[])}
+    key_nomi   = art_nomi | short_nomi
+    key_df     = funds_df[funds_df["nome"].isin(key_nomi)].reset_index(drop=True)
 
-    for idx, (_, fr) in enumerate(funds_df.iterrows()):
-        nome = fr["nome"]; isin = fr.get("isin","")
-        fd   = fund_data.get(nome,{})
-        ov   = fd.get("fondidoc",{}).get("overview",{})
-        ana  = fd.get("fondidoc",{}).get("analysis",{})
-        ms   = fd.get("morningstar",{})
-
-        def gv(k, src=None): return (src or ana).get(k,"—")
-
-        srri_s  = f"SRRI {gv('srri',ov)}/7"        if gv('srri',ov)       not in ("—","")  else ""
-        nav_s   = f"NAV {gv('nav')} €"              if gv('nav')           not in ("—","")  else ""
-        rat_s   = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("—","")  else ""
-        meta    = "  ·  ".join(x for x in [srri_s, rat_s, nav_s] if x)
-        isin_s  = f"  ·  ISIN: <b>{isin}</b>" if isin else ""
-        mc_s    = fr.get("macro_cat",""); mifid_v = fr.get("mifid","—")
-
-        hdr_rows = [
-            [Paragraph(f"<b>{nome}</b>", FS2)],
-            [Paragraph(f"MIFID: <b>{mifid_v}/7</b>  ·  {fr.get('categoria','')}{isin_s}", FK2)],
-            [Paragraph(meta or "—", FK2)],
+    if not key_df.empty:
+        story += [
+            accent_bar(), Spacer(1,8),
+            Paragraph("AZIMUT INVESTMENTS  ·  PORTFOLIO BUILDER", EY), Spacer(1,3),
+            Paragraph("Schede Analitiche — Portafogli Articolato + Short", T1),
+            Paragraph(f"Fonte: FondiDoc + Morningstar  ·  {datetime.date.today().strftime('%d %B %Y')}", SU),
+            light_rule(),
+            Paragraph('🔍 <link href="https://www.morningstar.it/it/funds/SecuritySearchResults.aspx">'
+                      '<u>Motore di ricerca Morningstar</u></link>', LK),
+            Spacer(1,6),
         ]
-        if ms.get("ms_url"):
-            hdr_rows.append([Paragraph(
-                f'<link href="{ms["ms_url"]}"><u>↗ {ms.get("ms_name","Morningstar")}</u></link>', FK2)])
-        if fr.get("descrizione","").strip():
-            hdr_rows.append([Paragraph(str(fr["descrizione"])[:200], FK2)])
 
-        hdr_tbl = Table(hdr_rows, colWidths=[17*cm])
-        hdr_tbl.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F0F4F9")),
-            ("LEFTPADDING",(0,0),(-1,-1),10),("RIGHTPADDING",(0,0),(-1,-1),10),
-            ("TOPPADDING",(0,0),(-1,0),10),("BOTTOMPADDING",(0,-1),(-1,-1),10),
-            ("TOPPADDING",(0,1),(-1,-1),2),("BOTTOMPADDING",(0,0),(-1,-2),2),
-            ("LINEBELOW",(0,-1),(-1,-1),2,rl_colors.HexColor("#C9A84C")),
-        ]))
+        for _, fr in key_df.iterrows():
+            nome  = fr["nome"];  isin  = fr.get("isin","")
+            fd    = fund_data.get(nome,{})
+            ov    = fd.get("fondidoc",{}).get("overview",{})
+            ana   = fd.get("fondidoc",{}).get("analysis",{})
+            ms    = fd.get("morningstar",{})
+            mifid = fr.get("mifid","—");  mc = fr.get("macro_cat","")
 
-        def pval2(v):
-            try:
-                num=float(str(v).replace("%","").replace(",",".").replace("+",""))
-                c="#1A7A4A" if num>0 else ("#C0392B" if num<0 else "#475569")
-                return Paragraph(f'<font color="{c}"><b>{v}</b></font>', BD)
-            except: return Paragraph(str(v), BD)
+            def gv(k, src=None):
+                v = (src or ana).get(k,""); return v if v else "—"
 
-        HDR3=S(f"HDR3_{idx}",fontName="Helvetica-Bold",fontSize=7.5,textColor=rl_colors.white,leading=11)
-        perf_data=[
-            [Paragraph("<b>Metrica</b>",HDR3),Paragraph("<b>YTD</b>",HDR3),
-             Paragraph("<b>1 Anno</b>",HDR3),Paragraph("<b>3 Anni</b>",HDR3),Paragraph("<b>5 Anni</b>",HDR3)],
-            [Paragraph("Performance",SM),pval2(gv("ytd")),pval2(gv("perf_1y")),pval2(gv("perf_3y")),pval2(gv("perf_5y"))],
-            [Paragraph("Volatilità",SM),Paragraph("—",SM),Paragraph(gv("vol_1y"),SM),Paragraph(gv("vol_3y"),SM),Paragraph(gv("vol_5y"),SM)],
-            [Paragraph("Vol. Neg.",SM),Paragraph("—",SM),Paragraph(gv("neg_vol_1y"),SM),Paragraph(gv("neg_vol_3y"),SM),Paragraph(gv("neg_vol_5y"),SM)],
-            [Paragraph("VaR",SM),Paragraph("—",SM),Paragraph(gv("var_1y"),SM),Paragraph(gv("var_3y"),SM),Paragraph("—",SM)],
-            [Paragraph("Sharpe",SM),Paragraph("—",SM),Paragraph("—",SM),Paragraph(gv("sharpe_3y"),SM),Paragraph(gv("sharpe_5y"),SM)],
-            [Paragraph("Sortino",SM),Paragraph("—",SM),Paragraph(gv("sortino_1y"),SM),Paragraph("—",SM),Paragraph("—",SM)],
-        ]
-        perf_tbl=Table(perf_data,colWidths=[2.4*cm,1.5*cm,1.8*cm,1.8*cm,1.8*cm])
-        perf_tbl.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor("#0D1B2A")),
-            ("FONTSIZE",(0,0),(-1,-1),7.5),("PADDING",(0,0),(-1,-1),4),
-            ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
-            ("LINEBELOW",(0,0),(-1,-1),0.4,rl_colors.HexColor("#E2E8F0")),
-            ("ALIGN",(1,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
-        ]))
+            def pvs(v):
+                try:
+                    n = float(str(v).replace("%","").replace(",",".").replace("+","").strip())
+                    c = "#1A7A4A" if n>0 else ("#C0392B" if n<0 else "#475569")
+                    return f'<font color="{c}"><b>{"+" if n>0 else ""}{n:.1f}%</b></font>'
+                except: return str(v) if v and v!="—" else "—"
 
-        det_data=[
-            [Paragraph("<b>Dettagli</b>",BD)],
-            [Paragraph(f"Avvio: {gv('start_date',ov)}",SM)],
-            [Paragraph(f"Categoria Assog.: {gv('cat_assog',ov)}",SM)],
-            [Paragraph(f"Gest.: {gv('mgmt_fee',ov)}  |  Perf.: {gv('perf_fee',ov)}",SM)],
-            [Paragraph(f"FIDArating: {gv('fida_rating',ov)}  |  Score: {gv('fida_score',ov)}",SM)],
-            [Paragraph(f"Morningstar cat.: {ms.get('ms_cat','—')}",SM)],
-        ]
-        det_tbl=Table([[d[0]] for d in det_data],colWidths=[7.3*cm])
-        det_tbl.setStyle(TableStyle([
-            ("PADDING",(0,0),(-1,-1),3),("TOPPADDING",(0,0),(-1,0),6),
-            ("LINEBELOW",(0,0),(0,0),0.8,rl_colors.HexColor("#C9A84C")),
-            ("BACKGROUND",(0,0),(0,-1),rl_colors.HexColor("#F8FAFC")),
-        ]))
+            # Colore accento (blu=articolato, verde=short, entrambi=blu)
+            acc = "#065F46" if nome in short_nomi and nome not in art_nomi else "#1B4FBB"
 
-        mid=Table([[perf_tbl,det_tbl]],colWidths=[9.7*cm,7.3*cm])
-        mid.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),("PADDING",(0,0),(-1,-1),0),
-                                  ("LEFTPADDING",(1,0),(1,-1),10)]))
+            srri_s = f"SRRI {gv('srri',ov)}/7" if gv('srri',ov) not in ("—","") else ""
+            nav_s  = f"NAV {gv('nav')} €"       if gv('nav')    not in ("—","") else ""
+            rat_s  = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("—","") else ""
+            meta   = "  ·  ".join(x for x in [srri_s,rat_s,nav_s] if x) or "—"
+            fee_s  = f"Fee gest.: {gv('mgmt_fee',ov)}" if gv('mgmt_fee',ov) not in ("—","") else ""
+            ms_s   = f"MS: {ms.get('ms_cat','—')}" if ms.get('ms_cat') else ""
 
-        story.append(KeepTogether([Spacer(1,6),hdr_tbl,Spacer(1,6),mid]))
-        if idx < len(funds_df)-1:
-            story.append(HRFlowable(width="100%",thickness=0.5,
-                                     color=rl_colors.HexColor("#CBD5E1"),spaceBefore=8,spaceAfter=8))
+            r1 = f"<b>{nome}</b>"
+            r2 = (f"ISIN: <b>{isin or '—'}</b>  ·  {mc}  ·  MIFID: <b>{mifid}/7</b>"
+                  + (f"  ·  {meta}" if meta != "—" else ""))
+            r3 = (f"YTD: {pvs(gv('ytd'))}  ·  "
+                  f"1A: {pvs(gv('perf_1y'))}  ·  "
+                  f"3A: {pvs(gv('perf_3y'))}  ·  "
+                  f"5A: {pvs(gv('perf_5y'))}  ·  "
+                  f"Vol.1A: <b>{gv('vol_1y')}</b>  ·  "
+                  f"Vol.Neg.: <b>{gv('neg_vol_1y')}</b>  ·  "
+                  f"Sharpe 3A: <b>{gv('sharpe_3y')}</b>  ·  "
+                  f"Sortino 1A: <b>{gv('sortino_1y')}</b>")
+            det_parts = [x for x in [
+                f"Avvio: {gv('start_date',ov)}", fee_s,
+                f"Fee perf.: {gv('perf_fee',ov)}" if gv('perf_fee',ov) not in ("—","") else "",
+                f"Cat. Assog.: {gv('cat_assog',ov)}", ms_s,
+            ] if x]
+            r4 = "  ·  ".join(det_parts) or "—"
+
+            card = Table(
+                [[Paragraph(r1,FS)],[Paragraph(r2,FK)],
+                 [Paragraph(r3,SM)],[Paragraph(r4,FK)]],
+                colWidths=[W])
+            card.setStyle(TableStyle([
+                ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
+                ("LEFTPADDING",(0,0),(-1,-1),8),("RIGHTPADDING",(0,0),(-1,-1),8),
+                ("TOPPADDING",(0,0),(0,0),7),("BOTTOMPADDING",(0,-1),(-1,-1),7),
+                ("TOPPADDING",(0,1),(-1,-1),2),("BOTTOMPADDING",(0,0),(-1,-2),2),
+                ("LINEABOVE",(0,0),(-1,0),2,rl_colors.HexColor(acc)),
+                ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#FAFBFC")),
+            ]))
+            story.append(KeepTogether([card, Spacer(1,5)]))
 
     # ── DISCLAIMER ──────────────────────────────────────────
-    story += [PageBreak(),
-              HRFlowable(width="100%",thickness=0.5,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=8),
+    story += [light_rule(),
               Paragraph("Documento generato automaticamente a scopo illustrativo. Dati da FIDA FondiDoc e Morningstar. "
-                        "I portafogli sono costruiti tramite analisi AI/rules-based del contesto di mercato e non "
+                        "I portafogli sono costruiti tramite analisi rules-based/AI del contesto di mercato e non "
                         "costituiscono offerta o consulenza di investimento. Rendimenti passati non garantiscono "
-                        "risultati futuri. © Azimut Group — uso interno.", FT2)]
+                        "risultati futuri. © Azimut Group — uso interno.", FT)]
 
     doc.build(story)
     main_pdf = buf.getvalue()
 
-    # Merge schede prodotto PDF se presenti
     if fund_sheets and _HAS_PYPDF:
         try:
             writer = PdfWriter()
-            for pdf_bytes in [main_pdf] + fund_sheets:
-                for page in PdfReader(io.BytesIO(pdf_bytes)).pages:
+            for pdf_b in [main_pdf] + fund_sheets:
+                for page in PdfReader(io.BytesIO(pdf_b)).pages:
                     writer.add_page(page)
             out = io.BytesIO(); writer.write(out); return out.getvalue()
         except Exception: pass
