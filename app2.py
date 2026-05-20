@@ -1147,16 +1147,17 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
                 pv(gf("perf_3y")),    pv(gf("perf_5y")),
                 txt(gf("var_1y")),    txt(gf("sharpe_3y")),
             ])
-        ft = Table(rows,
-                   colWidths=[3.5*cm,1.85*cm,1.85*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm],
-                   repeatRows=1)
-        ft.setStyle(TableStyle([
+        _fund_tbl_style = TableStyle([
             ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor(NAV)),
             ("FONTSIZE",(0,0),(-1,-1),6.8),("PADDING",(0,0),(-1,-1),3),
             ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
             ("LINEBELOW",(0,0),(-1,-1),0.3,rl_colors.HexColor("#E2E8F0")),
             ("ALIGN",(3,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
-        ]))
+        ])
+        ft = Table(rows,
+                   colWidths=[3.5*cm,1.85*cm,1.85*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm],
+                   repeatRows=1)
+        ft.setStyle(_fund_tbl_style)
 
         mb = _pie_macro(metrics.get("macro_alloc",{}))
         if mb:
@@ -1166,7 +1167,7 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
             ft2 = Table(rows,
                         colWidths=[3.0*cm,1.6*cm,1.5*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm],
                         repeatRows=1)
-            ft2.setStyle(ft._tblStyle)
+            ft2.setStyle(_fund_tbl_style)
             side = Table([[ft2, pie_img]], colWidths=[tbl_w, 6.0*cm])
             side.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),
                                       ("LEFTPADDING",(1,0),(1,0),6)]))
