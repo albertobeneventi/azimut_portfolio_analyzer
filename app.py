@@ -369,13 +369,48 @@ def _extract_isin(url: str) -> str:
     return m.group(1) if m else ""
 
 
+def _fetch_morningstar_url(isin: str) -> str:
+    """Risolve ISIN → URL scheda Morningstar Italia.
+    Usa l'API interna SecuritySearch.ashx (restituisce JSON con SecId).
+    Fallback: search page con ISIN (apre comunque la pagina corretta)."""
+    if not isin:
+        return ""
+    try:
+        r = requests.get(
+            "https://www.morningstar.it/it/util/SecuritySearch.ashx",
+            params={"q": isin, "t": "FO", "limit": "1",
+                    "langId": "it", "currencyId": "EUR"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                              "AppleWebKit/537.36 Chrome/120.0.0.0",
+                "Accept": "application/json, text/javascript, */*",
+                "Referer": "https://www.morningstar.it/",
+            },
+            timeout=6)
+        if r.status_code == 200 and r.text.strip().startswith("["):
+            data = r.json()
+            if isinstance(data, list) and data:
+                sec_id = data[0].get("id", "")
+                if sec_id:
+                    return (f"https://www.morningstar.it/it/funds/snapshot/"
+                            f"snapshot.aspx?id={sec_id}")
+    except Exception:
+        pass
+    # Fallback: pagina di ricerca — trova comunque il fondo
+    return (f"https://www.morningstar.it/it/funds/SecuritySearchResults.aspx"
+            f"?search={isin}&SearchType=ALL")
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_fund_data(index_url: str) -> dict:
-    """Fetch overview + analysis for one fund. Cached 1h."""
+    """Fetch overview + analysis + Morningstar URL for one fund. Cached 1h."""
     result = {"url": index_url}
     isin = _extract_isin(index_url)
     if isin:
         result["isin"] = isin
+        ms_url = _fetch_morningstar_url(isin)
+        if ms_url:
+            result["ms_url"] = ms_url
     html_idx = _fetch_html(index_url)
     if html_idx: result["overview"] = _parse_overview(html_idx)
     html_ana = _fetch_html(_to_ana_url(index_url))
@@ -564,6 +599,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     FT = S("FT", fontName="Helvetica-Oblique",fontSize=7, textColor=rl_colors.HexColor("#94A3B8"), leading=10)
     FS = S("FS", fontName="Helvetica-Bold",  fontSize=13, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=4,spaceAfter=2)
     FK = S("FK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#64748B"), spaceAfter=2)
+    LK = S("LK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1B4FBB"), spaceAfter=2)
     # HDR: sempre bianco+grassetto — per celle intestazione su sfondo scuro
     # (TEXTCOLOR di TableStyle NON sovrascrive il colore dei Paragraph — serve lo stile dedicato)
     HDR= S("HDR",fontName="Helvetica-Bold",  fontSize=7.5,textColor=rl_colors.white, leading=11)
@@ -856,11 +892,17 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         isin = fd.get("isin", "") or isin_map.get(row["nome"], "")
         isin_str = f"  ·  ISIN: <b>{isin}</b>" if isin else ""
 
+        # Link Morningstar risolto (URL diretto scheda fondo)
+        ms_url = fd.get("ms_url", "")
+
         hdr_rows = [
             [Paragraph(f"<b>{row['nome']}</b>", FS)],
             [Paragraph(f"Peso: <b>{row[wcol]*100:.1f}%</b>  ·  {row['categoria']}{isin_str}", FK)],
             [Paragraph(meta_extra or "—", FK)],
         ]
+        if ms_url:
+            hdr_rows.append([Paragraph(
+                f'<link href="{ms_url}"><u>↗ Scheda Morningstar</u></link>', LK)])
 
         hdr_tbl = Table(hdr_rows, colWidths=[17*cm])
         hdr_tbl.setStyle(TableStyle([
