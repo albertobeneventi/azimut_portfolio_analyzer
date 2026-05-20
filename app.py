@@ -517,6 +517,9 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     FT = S("FT", fontName="Helvetica-Oblique",fontSize=7, textColor=rl_colors.HexColor("#94A3B8"), leading=10)
     FS = S("FS", fontName="Helvetica-Bold",  fontSize=13, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=4,spaceAfter=2)
     FK = S("FK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#64748B"), spaceAfter=2)
+    # HDR: sempre bianco+grassetto — per celle intestazione su sfondo scuro
+    # (TEXTCOLOR di TableStyle NON sovrascrive il colore dei Paragraph — serve lo stile dedicato)
+    HDR= S("HDR",fontName="Helvetica-Bold",  fontSize=7.5,textColor=rl_colors.white, leading=11)
 
     story = []
     d_act = df[df[wcol]>0.001].copy()
@@ -632,7 +635,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     perf_keys = ["ytd","perf_1y","perf_3y","perf_5y","vol_1y","sharpe_1y"]
     ptf_p = ptf_wavg(perf_keys)
 
-    perf_hdr = [Paragraph(f"<b>{t}</b>", SM) for t in
+    perf_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
                 ["Fondo","Peso","YTD","1 Anno","3 Anni","5 Anni","Vol. 1A","Sharpe 1A"]]
 
     # Portfolio summary row (row index 1 — gold background)
@@ -693,7 +696,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     risk_keys = ["vol_1y","vol_3y","vol_5y","sharpe_1y","sharpe_3y","sortino_1y"]
     ptf_r = ptf_wavg(risk_keys)
 
-    risk_hdr = [Paragraph(f"<b>{t}</b>", SM) for t in
+    risk_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
                 ["Fondo","Peso","Vol. 1A","Vol. 3A","Vol. 5A","Sharpe 1A","Sharpe 3A","Sortino 1A"]]
 
     ptf_risk_row = [
@@ -792,8 +795,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             except: return Paragraph(v, BD)
 
         perf_data = [
-            [Paragraph("<b>Rendimenti</b>",BD), Paragraph("<b>YTD</b>",BD),
-             Paragraph("<b>1 Anno</b>",BD), Paragraph("<b>3 Anni</b>",BD), Paragraph("<b>5 Anni</b>",BD)],
+            [Paragraph("<b>Rendimenti</b>",HDR), Paragraph("<b>YTD</b>",HDR),
+             Paragraph("<b>1 Anno</b>",HDR), Paragraph("<b>3 Anni</b>",HDR), Paragraph("<b>5 Anni</b>",HDR)],
             [Paragraph("Performance",SM),
              pval(gv("ytd")), pval(gv("perf_1y")), pval(gv("perf_3y")), pval(gv("perf_5y"))],
             [Paragraph("Volatilità",SM),
