@@ -3,6 +3,7 @@
 # Aggiornamento: Schede fondi + Rendimenti da FondiDoc FIDA
 # ============================================================
 
+import re
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -360,10 +361,19 @@ def _parse_analysis(html: str) -> dict:
     return d
 
 
+def _extract_isin(url: str) -> str:
+    """Estrae ISIN da URL FondiDoc (formato: /CATCODE/ISIN_slug-nome-fondo)."""
+    m = re.search(r'/([A-Z]{2}[A-Z0-9]{10})[_/]', url)
+    return m.group(1) if m else ""
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_fund_data(index_url: str) -> dict:
     """Fetch overview + analysis for one fund. Cached 1h."""
     result = {"url": index_url}
+    isin = _extract_isin(index_url)
+    if isin:
+        result["isin"] = isin
     html_idx = _fetch_html(index_url)
     if html_idx: result["overview"] = _parse_overview(html_idx)
     html_ana = _fetch_html(_to_ana_url(index_url))
@@ -469,26 +479,31 @@ def _mpl_portfolio_pie(df, wcol, profile) -> io.BytesIO:
 
 
 def _mpl_macro_pie(df, wcol) -> io.BytesIO | None:
-    """Asset-allocation pie by macro-category for PDF page 1."""
+    """Asset-allocation donut per macro-categoria — stesso stile di _mpl_portfolio_pie."""
     agg = df[df[wcol]>0.001].groupby("macro_cat")[wcol].sum().sort_values(ascending=False)
     if agg.empty: return None
     colors = [MACRO_COLORS.get(k, "#94A3B8") for k in agg.index]
-    fig, ax = plt.subplots(figsize=(4.5, 5.0))
-    wedges, _, autotexts = ax.pie(
+    fig, (ax_pie, ax_leg) = plt.subplots(1, 2, figsize=(10, 4),
+                                          gridspec_kw={"width_ratios": [1.2, 1]})
+    wedges, _, autotexts = ax_pie.pie(
         agg.values, colors=colors,
         autopct=lambda p: f"{p:.1f}%" if p >= 5 else "",
-        pctdistance=0.72,
-        wedgeprops=dict(edgecolor="white", linewidth=2, width=0.58),
+        pctdistance=0.70,
+        wedgeprops=dict(width=0.58, edgecolor="white", linewidth=2.5),
         startangle=90,
     )
     for at in autotexts:
-        at.set_fontsize(8.5); at.set_color("white"); at.set_fontweight("bold")
-    labels = [f"{k}  {v*100:.1f}%" for k, v in agg.items()]
-    ax.legend(wedges, labels, loc="lower center", bbox_to_anchor=(0.5, -0.26),
-              frameon=False, fontsize=8.5, ncol=1, handlelength=1.2, labelspacing=0.8)
-    ax.set_title("Asset Allocation", fontsize=10, fontweight="bold", color="#0D1B2A", pad=8)
+        at.set_fontsize(10); at.set_color("white"); at.set_fontweight("bold")
+    ax_pie.text(0, 0, "Asset\nAlloc.", ha="center", va="center",
+                fontsize=11, fontweight="bold", color="#0D1B2A")
+    ax_leg.axis("off")
+    handles = [mpatches.Patch(color=colors[i],
+               label=f"{k}  {v*100:.1f}%")
+               for i, (k, v) in enumerate(agg.items())]
+    ax_leg.legend(handles=handles, loc="center left", frameon=False,
+                  fontsize=9.5, labelspacing=1.2, handlelength=1.4)
     fig.patch.set_facecolor("#FFFFFF")
-    plt.tight_layout(pad=1.5)
+    plt.tight_layout(pad=1.2)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig); buf.seek(0); return buf
@@ -547,7 +562,6 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     FT = S("FT", fontName="Helvetica-Oblique",fontSize=7, textColor=rl_colors.HexColor("#94A3B8"), leading=10)
     FS = S("FS", fontName="Helvetica-Bold",  fontSize=13, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=4,spaceAfter=2)
     FK = S("FK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#64748B"), spaceAfter=2)
-    LK = S("LK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1B4FBB"), spaceAfter=2)
     # HDR: sempre bianco+grassetto — per celle intestazione su sfondo scuro
     # (TEXTCOLOR di TableStyle NON sovrascrive il colore dei Paragraph — serve lo stile dedicato)
     HDR= S("HDR",fontName="Helvetica-Bold",  fontSize=7.5,textColor=rl_colors.white, leading=11)
@@ -556,10 +570,10 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     d_act = df[df[wcol]>0.001].copy()
     n_fondi = len(d_act)
 
-    # ISIN lookup per link Morningstar
+    # ISIN da foglio FIDA (fallback per fondi senza URL FondiDoc)
     isin_map = {}
     if fida_df is not None and not fida_df.empty and "isin" in fida_df.columns:
-        isin_map = {r["nome"]: r["isin"] for _, r in fida_df.iterrows()
+        isin_map = {r["nome"]: str(r["isin"]).strip() for _, r in fida_df.iterrows()
                     if r.get("isin") and str(r.get("isin","")).strip()}
     w_az  = (d_act[wcol]*d_act["az_pct"]).sum()*100
     w_obb = (d_act[wcol]*d_act["obb_pct"]).sum()*100
@@ -604,19 +618,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     pie_buf   = _mpl_portfolio_pie(d_act, wcol, profile)
     macro_buf = _mpl_macro_pie(d_act, wcol)
     # Pie fondi — larghezza piena
-    story.append(RLImage(pie_buf, width=15*cm, height=7*cm))
-    # Pie asset allocation — centrato sotto
+    story.append(RLImage(pie_buf, width=15*cm, height=6.5*cm))
+    # Pie asset allocation — stessa larghezza, stesso stile, sotto
     if macro_buf:
-        story.append(Spacer(1, 6))
-        macro_centered = Table(
-            [[RLImage(macro_buf, width=9*cm, height=6.5*cm)]],
-            colWidths=[17*cm]
-        )
-        macro_centered.setStyle(TableStyle([
-            ("ALIGN",   (0,0), (-1,-1), "CENTER"),
-            ("PADDING", (0,0), (-1,-1), 0),
-        ]))
-        story.append(macro_centered)
+        story.append(Spacer(1, 8))
+        story.append(RLImage(macro_buf, width=15*cm, height=5.5*cm))
 
     story.append(PageBreak())
 
@@ -829,22 +835,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         nav_str  = f"NAV {gv('nav')} € ({gv('last_update')})" if gv('nav') != "N/D" else ""
         rating_s = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("N/D","—") else ""
 
-        # ── Intestazione fondo (3-4 righe × 1 colonna) ──────
+        # ── Intestazione fondo (3 righe × 1 colonna) ─────────
         meta_extra = "  ·  ".join(x for x in [srri_str, rating_s, nav_str] if x)
 
-        # Link Morningstar tramite ISIN
-        isin = isin_map.get(row["nome"], "")
-        ms_url = (f"https://www.morningstar.it/it/funds/SecuritySearchResults.aspx"
-                  f"?search={isin}&SearchType=ALL") if isin else ""
+        # ISIN: estratto dall'URL FondiDoc oppure dal foglio FIDA
+        isin = fd.get("isin", "") or isin_map.get(row["nome"], "")
+        isin_str = f"  ·  ISIN: <b>{isin}</b>" if isin else ""
 
         hdr_rows = [
             [Paragraph(f"<b>{row['nome']}</b>", FS)],
-            [Paragraph(f"Peso: <b>{row[wcol]*100:.1f}%</b>  ·  {row['categoria']}", FK)],
+            [Paragraph(f"Peso: <b>{row[wcol]*100:.1f}%</b>  ·  {row['categoria']}{isin_str}", FK)],
             [Paragraph(meta_extra or "—", FK)],
         ]
-        if ms_url:
-            hdr_rows.append([Paragraph(
-                f'<link href="{ms_url}"><u>↗ Scheda Morningstar</u></link>', LK)])
 
         hdr_tbl = Table(hdr_rows, colWidths=[17*cm])
         hdr_tbl.setStyle(TableStyle([
