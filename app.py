@@ -749,7 +749,19 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     ]
     perf_tbl.setStyle(TableStyle(ts_perf))
     # KeepTogether: la tabella rendimenti non viene spezzata su due pagine
-    story.append(KeepTogether([perf_tbl]))
+    NOTE_P = S("NTP", fontName="Helvetica-Oblique", fontSize=6.5,
+               textColor=rl_colors.HexColor("#94A3B8"), leading=9)
+    story.append(KeepTogether([
+        perf_tbl,
+        Spacer(1, 5),
+        Paragraph(
+            "◆ La riga <b>Portafoglio</b> riporta la media ponderata dei rendimenti dei singoli fondi, "
+            "usando i pesi del profilo selezionato. Il calcolo include solo i fondi per cui il dato è "
+            "disponibile su FondiDoc, rinormalizzando i pesi su di essi. "
+            "I rendimenti a 3 e 5 anni sono tassi annualizzati: la media ponderata è un'approssimazione "
+            "(il rendimento composito effettivo dipende dalla sequenza temporale e dalla correlazione tra fondi). "
+            "Dati a titolo indicativo — non costituiscono consulenza di investimento.", NOTE_P),
+    ]))
     story.append(Spacer(1,12))
 
     # ── RISK TABLE ───────────────────────────────────────────
