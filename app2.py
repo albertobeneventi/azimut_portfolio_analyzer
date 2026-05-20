@@ -129,10 +129,94 @@ def _norm_w(lst: list) -> list:
 # FILE PARSERS
 # ════════════════════════════════════════════════════════════
 
+def _extract_text_from_pdf(fb: bytes) -> str:
+    """Estrae testo grezzo da un PDF usando pypdf."""
+    if not _HAS_PYPDF:
+        return ""
+    try:
+        reader = PdfReader(io.BytesIO(fb))
+        return "\n".join(p.extract_text() or "" for p in reader.pages)
+    except Exception:
+        return ""
+
+
+def _parse_funds_from_text(text: str) -> pd.DataFrame:
+    """
+    Dato testo grezzo (da PDF), estrae una lista fondi cercando pattern ISIN.
+    Per ogni ISIN trovato prende le righe vicine come candidato nome.
+    """
+    ISIN_RE = re.compile(r'\b([A-Z]{2}[A-Z0-9]{10})\b')
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    records = []
+    seen_isin = set()
+
+    for i, line in enumerate(lines):
+        for m in ISIN_RE.finditer(line):
+            isin = m.group(1)
+            if isin in seen_isin:
+                continue
+            seen_isin.add(isin)
+
+            # Cerca il nome nelle righe circostanti (prima dell'ISIN di solito)
+            name_candidates = []
+            for offset in [-1, -2, 1, -3, 2]:
+                idx = i + offset
+                if 0 <= idx < len(lines):
+                    cand = lines[idx].strip()
+                    # Scarta righe che contengono altri ISIN, numeri puri, o sono troppo corte
+                    if (cand and len(cand) > 6
+                            and not ISIN_RE.search(cand)
+                            and not re.match(r'^[\d\s\.\,\%\-\+]+$', cand)
+                            and not re.match(r'^\d{1,2}/\d{1,2}/\d{2,4}$', cand)):
+                        name_candidates.append(cand)
+            # Prendi il candidato più lungo come nome (solitamente il più descrittivo)
+            nome = max(name_candidates, key=len) if name_candidates else isin
+
+            # Inferisci categoria dal contesto
+            ctx = " ".join(lines[max(0,i-4):i+5]).lower()
+            cat = ""
+            if any(w in ctx for w in ["azionari","equity","azioni","stock"]): cat = "Azionari"
+            elif any(w in ctx for w in ["obbligazion","bond","credit","reddito fisso","fixed income"]): cat = "Obbligazionari"
+            elif any(w in ctx for w in ["bilanc","flessib","balanced","allocation","flexible"]): cat = "Bilanciati/Flessibili"
+            elif any(w in ctx for w in ["monetar","money market","liquidit"]): cat = "Monetari"
+            elif any(w in ctx for w in ["alternativ","commodity","real asset"]): cat = "Alternativi"
+
+            # Inferisci MIFID/SRRI dal contesto
+            mifid = 4
+            srri_m = re.search(r'(?:srri|mifid|rischio)[^\d]{0,10}([1-7])', ctx)
+            if not srri_m:
+                srri_m = re.search(r'\b([1-7])\s*/\s*7\b', ctx)
+            if srri_m:
+                try: mifid = int(srri_m.group(1))
+                except: pass
+
+            records.append({"nome": nome, "isin": isin, "categoria": cat,
+                            "descrizione": "", "az_pct": 0.5, "mifid": mifid})
+
+    if not records:
+        return pd.DataFrame()
+    df = pd.DataFrame(records).drop_duplicates("isin").reset_index(drop=True)
+    df["macro_cat"] = df["categoria"].apply(get_macro)
+    return assign_colors(df)
+
+
 @st.cache_data(show_spinner=False)
 def parse_funds_file(fb: bytes, fname: str) -> pd.DataFrame:
+    # ── PDF: estrai ISIN + metadati dal testo ──────────────────
+    if fname.lower().endswith(".pdf"):
+        text = _extract_text_from_pdf(fb)
+        if not text.strip():
+            st.error("PDF vuoto o non leggibile con pypdf."); return pd.DataFrame()
+        df = _parse_funds_from_text(text)
+        if df.empty:
+            st.error("Nessun ISIN trovato nel PDF. Carica un Excel/CSV con la lista fondi.")
+        else:
+            st.success(f"📄 PDF: estratti {len(df)} fondi tramite ISIN.")
+        return df
+
+    # ── Excel / CSV ───────────────────────────────────────────
     try:
-        df = pd.read_csv(io.BytesIO(fb)) if fname.endswith(".csv") else pd.read_excel(io.BytesIO(fb))
+        df = pd.read_csv(io.BytesIO(fb)) if fname.lower().endswith(".csv") else pd.read_excel(io.BytesIO(fb))
     except Exception as e:
         st.error(f"Errore lettura fondi: {e}"); return pd.DataFrame()
     df.columns = [str(c).strip().lower() for c in df.columns]
@@ -165,8 +249,36 @@ def parse_funds_file(fb: bytes, fname: str) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def parse_mifid_file(fb: bytes, fname: str) -> pd.DataFrame:
+    # ── PDF: estrai ISIN + SRRI/MIFID dal testo ───────────────
+    if fname.lower().endswith(".pdf"):
+        text = _extract_text_from_pdf(fb)
+        if not text.strip():
+            st.warning("MIFID PDF vuoto o non leggibile."); return pd.DataFrame()
+        ISIN_RE = re.compile(r'\b([A-Z]{2}[A-Z0-9]{10})\b')
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        records = []; seen = set()
+        for i, line in enumerate(lines):
+            for m in ISIN_RE.finditer(line):
+                isin = m.group(1)
+                if isin in seen: continue
+                seen.add(isin)
+                ctx = " ".join(lines[max(0,i-3):i+4]).lower()
+                mifid = 4
+                srri_m = re.search(r'(?:srri|mifid|rischio|risk)[^\d]{0,12}([1-7])', ctx)
+                if not srri_m:
+                    srri_m = re.search(r'\b([1-7])\s*/\s*7\b', ctx)
+                if srri_m:
+                    try: mifid = int(srri_m.group(1))
+                    except: pass
+                records.append({"isin": isin, "mifid": mifid})
+        if not records:
+            st.warning("Nessun ISIN trovato nel PDF MIFID."); return pd.DataFrame()
+        st.success(f"📄 MIFID PDF: {len(records)} fondi estratti.")
+        return pd.DataFrame(records).drop_duplicates("isin").reset_index(drop=True)
+
+    # ── Excel / CSV ───────────────────────────────────────────
     try:
-        df = pd.read_csv(io.BytesIO(fb)) if fname.endswith(".csv") else pd.read_excel(io.BytesIO(fb))
+        df = pd.read_csv(io.BytesIO(fb)) if fname.lower().endswith(".csv") else pd.read_excel(io.BytesIO(fb))
     except Exception as e:
         st.error(f"Errore MIFID: {e}"); return pd.DataFrame()
     df.columns = [str(c).strip().lower() for c in df.columns]
@@ -828,16 +940,16 @@ def main():
         </div>""", unsafe_allow_html=True)
         st.markdown("---")
         st.markdown("<span style='color:#4a6582;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;'>FONDI POTENZIALI (mensile)</span>", unsafe_allow_html=True)
-        file_fondi = st.file_uploader("Excel/CSV — nome, ISIN, categoria, descrizione, MIFID",
-                                       type=["xlsx","xls","csv"], key="u_fondi", label_visibility="collapsed")
+        file_fondi = st.file_uploader("Excel/CSV/PDF — nome, ISIN, categoria, descrizione, MIFID",
+                                       type=["xlsx","xls","csv","pdf"], key="u_fondi", label_visibility="collapsed")
         st.markdown("---")
         st.markdown("<span style='color:#4a6582;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;'>CONTESTO MERCATI</span>", unsafe_allow_html=True)
         file_mercato = st.file_uploader("TXT/PDF con view di mercato",
                                          type=["txt","pdf","md"], key="u_mercato", label_visibility="collapsed")
         st.markdown("---")
         st.markdown("<span style='color:#4a6582;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;'>CLASSIFICAZIONE MIFID</span>", unsafe_allow_html=True)
-        file_mifid = st.file_uploader("Excel/CSV — nome/ISIN + punteggio 1-7",
-                                       type=["xlsx","xls","csv"], key="u_mifid", label_visibility="collapsed")
+        file_mifid = st.file_uploader("Excel/CSV/PDF — nome/ISIN + punteggio 1-7",
+                                       type=["xlsx","xls","csv","pdf"], key="u_mifid", label_visibility="collapsed")
         st.markdown("---")
         st.markdown("<span style='color:#4a6582;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;'>SCHEDE PRODOTTO (PDF allegati)</span>", unsafe_allow_html=True)
         files_schede = st.file_uploader("PDF schede singoli fondi (multipli)",
@@ -864,9 +976,9 @@ def main():
         st.info("⬅️ **Carica il file fondi potenziali** per iniziare.")
         st.markdown("""
 **Flusso di lavoro:**
-1. 📁 **Fondi potenziali** *(mensile)* — lista fondi con ISIN, categoria, descrizione, MIFID
+1. 📁 **Fondi potenziali** *(mensile)* — Excel/CSV **oppure PDF** (es. factbook): gli ISIN vengono estratti automaticamente
 2. 📰 **Contesto mercati** *(più frequente)* — view PDF/TXT → guida la costruzione dei portafogli
-3. 📋 **Classificazione MIFID** — file con punteggi rischio 1-7 per ogni fondo
+3. 📋 **Classificazione MIFID** — Excel/CSV **oppure PDF**: ISIN + punteggio SRRI/MIFID 1-7
 4. 📎 **Schede prodotto** — PDF allegati al report finale
 5. 🚀 **Genera** → 3 portafogli (Articolato · Short · Libero) con rendimenti, asset allocation, VaR, Sharpe
         """)
