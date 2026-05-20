@@ -468,6 +468,32 @@ def _mpl_portfolio_pie(df, wcol, profile) -> io.BytesIO:
     plt.close(fig); buf.seek(0); return buf
 
 
+def _mpl_macro_pie(df, wcol) -> io.BytesIO | None:
+    """Asset-allocation pie by macro-category for PDF page 1."""
+    agg = df[df[wcol]>0.001].groupby("macro_cat")[wcol].sum().sort_values(ascending=False)
+    if agg.empty: return None
+    colors = [MACRO_COLORS.get(k, "#94A3B8") for k in agg.index]
+    fig, ax = plt.subplots(figsize=(4.5, 5.0))
+    wedges, _, autotexts = ax.pie(
+        agg.values, colors=colors,
+        autopct=lambda p: f"{p:.1f}%" if p >= 5 else "",
+        pctdistance=0.72,
+        wedgeprops=dict(edgecolor="white", linewidth=2, width=0.58),
+        startangle=90,
+    )
+    for at in autotexts:
+        at.set_fontsize(8.5); at.set_color("white"); at.set_fontweight("bold")
+    labels = [f"{k}  {v*100:.1f}%" for k, v in agg.items()]
+    ax.legend(wedges, labels, loc="lower center", bbox_to_anchor=(0.5, -0.26),
+              frameon=False, fontsize=8.5, ncol=1, handlelength=1.2, labelspacing=0.8)
+    ax.set_title("Asset Allocation", fontsize=10, fontweight="bold", color="#0D1B2A", pad=8)
+    fig.patch.set_facecolor("#FFFFFF")
+    plt.tight_layout(pad=1.5)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig); buf.seek(0); return buf
+
+
 def _mpl_annual_bar(annual_perf: dict, fund_name: str) -> io.BytesIO | None:
     if not annual_perf: return None
     years, vals = [], []
@@ -565,10 +591,24 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     ]))
     story.append(kpi)
 
-    # ── PIE CHART ───────────────────────────────────────────
-    story.append(Paragraph("Distribuzione del Portafoglio", SC))
-    pie_buf = _mpl_portfolio_pie(d_act, wcol, profile)
-    story.append(RLImage(pie_buf, width=14.5*cm, height=8.5*cm))
+    # ── PIE CHARTS: allocazione fondi + asset allocation ────
+    story.append(Paragraph("Allocazione del Portafoglio", SC))
+    pie_buf   = _mpl_portfolio_pie(d_act, wcol, profile)
+    macro_buf = _mpl_macro_pie(d_act, wcol)
+    if macro_buf:
+        charts_row = Table(
+            [[RLImage(pie_buf, width=10*cm, height=7*cm),
+              RLImage(macro_buf, width=7*cm, height=7*cm)]],
+            colWidths=[10*cm, 7*cm]
+        )
+        charts_row.setStyle(TableStyle([
+            ("VALIGN", (0,0), (-1,-1), "TOP"),
+            ("PADDING", (0,0), (-1,-1), 0),
+            ("LEFTPADDING", (1,0), (1,-1), 6),
+        ]))
+        story.append(charts_row)
+    else:
+        story.append(RLImage(pie_buf, width=14.5*cm, height=8.5*cm))
 
     story.append(PageBreak())
 
@@ -692,12 +732,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ("VALIGN",(0,0),(-1,-1),    "MIDDLE"),
     ]
     perf_tbl.setStyle(TableStyle(ts_perf))
-    story.append(perf_tbl)
+    # KeepTogether: la tabella rendimenti non viene spezzata su due pagine
+    story.append(KeepTogether([perf_tbl]))
     story.append(Spacer(1,12))
 
     # ── RISK TABLE ───────────────────────────────────────────
-    story.append(Paragraph("Metriche di Rischio", SC))
-
     risk_keys = ["vol_1y","vol_3y","vol_5y","var_1y","sharpe_3y","sortino_1y"]
     ptf_r = ptf_wavg(risk_keys)
 
@@ -744,16 +783,19 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ("VALIGN",(0,0),(-1,-1),    "MIDDLE"),
     ]
     risk_tbl.setStyle(TableStyle(ts_risk))
-    story.append(risk_tbl)
-    story.append(Spacer(1,6))
 
-    # Note under tables
     NOTE = S("NT", fontName="Helvetica-Oblique", fontSize=6.5,
              textColor=rl_colors.HexColor("#94A3B8"), leading=9)
-    story.append(Paragraph(
-        "◆ I valori del Portafoglio sono medie ponderate per peso dei singoli fondi. "
-        "La volatilità di portafoglio effettiva dipende anche dalle correlazioni tra i fondi. "
-        "Dati forniti a titolo indicativo.", NOTE))
+    # KeepTogether: titolo + tabella rischio + nota nella stessa pagina
+    story.append(KeepTogether([
+        Paragraph("Metriche di Rischio", SC),
+        risk_tbl,
+        Spacer(1,6),
+        Paragraph(
+            "◆ I valori del Portafoglio sono medie ponderate per peso dei singoli fondi. "
+            "La volatilità di portafoglio effettiva dipende anche dalle correlazioni tra i fondi. "
+            "Dati forniti a titolo indicativo.", NOTE),
+    ]))
 
     story.append(PageBreak())
 
