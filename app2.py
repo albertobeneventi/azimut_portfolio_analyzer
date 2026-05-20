@@ -608,18 +608,38 @@ def calc_metrics(ptf_funds: list, fund_data: dict) -> dict:
 # ════════════════════════════════════════════════════════════
 
 def _pie_funds(ptf_funds, title):
-    names   = [f["nome"][:32]+("…" if len(f["nome"])>32 else "") for f in ptf_funds]
-    weights = [f["peso"] for f in ptf_funds]
-    colors  = [f.get("color","#94A3B8") for f in ptf_funds]
+    # Ordina per peso decrescente per il grafico
+    ptf_sorted = sorted(ptf_funds, key=lambda f: f["peso"], reverse=True)
+    names   = [f["nome"][:30]+("…" if len(f["nome"])>30 else "") for f in ptf_sorted]
+    weights = [f["peso"] for f in ptf_sorted]
+    colors  = [f.get("color","#94A3B8") for f in ptf_sorted]
+    n = len(ptf_sorted)
+
     fig,(ax1,ax2) = plt.subplots(1,2,figsize=(11,5),gridspec_kw={"width_ratios":[1.3,1]})
-    wedges,_,ats = ax1.pie(weights,colors=colors,autopct=lambda p:f"{p:.1f}%" if p>4 else "",
-                            pctdistance=0.72,wedgeprops=dict(width=0.58,edgecolor="white",linewidth=2),startangle=90)
-    for at in ats: at.set_fontsize(8); at.set_color("white"); at.set_fontweight("bold")
-    ax1.text(0,0,title[:8],ha="center",va="center",fontsize=11,fontweight="bold",color="#0D1B2A")
+    wedges,_,ats = ax1.pie(weights,colors=colors,
+                            autopct=lambda p:f"{p:.1f}%" if p>3 else "",
+                            pctdistance=0.72,
+                            wedgeprops=dict(width=0.58,edgecolor="white",linewidth=1.5),
+                            startangle=90)
+    for at in ats: at.set_fontsize(7); at.set_color("white"); at.set_fontweight("bold")
+    ax1.text(0,0,title[:8],ha="center",va="center",fontsize=10,fontweight="bold",color="#0D1B2A")
     ax2.axis("off")
-    ax2.legend([mpatches.Patch(color=colors[i],label=f"{names[i]}  {weights[i]:.1f}%")
-                for i in range(len(ptf_funds))],
-               loc="center left",frameon=False,fontsize=7.5,labelspacing=0.9,handlelength=1.2)
+
+    # Limita la legenda ai top 18 per peso; raggruppa il resto
+    MAX_LEG = 18
+    if n > MAX_LEG:
+        top_handles = [mpatches.Patch(color=colors[i]) for i in range(MAX_LEG)]
+        top_labels  = [f"{names[i]}  {weights[i]:.1f}%" for i in range(MAX_LEG)]
+        altri_w = sum(weights[MAX_LEG:])
+        top_handles.append(mpatches.Patch(color="#CBD5E1"))
+        top_labels.append(f"altri {n-MAX_LEG} fondi  {altri_w:.1f}%")
+    else:
+        top_handles = [mpatches.Patch(color=colors[i]) for i in range(n)]
+        top_labels  = [f"{names[i]}  {weights[i]:.1f}%" for i in range(n)]
+
+    ax2.legend(top_handles, top_labels,
+               loc="center left", frameon=False,
+               fontsize=7.5, labelspacing=0.85, handlelength=1.2)
     fig.patch.set_facecolor("#FFFFFF"); plt.tight_layout(pad=1.5)
     buf=io.BytesIO(); fig.savefig(buf,format="png",dpi=150,bbox_inches="tight",facecolor="white")
     plt.close(fig); buf.seek(0); return buf
@@ -636,9 +656,10 @@ def _pie_macro(macro_alloc):
     for at in ats: at.set_fontsize(9.5); at.set_color("white"); at.set_fontweight("bold")
     ax1.text(0,0,"Asset\nAlloc.",ha="center",va="center",fontsize=10,fontweight="bold",color="#0D1B2A")
     ax2.axis("off")
-    ax2.legend([mpatches.Patch(color=colors[i],label=f"{keys[i]}  {vals[i]:.1f}%")
-                for i in range(len(keys))],
-               loc="center left",frameon=False,fontsize=9,labelspacing=1.1,handlelength=1.3)
+    handles = [mpatches.Patch(color=colors[i]) for i in range(len(keys))]
+    labels  = [f"{keys[i]}  {vals[i]:.1f}%" for i in range(len(keys))]
+    ax2.legend(handles, labels,
+               loc="center left", frameon=False, fontsize=9, labelspacing=1.1, handlelength=1.3)
     fig.patch.set_facecolor("#FFFFFF"); plt.tight_layout(pad=1.2)
     buf=io.BytesIO(); fig.savefig(buf,format="png",dpi=150,bbox_inches="tight",facecolor="white")
     plt.close(fig); buf.seek(0); return buf
