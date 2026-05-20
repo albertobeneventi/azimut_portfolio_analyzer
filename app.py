@@ -334,6 +334,8 @@ def _parse_analysis(html: str) -> dict:
                     d["vol_1y"],d["vol_3y"],d["vol_5y"] = gv(1),gv(2),gv(3)
                 elif "negative" in lbl:
                     d["neg_vol_1y"] = gv(1)
+                    if len(header) > 2: d["neg_vol_3y"] = gv(2)
+                    if len(header) > 3: d["neg_vol_5y"] = gv(3)
                 elif "sharpe" in lbl:
                     d["sharpe_1y"],d["sharpe_3y"],d["sharpe_5y"] = gv(1),gv(2),gv(3)
                 elif "sortino" in lbl:
@@ -875,8 +877,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
              pval(gv("ytd")), pval(gv("perf_1y")), pval(gv("perf_3y")), pval(gv("perf_5y"))],
             [Paragraph("Volatilità",SM),
              Paragraph("—",SM), Paragraph(gv("vol_1y"),SM), Paragraph(gv("vol_3y"),SM), Paragraph(gv("vol_5y"),SM)],
-            [Paragraph("VaR",SM),
-             Paragraph("—",SM), Paragraph(gv("var_1y"),SM), Paragraph(gv("var_3y"),SM), Paragraph("—",SM)],
+            [Paragraph("Vol. Neg.",SM),
+             Paragraph("—",SM), Paragraph(gv("neg_vol_1y"),SM), Paragraph(gv("neg_vol_3y"),SM), Paragraph(gv("neg_vol_5y"),SM)],
             [Paragraph("Sharpe",SM),
              Paragraph("—",SM), Paragraph("—",SM), Paragraph(gv("sharpe_3y"),SM), Paragraph(gv("sharpe_5y"),SM)],
             [Paragraph("Sortino",SM),
