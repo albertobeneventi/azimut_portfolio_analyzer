@@ -529,18 +529,118 @@ def fetch_all(funds_df: pd.DataFrame, progress_cb=None) -> dict:
 # PORTFOLIO CONSTRUCTION
 # ════════════════════════════════════════════════════════════
 
-def _market_signals(text: str) -> dict:
-    if not text: return {"eq":0,"bd":0,"regions":[],"risk":"neutral"}
+def _extract_market_view(text: str) -> dict:
+    """
+    Analisi strutturata del documento di contesto mercati.
+    Cerca sezioni 'Contest View', 'Asset Allocation', 'View' ecc.
+    Restituisce segnali per scoring + dati per il Quadro di Mercato nel PDF.
+    """
+    if not text:
+        return {"signals":{"eq":0,"bd":0,"regions":[],"risk":"neutral"},
+                "asset_views":[],"geo_views":[],"themes":[],"summary":"","risk":"neutral"}
     t = text.lower()
-    eq = sum(1 for w in ["rialzo","bullish","azionario positivo","overweight equity","sovrappeso azionario"] if w in t) \
-       - sum(1 for w in ["ribasso","bearish","azionario negativo","sottopeso azionario","sell equity"] if w in t)
-    bd = sum(1 for w in ["obbligazionario positivo","overweight bond","tassi in calo","duration lunga"] if w in t) \
-       - sum(1 for w in ["obbligazionario negativo","underweight bond","tassi in rialzo","duration corta"] if w in t)
-    regions = ([r for r in ["Europa","USA","Emergenti","Globale","Asia","Giappone"]
-                if r.lower() in t or (r=="USA" and ("usa" in t or "america" in t or "s&p" in t))])
-    risk = "low" if any(w in t for w in ["risk off","cautela","prudente","difensivo","bassa volatilità"]) \
-      else "high" if any(w in t for w in ["risk on","aggressivo","growth","high risk"]) else "neutral"
-    return {"eq":eq,"bd":bd,"regions":regions,"risk":risk}
+
+    # ── cerca la sezione "contest view" / "market view" ─────
+    # Isola la porzione rilevante del documento se esiste
+    VIEW_MARKERS = ["contest view","market view","view di mercato","asset allocation view",
+                    "investment view","our view","tactical view","posizionamento"]
+    view_text = text
+    for marker in VIEW_MARKERS:
+        idx = t.find(marker)
+        if idx >= 0:
+            # Prendi i 3000 caratteri dopo il marker
+            view_text = text[idx:idx+3000]
+            break
+    vt = view_text.lower()
+
+    # ── asset class: vista +/=/- ─────────────────────────────
+    AC_DEF = {
+        "Azionario":      (["azionari","equity","azioni","stock"],
+                           ["sovrappeso","overweight","positiv","costruttiv","rialzist","preferit","favorit","aumenta"],
+                           ["sottopeso","underweight","negativ","ribassist","ridurr","cauto","evitar"]),
+        "Obbligazionario":(["obbligazion","bond","reddito fisso","fixed income","governo","governativ","corporate","credito","duration"],
+                           ["sovrappeso","overweight","positiv","costruttiv","duration lunga","tassi in calo"],
+                           ["sottopeso","underweight","negativ","duration corta","short duration","tassi in rialzo"]),
+        "Monetario/Cash": (["monetari","money market","liquidità","liquidita","cash"],
+                           ["sovrappeso","overweight","favorit","privilegia"],
+                           ["sottopeso","underweight","ridurr"]),
+        "Alternativi":    (["alternativ","commodity","commodit","real asset","oro","gold","infrastructure"],
+                           ["sovrappeso","overweight","positiv","costruttiv"],
+                           ["sottopeso","underweight","negativ"]),
+    }
+    asset_views = []
+    eq_score = 0; bd_score = 0
+    for asset, (keys, pos_w, neg_w) in AC_DEF.items():
+        pos = neg = 0
+        for key in keys:
+            for m in re.finditer(re.escape(key), vt):
+                ctx = vt[max(0,m.start()-90):m.end()+90]
+                pos += sum(1 for w in pos_w if w in ctx)
+                neg += sum(1 for w in neg_w if w in ctx)
+        if pos == 0 and neg == 0: continue
+        if pos > neg:   view, col = "Sovrappeso (+)", "#1A7A4A"
+        elif neg > pos: view, col = "Sottopeso (−)",  "#C0392B"
+        else:           view, col = "Neutrale (=)",   "#475569"
+        asset_views.append({"asset":asset,"view":view,"color":col,"pos":pos,"neg":neg})
+        if "Azionario"      in asset: eq_score = pos - neg
+        if "Obbligazionario" in asset: bd_score = pos - neg
+
+    # ── preferenze geografiche ───────────────────────────────
+    GEO = {
+        "Europa":    ["europa","eurozona","eurozone","bce","ecb","dax","euro stoxx"],
+        "USA":       ["usa","stati uniti","america","s&p","fed ","federal reserve","wall street"],
+        "Emergenti": ["emergenti","emerging market","em ","cina","india","brasile","latam"],
+        "Asia":      ["asia ex","asia-pacific","apac"],
+        "Giappone":  ["giappone","japan","nikkei","boj","topix"],
+        "UK":        ["regno unito","uk ","gran bretagna","ftse"],
+    }
+    geo_views = []
+    regions = []
+    for geo, keys in GEO.items():
+        cnt = sum(vt.count(k) for k in keys)
+        if cnt >= 1:
+            regions.append(geo)
+            geo_views.append({"region": geo, "cnt": cnt})
+    geo_views = sorted(geo_views, key=lambda x: x["cnt"], reverse=True)
+
+    # ── propensione al rischio ────────────────────────────────
+    low_w  = ["risk off","risk-off","cautela","prudente","difensiv","quality","qualità","bassa volatil","protettiv"]
+    high_w = ["risk on","risk-on","aggressiv","pro-ciclic","high beta","risk appetite","crescita"]
+    rl = sum(1 for w in low_w  if w in vt)
+    rh = sum(1 for w in high_w if w in vt)
+    risk = "low" if rl > rh else ("high" if rh > rl else "neutral")
+
+    # ── temi di mercato ───────────────────────────────────────
+    THEMES = [
+        (["inflazion","inflation","cpi","pce"],                         "Inflazione"),
+        (["tassi","rate","banca centr","bce","fed "],                   "Banche centrali / Tassi"),
+        (["crescita","gdp","pil","recessione","recession","soft land"], "Crescita / Ciclo"),
+        (["geopolit","guerra","conflitt","ucraina","russia","taiwan"],  "Rischi geopolitici"),
+        (["credito","spread","high yield","investment grade"],          "Credito"),
+        (["dollaro","euro/dollar","eur/usd","valuta","forex","fx "],    "Valute"),
+        (["tecnologi","ai ","intelligenza artificiale","semi"],         "Tecnologia / AI"),
+        (["energia","petrolio","oil","gas","materie prime","commodity"],"Energia / Commodities"),
+        (["immobil","reit","real estate"],                              "Immobiliare"),
+    ]
+    themes = [lbl for keys, lbl in THEMES if any(k in vt for k in keys)]
+
+    # ── sommario: prime frasi significative del documento ────
+    lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 50]
+    summary = " ".join(lines[:3])[:500]
+
+    return {
+        "signals":     {"eq": eq_score, "bd": bd_score, "regions": regions, "risk": risk},
+        "asset_views": asset_views,
+        "geo_views":   geo_views,
+        "themes":      themes,
+        "summary":     summary,
+        "risk":        risk,
+    }
+
+
+def _market_signals(text: str) -> dict:
+    """Wrapper per compatibilità — restituisce solo i segnali di scoring."""
+    return _extract_market_view(text)["signals"]
 
 
 def _score_funds(funds_df, signals, mifid_df=None):
@@ -775,7 +875,7 @@ def _pie_macro(macro_alloc):
 # PDF GENERATOR
 # ════════════════════════════════════════════════════════════
 
-def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None, schede_alloc=None):
+def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None, schede_alloc=None, market_view=None):
     # ── STILI ────────────────────────────────────────────────
     NAV="#0D1B2A"; GLD="#C9A84C"; MED="#64748B"; LGT="#94A3B8"; SLT="#1E293B"
     buf = io.BytesIO()
@@ -873,13 +973,112 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
     story += [ptf_sum, Spacer(1,10)]
 
     if market_text and market_text.strip():
-        story += [Paragraph("Contesto di Mercato", T2),
-                  Paragraph(market_text.strip()[:600].replace("\n","<br/>"), IT)]
+        story += [Paragraph("Sintesi del Contesto di Mercato", T2),
+                  Paragraph((market_view or {}).get("summary","") or
+                             market_text.strip()[:500].replace("\n"," "), IT)]
 
     story.append(PageBreak())
 
     # ════════════════════════════════════════════════════════
-    # PAG 2-4 — UN PORTAFOGLIO PER PAGINA
+    # PAG 2 — QUADRO DI MERCATO (solo se market_view disponibile)
+    # ════════════════════════════════════════════════════════
+    mv = market_view or {}
+    if mv.get("asset_views") or mv.get("themes"):
+        story += [
+            accent_bar(), Spacer(1,8),
+            Paragraph("AZIMUT INVESTMENTS  ·  PORTFOLIO BUILDER", EY), Spacer(1,3),
+            Paragraph("Quadro di Mercato", T1),
+            Paragraph(f"Estratto dal documento di contesto  ·  {datetime.date.today().strftime('%d %B %Y')}", SU),
+            color_bar("#C9A84C"), Spacer(1,10),
+        ]
+
+        # Tabella posizionamento asset class + temi chiave affiancati
+        left_parts = []
+        right_parts = []
+
+        if mv.get("asset_views"):
+            ac_hdr = [Paragraph("<b>Asset Class</b>",HDR),
+                      Paragraph("<b>Posizionamento</b>",HDR),
+                      Paragraph("<b>Segnale</b>",HDR)]
+            ac_rows = [ac_hdr]
+            for av in mv["asset_views"]:
+                strength = av.get("pos",0) + av.get("neg",0)
+                dots = min(strength, 5)
+                sig = "●"*dots + "○"*(5-dots)
+                ac_rows.append([
+                    Paragraph(av["asset"], SM),
+                    Paragraph(f'<font color="{av["color"]}"><b>{av["view"]}</b></font>', SM),
+                    Paragraph(f'<font color="{av["color"]}">{sig}</font>', SM),
+                ])
+            ac_tbl = Table(ac_rows, colWidths=[3.5*cm, 3.5*cm, 2.2*cm])
+            ac_tbl.setStyle(TableStyle([
+                ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor(NAV)),
+                ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
+                ("FONTSIZE",(0,0),(-1,-1),7.5),("PADDING",(0,0),(-1,-1),5),
+                ("LINEBELOW",(0,0),(-1,-1),0.4,rl_colors.HexColor("#E2E8F0")),
+                ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+            ]))
+            left_parts.append(Paragraph("<b>Posizionamento per Asset Class</b>", T2))
+            left_parts.append(Spacer(1,4))
+            left_parts.append(ac_tbl)
+
+        if mv.get("geo_views"):
+            left_parts.append(Spacer(1,10))
+            left_parts.append(Paragraph("<b>Regioni preferite</b>", T2))
+            left_parts.append(Spacer(1,4))
+            geo_rows = [[Paragraph("<b>Regione</b>",HDR), Paragraph("<b>Menzioni</b>",HDR)]]
+            for gv_item in mv["geo_views"][:6]:
+                geo_rows.append([
+                    Paragraph(gv_item["region"], SM),
+                    Paragraph("●" * min(gv_item["cnt"],5), SM),
+                ])
+            geo_tbl = Table(geo_rows, colWidths=[4*cm, 5.2*cm])
+            geo_tbl.setStyle(TableStyle([
+                ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor(NAV)),
+                ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
+                ("FONTSIZE",(0,0),(-1,-1),7.5),("PADDING",(0,0),(-1,-1),5),
+                ("LINEBELOW",(0,0),(-1,-1),0.4,rl_colors.HexColor("#E2E8F0")),
+            ]))
+            left_parts.append(geo_tbl)
+
+        # Colonna destra: propensione rischio + temi
+        risk_lbl   = {"low":"Risk-Off / Difensivo","high":"Risk-On / Aggressivo","neutral":"Bilanciato / Neutrale"}
+        risk_col   = {"low":"#C0392B","high":"#1A7A4A","neutral":"#475569"}
+        risk_val   = mv.get("risk","neutral")
+        right_parts.append(Paragraph("<b>Propensione al Rischio</b>", T2))
+        right_parts.append(Spacer(1,4))
+        risk_box = Table([[Paragraph(
+            f'<font color="{risk_col[risk_val]}" size="14"><b>{risk_lbl[risk_val]}</b></font>', BD)]],
+            colWidths=[7.5*cm])
+        risk_box.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F8FAFC")),
+            ("BOX",(0,0),(-1,-1),1.5,rl_colors.HexColor(risk_col[risk_val])),
+            ("PADDING",(0,0),(-1,-1),10),("ALIGN",(0,0),(-1,-1),"CENTER"),
+        ]))
+        right_parts.append(risk_box)
+
+        if mv.get("themes"):
+            right_parts.append(Spacer(1,10))
+            right_parts.append(Paragraph("<b>Temi Chiave Identificati</b>", T2))
+            right_parts.append(Spacer(1,4))
+            for th in mv["themes"]:
+                right_parts.append(Paragraph(f"▸  {th}", SM))
+                right_parts.append(Spacer(1,3))
+
+        # Layout a due colonne
+        from reportlab.platypus import KeepInFrame
+        left_frame  = KeepInFrame(9*cm, 22*cm, left_parts,  mode="shrink")
+        right_frame = KeepInFrame(7.5*cm, 22*cm, right_parts, mode="shrink")
+        two_col = Table([[left_frame, right_frame]], colWidths=[9.4*cm, 8*cm])
+        two_col.setStyle(TableStyle([
+            ("VALIGN",(0,0),(-1,-1),"TOP"),
+            ("LEFTPADDING",(1,0),(1,0),14),
+        ]))
+        story.append(two_col)
+        story.append(PageBreak())
+
+    # ════════════════════════════════════════════════════════
+    # PAG 3-5 (o 2-4 senza quadro) — UN PORTAFOGLIO PER PAGINA
     # tabella fondi + torta asset allocation affiancati
     # ════════════════════════════════════════════════════════
     PTF_COLORS = {"articolato":"#1B4FBB","short":"#065F46","libero":"#7C3AED"}
@@ -1338,11 +1537,35 @@ def main():
 
             with st.spinner("📄 Generazione PDF…"):
                 try:
+                    market_view = _extract_market_view(market_text) if market_text else None
                     pdf_bytes = generate_pdf(portfolios, ptf_df, fund_data, market_text,
-                                             fund_sheets, schede_alloc)
+                                             fund_sheets, schede_alloc, market_view)
                     prog.empty()
 
-                    # Anteprima
+                    # Anteprima quadro mercato
+                    if market_view and (market_view.get("asset_views") or market_view.get("themes")):
+                        st.markdown("---")
+                        st.markdown('<p class="sec-title">📊 Quadro di Mercato estratto</p>', unsafe_allow_html=True)
+                        qa, qb = st.columns(2)
+                        with qa:
+                            if market_view.get("asset_views"):
+                                st.markdown("**Posizionamento Asset Class**")
+                                for av in market_view["asset_views"]:
+                                    color_map = {"Sovrappeso (+)":"🟢","Sottopeso (−)":"🔴","Neutrale (=)":"🟡"}
+                                    icon = color_map.get(av["view"],"⚪")
+                                    st.write(f"{icon} **{av['asset']}**: {av['view']}")
+                        with qb:
+                            risk_icon = {"low":"🔴 Risk-Off","high":"🟢 Risk-On","neutral":"🟡 Neutrale"}
+                            st.markdown(f"**Propensione rischio:** {risk_icon.get(market_view.get('risk','neutral'),'—')}")
+                            if market_view.get("themes"):
+                                st.markdown("**Temi chiave:**")
+                                for th in market_view["themes"]:
+                                    st.write(f"▸ {th}")
+                            if market_view.get("geo_views"):
+                                st.markdown("**Regioni citate:**")
+                                st.write("  ·  ".join(g["region"] for g in market_view["geo_views"]))
+
+                    # Anteprima portafogli
                     st.markdown("---")
                     st.markdown('<p class="sec-title">Anteprima Portafogli</p>', unsafe_allow_html=True)
                     tabs = st.tabs(["📊 Articolato","⚡ Short","🎨 Libero"])
