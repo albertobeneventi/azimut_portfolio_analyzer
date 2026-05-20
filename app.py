@@ -808,7 +808,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             [Paragraph("Sortino",SM),
              Paragraph("—",SM), Paragraph(gv("sortino_1y"),SM), Paragraph("—",SM), Paragraph("—",SM)],
         ]
-        perf_tbl2 = Table(perf_data, colWidths=[2.8*cm,1.6*cm,1.9*cm,1.9*cm,1.9*cm])
+        perf_tbl2 = Table(perf_data, colWidths=[2.6*cm,1.5*cm,1.8*cm,1.8*cm,1.8*cm])
         perf_tbl2.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor("#0D1B2A")),
             ("TEXTCOLOR",(0,0),(-1,0),rl_colors.white),
@@ -841,9 +841,13 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             ("BACKGROUND",(0,0),(0,0),rl_colors.HexColor("#F8FAFC")),
         ]))
 
-        mid_row = Table([[perf_tbl2, Spacer(0.3*cm,0), det_tbl]],
-                        colWidths=[10.2*cm,0.4*cm,6.4*cm])
-        mid_row.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),("PADDING",(0,0),(-1,-1),0)]))
+        mid_row = Table([[perf_tbl2, det_tbl]],
+                        colWidths=[9.5*cm, 7.5*cm])
+        mid_row.setStyle(TableStyle([
+            ("VALIGN",(0,0),(-1,-1),"TOP"),
+            ("PADDING",(0,0),(-1,-1),0),
+            ("LEFTPADDING",(1,0),(1,-1),14),
+        ]))
 
         story.append(Spacer(1,8))
         for b in fund_block: story.append(b[0])
