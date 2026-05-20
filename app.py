@@ -337,6 +337,9 @@ def _parse_analysis(html: str) -> dict:
                     d["sharpe_1y"],d["sharpe_3y"],d["sharpe_5y"] = gv(1),gv(2),gv(3)
                 elif "sortino" in lbl:
                     d["sortino_1y"] = gv(1)
+                elif "var" in lbl or "value at risk" in lbl:
+                    d["var_1y"] = gv(1)
+                    if len(header) > 2: d["var_3y"] = gv(2)
 
         # Annual performance (header contains year digits)
         elif any(h.isdigit() and len(h)==4 for h in header):
@@ -695,11 +698,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # ── RISK TABLE ───────────────────────────────────────────
     story.append(Paragraph("Metriche di Rischio", SC))
 
-    risk_keys = ["vol_1y","vol_3y","vol_5y","sharpe_1y","sharpe_3y","sortino_1y"]
+    risk_keys = ["vol_1y","vol_3y","vol_5y","var_1y","sharpe_3y","sortino_1y"]
     ptf_r = ptf_wavg(risk_keys)
 
     risk_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
-                ["Fondo","Peso","Vol. 1A","Vol. 3A","Vol. 5A","Sharpe 1A","Sharpe 3A","Sortino 1A"]]
+                ["Fondo","Peso","Vol. 1A","Vol. 3A","Vol. 5A","VaR 1A","Sharpe 3A","Sortino 1A"]]
 
     ptf_risk_row = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
@@ -707,7 +710,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         Paragraph(ptf_r.get("vol_1y","N/D"),    WH),
         Paragraph(ptf_r.get("vol_3y","N/D"),    WH),
         Paragraph(ptf_r.get("vol_5y","N/D"),    WH),
-        Paragraph(ptf_r.get("sharpe_1y","N/D"), WH),
+        Paragraph(ptf_r.get("var_1y","N/D"),    WH),
         Paragraph(ptf_r.get("sharpe_3y","N/D"), WH),
         Paragraph(ptf_r.get("sortino_1y","N/D"),WH),
     ]
@@ -716,12 +719,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     for _, row in d_sorted.iterrows():
         fd  = (fund_data or {}).get(row["nome"], {})
         ana = fd.get("analysis", {})
-        def gv(k): return ana.get(k,"N/D")
+        def gv_r(k): return ana.get(k,"N/D")
         risk_rows.append([
             Paragraph(row["nome"][:48], SM),
             Paragraph(f"{row[wcol]*100:.1f}%", SM),
-            Paragraph(gv("vol_1y"),    SM), Paragraph(gv("vol_3y"),    SM), Paragraph(gv("vol_5y"),    SM),
-            Paragraph(gv("sharpe_1y"), SM), Paragraph(gv("sharpe_3y"), SM), Paragraph(gv("sortino_1y"),SM),
+            Paragraph(gv_r("vol_1y"),    SM), Paragraph(gv_r("vol_3y"),    SM), Paragraph(gv_r("vol_5y"),    SM),
+            Paragraph(gv_r("var_1y"),    SM), Paragraph(gv_r("sharpe_3y"), SM), Paragraph(gv_r("sortino_1y"),SM),
         ])
 
     risk_tbl = Table(risk_rows,
@@ -776,19 +779,25 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         nav_str  = f"NAV {gv('nav')} € ({gv('last_update')})" if gv('nav') != "N/D" else ""
         rating_s = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("N/D","—") else ""
 
-        fund_block = [
-            [Table([[
-                Paragraph(f"<b>{row['nome']}</b>", FS),
-                Paragraph(f"Peso nel portafoglio: <b>{row[wcol]*100:.1f}%</b>", FK),
-                Paragraph(f"{row['categoria']}  ·  {srri_str}  ·  {rating_s}  ·  {nav_str}", FK),
-            ]], colWidths=[17*cm], style=TableStyle([
-                ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F0F4F9")),
-                ("PADDING",(0,0),(-1,-1),10),
-                ("LINEBELOW",(0,0),(-1,-1),2,rl_colors.HexColor("#C9A84C")),
-            ]))],
-        ]
+        # ── Intestazione fondo (3 righe × 1 colonna) ─────────
+        meta_extra = "  ·  ".join(x for x in [srri_str, rating_s, nav_str] if x)
+        hdr_tbl = Table([
+            [Paragraph(f"<b>{row['nome']}</b>", FS)],
+            [Paragraph(f"Peso: <b>{row[wcol]*100:.1f}%</b>  ·  {row['categoria']}", FK)],
+            [Paragraph(meta_extra or "—", FK)],
+        ], colWidths=[17*cm])
+        hdr_tbl.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1), rl_colors.HexColor("#F0F4F9")),
+            ("LEFTPADDING",(0,0),(-1,-1), 10),
+            ("RIGHTPADDING",(0,0),(-1,-1), 10),
+            ("TOPPADDING",(0,0),(-1,0), 10),
+            ("BOTTOMPADDING",(0,-1),(-1,-1), 10),
+            ("TOPPADDING",(0,1),(-1,-1), 2),
+            ("BOTTOMPADDING",(0,0),(-1,-2), 2),
+            ("LINEBELOW",(0,-1),(-1,-1), 2, rl_colors.HexColor("#C9A84C")),
+        ]))
 
-        # Two-column layout: performance left, details right
+        # ── Tabella rendimenti fondo ──────────────────────────
         def pval(v):
             try:
                 num = float(v.replace("%","").replace(",","."))
@@ -797,76 +806,73 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             except: return Paragraph(v, BD)
 
         perf_data = [
-            [Paragraph("<b>Rendimenti</b>",HDR), Paragraph("<b>YTD</b>",HDR),
+            [Paragraph("<b>Metrica</b>",HDR), Paragraph("<b>YTD</b>",HDR),
              Paragraph("<b>1 Anno</b>",HDR), Paragraph("<b>3 Anni</b>",HDR), Paragraph("<b>5 Anni</b>",HDR)],
             [Paragraph("Performance",SM),
              pval(gv("ytd")), pval(gv("perf_1y")), pval(gv("perf_3y")), pval(gv("perf_5y"))],
             [Paragraph("Volatilità",SM),
              Paragraph("—",SM), Paragraph(gv("vol_1y"),SM), Paragraph(gv("vol_3y"),SM), Paragraph(gv("vol_5y"),SM)],
+            [Paragraph("VaR",SM),
+             Paragraph("—",SM), Paragraph(gv("var_1y"),SM), Paragraph(gv("var_3y"),SM), Paragraph("—",SM)],
             [Paragraph("Sharpe",SM),
-             Paragraph("—",SM), Paragraph(gv("sharpe_1y"),SM), Paragraph(gv("sharpe_3y"),SM), Paragraph(gv("sharpe_5y"),SM)],
+             Paragraph("—",SM), Paragraph("—",SM), Paragraph(gv("sharpe_3y"),SM), Paragraph(gv("sharpe_5y"),SM)],
             [Paragraph("Sortino",SM),
              Paragraph("—",SM), Paragraph(gv("sortino_1y"),SM), Paragraph("—",SM), Paragraph("—",SM)],
         ]
-        perf_tbl2 = Table(perf_data, colWidths=[2.6*cm,1.5*cm,1.8*cm,1.8*cm,1.8*cm])
+        perf_tbl2 = Table(perf_data, colWidths=[2.4*cm,1.5*cm,1.8*cm,1.8*cm,1.8*cm])
         perf_tbl2.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor("#0D1B2A")),
-            ("TEXTCOLOR",(0,0),(-1,0),rl_colors.white),
-            ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
-            ("FONTSIZE",(0,0),(-1,-1),8),
-            ("PADDING",(0,0),(-1,-1),5),
+            ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),
+            ("TEXTCOLOR",(0,0),(-1,0),  rl_colors.white),
+            ("FONTNAME",(0,0),(-1,0),   "Helvetica-Bold"),
+            ("FONTSIZE",(0,0),(-1,-1),  7.5),
+            ("PADDING",(0,0),(-1,-1),   4),
             ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
-            ("LINEBELOW",(0,0),(-1,-1),0.4,rl_colors.HexColor("#E2E8F0")),
+            ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
             ("ALIGN",(1,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
         ]))
 
-        # Details column
+        # ── Dettagli fondo ───────────────────────────────────
         det_data = [
-            [Paragraph("<b>Dettagli Fondo</b>",BD)],
-            [Paragraph(f"Data avvio: {gv('start_date',ov,'—')}",SM)],
-            [Paragraph(f"Distribuzione: {gv('income',ov,'—')}",SM)],
-            [Paragraph(f"Categoria Assogestioni: {gv('cat_assog',ov,'—')}",SM)],
-            [Spacer(1,4)],
-            [Paragraph("<b>Commissioni</b>",BD)],
-            [Paragraph(f"Gestione: {gv('mgmt_fee',ov,'—')}",SM)],
-            [Paragraph(f"Performance: {gv('perf_fee',ov,'—')}",SM)],
-            [Paragraph(f"Sottoscrizione: {gv('sub_fee',ov,'—')}",SM)],
-            [Spacer(1,4)],
-            [Paragraph(f"<b>FIDArating:</b> {gv('fida_rating',ov,'—')}  |  Score: {gv('fida_score',ov,'—')}",SM)],
+            [Paragraph("<b>Dettagli Fondo</b>", BD)],
+            [Paragraph(f"Data avvio: {gv('start_date',ov,'—')}", SM)],
+            [Paragraph(f"Distribuzione: {gv('income',ov,'—')}", SM)],
+            [Paragraph(f"Categoria: {gv('cat_assog',ov,'—')}", SM)],
+            [Paragraph(f"Gestione: {gv('mgmt_fee',ov,'—')}  |  Perf.: {gv('perf_fee',ov,'—')}", SM)],
+            [Paragraph(f"Sottoscrizione: {gv('sub_fee',ov,'—')}", SM)],
+            [Paragraph(f"<b>FIDArating:</b> {gv('fida_rating',ov,'—')}  |  Score: {gv('fida_score',ov,'—')}", SM)],
         ]
-        det_tbl = Table(det_data, colWidths=[6.4*cm])
+        det_tbl = Table([[d[0]] for d in det_data], colWidths=[7.3*cm])
         det_tbl.setStyle(TableStyle([
-            ("PADDING",(0,0),(-1,-1),3),
-            ("LINEBELOW",(0,0),(0,0),0.8,rl_colors.HexColor("#E2E8F0")),
-            ("BACKGROUND",(0,0),(0,0),rl_colors.HexColor("#F8FAFC")),
+            ("PADDING",(0,0),(-1,-1), 3),
+            ("TOPPADDING",(0,0),(-1,0), 6),
+            ("LINEBELOW",(0,0),(0,0), 0.8, rl_colors.HexColor("#C9A84C")),
+            ("BACKGROUND",(0,0),(0,-1), rl_colors.HexColor("#F8FAFC")),
         ]))
 
-        mid_row = Table([[perf_tbl2, det_tbl]],
-                        colWidths=[9.5*cm, 7.5*cm])
+        mid_row = Table([[perf_tbl2, det_tbl]], colWidths=[9.7*cm, 7.3*cm])
         mid_row.setStyle(TableStyle([
-            ("VALIGN",(0,0),(-1,-1),"TOP"),
-            ("PADDING",(0,0),(-1,-1),0),
-            ("LEFTPADDING",(1,0),(1,-1),14),
+            ("VALIGN",(0,0),(-1,-1), "TOP"),
+            ("PADDING",(0,0),(-1,-1), 0),
+            ("LEFTPADDING",(1,0),(1,-1), 10),
         ]))
 
-        story.append(Spacer(1,8))
-        for b in fund_block: story.append(b[0])
-        story.append(Spacer(1,8))
-        story.append(mid_row)
-        story.append(Spacer(1,6))
-
-        # Annual performance bar chart
-        annual = ana.get("annual_perf")
+        # ── Grafico rendimenti annuali ───────────────────────
+        annual  = ana.get("annual_perf")
         bar_buf = _mpl_annual_bar(annual, row["nome"]) if annual else None
-        if bar_buf:
-            story.append(Paragraph("<b>Performance Annuale (€)</b>", SM))
-            story.append(RLImage(bar_buf, width=14.5*cm, height=3.5*cm))
 
-        # Separator (not after last fund)
+        # ── KeepTogether: tutta la scheda su stessa pagina ───
+        card = [Spacer(1,6), hdr_tbl, Spacer(1,6), mid_row]
+        if bar_buf:
+            card += [Spacer(1,4),
+                     Paragraph("<b>Performance Annuale (%)</b>", SM),
+                     RLImage(bar_buf, width=14*cm, height=3.2*cm)]
+        story.append(KeepTogether(card))
+
+        # Separatore tra fondi
         if idx < len(d_sorted)-1:
-            story.append(HRFlowable(width="100%",thickness=0.5,
-                                     color=rl_colors.HexColor("#CBD5E1"),
-                                     spaceBefore=10,spaceAfter=10))
+            story.append(HRFlowable(width="100%", thickness=0.5,
+                                    color=rl_colors.HexColor("#CBD5E1"),
+                                    spaceBefore=8, spaceAfter=8))
 
     # ── FOOTER ─────────────────────────────────────────────
     story.append(PageBreak())
