@@ -631,6 +631,9 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             return f'<font color="{color}"><b>{val}</b></font>'
         except: return val
 
+    # ── d_sorted deve essere definito PRIMA di chiamare ptf_wavg ──
+    d_sorted = d_act.sort_values(wcol, ascending=False)
+
     # ── PERFORMANCE TABLE ────────────────────────────────────
     perf_keys = ["ytd","perf_1y","perf_3y","perf_5y","vol_1y","sharpe_1y"]
     ptf_p = ptf_wavg(perf_keys)
@@ -652,7 +655,6 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     perf_rows = [perf_hdr, ptf_perf_row]
 
-    d_sorted = d_act.sort_values(wcol, ascending=False)
     for _, row in d_sorted.iterrows():
         fd  = (fund_data or {}).get(row["nome"], {})
         ana = fd.get("analysis", {})
