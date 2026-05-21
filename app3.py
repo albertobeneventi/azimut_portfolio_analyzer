@@ -167,6 +167,12 @@ UNP_CATALOG = {
     "Azimut Thematic Fund - AZ Allocation - Global Goals":             (2.50, 1.25),
     "Azimut Thematic Fund - AZ Equity - New Generation":               (2.79, 1.39),
     "Azimut Thematic Fund - AZ Equity - Space":                        (2.79, 1.39),
+    # ── Fondi Economia Reale (sezione separata nel catalogo) ──────────────────
+    "AZ Allocation - Italian Long-Term Opp.":                          (2.73, 1.36),
+    "AZ Allocation - Long Term Credit Opp.":                           (1.94, 0.97),
+    "AZ Allocation - Long-Term Equity Opp.":                           (2.73, 1.36),
+    "AZ Bond - ABS":                                                   (1.23, 0.61),
+    "AZ Equity - Future Opportunities":                                (2.51, 1.25),
 }
 
 # ── CSS ──────────────────────────────────────────────────────
@@ -247,32 +253,32 @@ def pct_color(val_str: str) -> str:
 # ── UNP/IUNP lookup helpers ──────────────────────────────────
 
 def _normalize_for_unp(name: str) -> str:
-    """Normalise a fund name for UNP catalog lookup.
+    """Normalise a fund name for UNP/factbook catalog lookup.
 
-    Handles:
-    - AZ F.1 short forms  (AZ F.1 All. → AZ Allocation, etc.)
-    - Share-class suffix  (" A Cap EUR", " B Acc USD", " I Dis GBP")
-    - Classe C suffix     ("(Classe C)")
-    - Dashes / en-dashes  (removed; so "AZ Bond - Global Macro Bond" ==
-                           "AZ Bond Global Macro Bond")
-    - & and other punct   (removed)
+    Works across all three name formats:
+    - Excel  : "AZ F.1 Bd. Global Macro Bond A Cap EUR"  (abbreviation + share class)
+    - Excel  : "AZ F.1 Bd Global Macro Bond A Cap EUR"   (abbreviation without period)
+    - PDF    : "AZ Bond - Global Macro Bond"              (full name with dash)
+    - Web    : "AZ BOND - GLOBAL MACRO BOND"              (full name, ALL CAPS)
+
+    All four normalise to → "az bond global macro bond"
     """
     n = name.strip()
-    # Expand AZ Fund short forms
-    n = re.sub(r'AZ\s+F\.1\s+All\.\s*',  'AZ Allocation ',  n, flags=re.IGNORECASE)
-    n = re.sub(r'AZ\s+F\.1\s+Eq\.\s*',   'AZ Equity ',      n, flags=re.IGNORECASE)
-    n = re.sub(r'AZ\s+F\.1\s+Bd\.\s*',   'AZ Bond ',        n, flags=re.IGNORECASE)
-    n = re.sub(r'AZ\s+F\.1\s+Alt\.\s*',  'AZ Alternative ', n, flags=re.IGNORECASE)
-    n = re.sub(r'AZ\s+F\.1\s+Isl\.\s*',  'AZ Islamic ',     n, flags=re.IGNORECASE)
-    # Strip "(Classe C)" / "(classe c)" / "(Class C)" variants
+    # ── 1. Expand AZ F.1 abbreviations (period OPTIONAL after family code) ────
+    n = re.sub(r'AZ\s+F\.1\s+All\.?\s*',  'AZ Allocation ',  n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Eq\.?\s*',   'AZ Equity ',      n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Bd\.?\s*',   'AZ Bond ',        n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Alt\.?\s*',  'AZ Alternative ', n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Isl\.?\s*',  'AZ Islamic ',     n, flags=re.IGNORECASE)
+    # ── 2. Strip "(Classe C)" / "(classe c)" variants ─────────────────────────
     n = re.sub(r'\s*\(clas[se]+\s+c\)\s*$', '', n, flags=re.IGNORECASE)
-    # Strip share-class suffix e.g. " A Cap EUR", " B Acc USD", " I Dis GBP"
-    n = re.sub(r'\s+[A-Z]\s+(Cap|Acc|Dis|Inc)\s+\w{3}\s*$', '', n, flags=re.IGNORECASE)
-    n = re.sub(r'\s+[A-Z]\s+(Cap|Acc|Dis|Inc)\s*$',          '', n, flags=re.IGNORECASE)
-    n = re.sub(r'\s+Cap\s+\w{3}\s*$',                         '', n, flags=re.IGNORECASE)
-    # Normalise dashes, ampersands and remaining punctuation → space
+    # ── 3. Strip share-class suffix: " A Cap EUR", " B Acc USD", "A-HU Cap EUR Hdg" etc.
+    n = re.sub(r'\s+[A-Z][-\w]*\s+(Cap|Acc|Dis|Inc)\s+\w{3}(\s+Hdg)?\s*$', '', n, flags=re.IGNORECASE)
+    n = re.sub(r'\s+[A-Z]\s+(Cap|Acc|Dis|Inc)\s*$',                          '', n, flags=re.IGNORECASE)
+    n = re.sub(r'\s+Cap\s+\w{3}\s*$',                                         '', n, flags=re.IGNORECASE)
+    # ── 4. Normalise dashes, ampersands, dots and remaining punctuation ────────
     n = re.sub(r'[-–—]', ' ', n)
-    n = re.sub(r'&', ' ', n)
+    n = re.sub(r'[&]',   ' ', n)
     n = re.sub(r'[^\w\s]', ' ', n)
     n = re.sub(r'\s+', ' ', n).strip().lower()
     return n
@@ -282,14 +288,28 @@ _UNP_CATALOG_NORMALIZED: dict = {
     _normalize_for_unp(k): v for k, v in UNP_CATALOG.items()
 }
 
+# Alias table: normalised Excel name → normalised catalog name
+# Needed when the Excel name differs semantically from the catalog (e.g. "Hybrids" vs
+# "Sustainable Hybrid") or when slight wording changes prevent automatic substring match.
+_FUND_ALIASES: dict = {
+    "az bond hybrids":              "az bond sustainable hybrid",
+    "az bond sustainable hybrids":  "az bond sustainable hybrid",
+    # Long-Term Opp variants (catalog uses abbreviated "Opp.")
+    "az allocation long term credit opportunities":  "az allocation long term credit opp",
+    "az allocation long term equity opportunities":  "az allocation long term equity opp",
+    "az allocation italian long term opportunities": "az allocation italian long term opp",
+    "az allocation italian long-term opportunities": "az allocation italian long term opp",
+}
+
 
 def lookup_unp(fund_name: str):
     """Return (unp_pct, iunp36_pct) for a fund, or (None, None) if not found."""
     norm = _normalize_for_unp(fund_name)
+    norm = _FUND_ALIASES.get(norm, norm)          # apply alias if any
     # 1. exact match
     if norm in _UNP_CATALOG_NORMALIZED:
         return _UNP_CATALOG_NORMALIZED[norm]
-    # 2. longest substring match (catalog key contained in fund name or vice versa)
+    # 2. longest substring match (catalog key inside fund name or vice versa)
     best, best_len = None, 0
     for cat_key, val in _UNP_CATALOG_NORMALIZED.items():
         if cat_key in norm or norm in cat_key:
@@ -314,6 +334,96 @@ def parse_excel(file_bytes: bytes) -> dict:
     wb.close()
     out["fida_urls"] = extract_fida_urls(file_bytes)
     return out
+
+
+@st.cache_data(show_spinner=False)
+def parse_factbook(pdf_bytes: bytes) -> dict:
+    """Parse the AZ Investments factbook PDF performance summary tables.
+
+    Returns {normalized_fund_name: {ytd, perf_1y, perf_3y, perf_5y}}
+
+    Summary table columns: Fund | AUM | 1M | 3M | 6M | 12M | 24M | 36M | 60M | YTD
+    Risk metrics (vol, Sharpe, Sortino) are NOT in the factbook — those still
+    come from FondiDoc.
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        return {}
+
+    result: dict = {}
+
+    def _to_pct(s):
+        if not s:
+            return None
+        s = str(s).strip()
+        if s in ('-', 'n.d.', 'N/D', '', 'None', 'n/d'):
+            return None
+        s = s.replace('−', '-').replace('–', '-').replace('—', '-')
+        s = s.replace(',', '.').replace('%', '').strip()
+        try:
+            return f"{float(s):+.2f}%"
+        except Exception:
+            return None
+
+    def _store(name_raw: str, cols_vals: list):
+        """Normalise name and store performance data if not already seen."""
+        if not name_raw:
+            return
+        norm = _normalize_for_unp(name_raw.strip())
+        norm = _FUND_ALIASES.get(norm, norm)
+        if not norm or norm in result:
+            return
+        # cols_vals is expected to be [1M, 3M, 6M, 12M, 24M, 36M, 60M, YTD]
+        # indices:                        0   1   2    3    4    5    6    7
+        ytd  = _to_pct(cols_vals[7]) if len(cols_vals) > 7 else _to_pct(cols_vals[-1] if cols_vals else None)
+        p1y  = _to_pct(cols_vals[3]) if len(cols_vals) > 3 else None
+        p3y  = _to_pct(cols_vals[5]) if len(cols_vals) > 5 else None
+        p5y  = _to_pct(cols_vals[6]) if len(cols_vals) > 6 else None
+        if any(v is not None for v in (ytd, p1y, p3y, p5y)):
+            result[norm] = {"ytd": ytd, "perf_1y": p1y, "perf_3y": p3y, "perf_5y": p5y}
+
+    try:
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            for page in pdf.pages:
+
+                # ── A: structured table extraction (best-case) ────────────
+                for tbl in (page.extract_tables() or []):
+                    for row in tbl:
+                        if not row or len(row) < 6:
+                            continue
+                        cell0 = str(row[0] or '').replace('\n', ' ').strip()
+                        if not re.match(r'^(AZ\b|AZIMUT\b)', cell0, re.IGNORECASE):
+                            continue
+                        # row layout: [name, AUM, 1M, 3M, 6M, 12M, 24M, 36M, 60M, YTD]
+                        data_cols = [str(c or '').strip() for c in row[2:]]
+                        _store(cell0, data_cols)
+
+                # ── B: text-line fallback ──────────────────────────────────
+                text = page.extract_text() or ""
+                for line in text.split('\n'):
+                    line = line.strip()
+                    if not re.match(r'^(AZ\b|AZIMUT\b)', line, re.IGNORECASE):
+                        continue
+                    tokens = line.split()
+                    if len(tokens) < 6:
+                        continue
+                    # Find first all-digit token (= AUM integer like "81", "1050")
+                    num_idx = next(
+                        (i for i, t in enumerate(tokens) if re.match(r'^\d{1,6}$', t) and i > 0),
+                        None
+                    )
+                    if num_idx is None:
+                        continue
+                    name_raw = ' '.join(tokens[:num_idx])
+                    # tokens after AUM: [1M, 3M, 6M, 12M, 24M, 36M, 60M, YTD]
+                    data_cols = tokens[num_idx + 1:]
+                    _store(name_raw, data_cols)
+
+    except Exception:
+        pass
+
+    return result
 
 
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
@@ -694,7 +804,8 @@ def _mpl_annual_bar(annual_perf: dict, fund_name: str) -> io.BytesIO | None:
 
 def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                  ptf_name: str, fund_data: dict = None,
-                 fida_df: pd.DataFrame = None) -> bytes:
+                 fida_df: pd.DataFrame = None,
+                 factbook_data: dict = None) -> bytes:
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -844,41 +955,57 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Paragraph("AZIMUT INVESTMENTS  ·  PORTAFOGLI MODELLO", EY))
     story.append(Spacer(1,4))
     story.append(Paragraph("Tavola dei Rendimenti", T))
+    _fb_loaded = bool(factbook_data)
+    _perf_source = ("Factbook AZ Investments" if _fb_loaded else "FIDA FondiDoc") + \
+                   ("  ·  Metriche di rischio da FondiDoc" if _fb_loaded else "")
     story.append(Paragraph(
         f"Performance per fondo  ·  Profilo {profile.title()}  ·  "
-        f"Fonte: FIDA FondiDoc  ·  Dati al {datetime.date.today().strftime('%d %B %Y')}", SU))
+        f"Fonte: {_perf_source}  ·  Dati al {datetime.date.today().strftime('%d %B %Y')}", SU))
     story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=12))
 
-    # ── Helper: weighted average of a metric across all funds ──
-    def ptf_wavg(keys_list):
-        """
-        Returns dict key→weighted-avg-string for each key in keys_list.
-        Uses only funds that have a valid numeric value for ALL keys in the row.
-        """
-        totals  = {k: 0.0 for k in keys_list}
-        cov_w   = {k: 0.0 for k in keys_list}   # weight covered for each metric
+    # ── Helper: look up a performance metric from the factbook ────────────────
+    _fb = factbook_data or {}
+    _PERF_KEYS = {"ytd", "perf_1y", "perf_3y", "perf_5y"}
 
+    def get_fb(nome: str, key: str) -> str:
+        """Return factbook value for fund `nome` and metric `key`, or ''."""
+        if key not in _PERF_KEYS or not _fb:
+            return ""
+        norm = _normalize_for_unp(nome)
+        norm = _FUND_ALIASES.get(norm, norm)
+        entry = _fb.get(norm)
+        if not entry:
+            # Substring fallback (same logic as lookup_unp)
+            best, best_len = None, 0
+            for fb_key, fb_val in _fb.items():
+                if (fb_key in norm or norm in fb_key) and len(fb_key) > best_len:
+                    best, best_len = fb_val, len(fb_key)
+            entry = best
+        if not entry:
+            return ""
+        return entry.get(key) or ""
+
+    # ── Helper: weighted average of a metric across all funds ─────────────────
+    def ptf_wavg(keys_list):
+        """Weighted average per metric. Prefers factbook for return keys."""
+        totals = {k: 0.0 for k in keys_list}
+        cov_w  = {k: 0.0 for k in keys_list}
         for _, row in d_sorted.iterrows():
             fd  = (fund_data or {}).get(row["nome"], {})
             ana = fd.get("analysis", {})
             w   = row[wcol]
             for k in keys_list:
-                raw = ana.get(k, "")
+                raw = get_fb(row["nome"], k) or ana.get(k, "")
                 try:
                     num = float(raw.replace("%","").replace(",",".").strip())
-                    totals[k]  += num * w
-                    cov_w[k]   += w
+                    totals[k] += num * w
+                    cov_w[k]  += w
                 except Exception:
                     pass
-
-        result = {}
+        out = {}
         for k in keys_list:
-            if cov_w[k] > 0.01:
-                avg = totals[k] / cov_w[k]
-                result[k] = f"{avg:+.2f}%"
-            else:
-                result[k] = "N/D"
-        return result
+            out[k] = f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "N/D"
+        return out
 
     # Paragraph style for portfolio summary row
     WH = S("WH", fontName="Helvetica-Bold", fontSize=8,
@@ -927,7 +1054,9 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     for _, row in d_sorted.iterrows():
         fd  = (fund_data or {}).get(row["nome"], {})
         ana = fd.get("analysis", {})
-        def gv(key): return ana.get(key,"N/D")
+        def gv(key, nome=row["nome"]):
+            # Return factbook value (for return metrics) or FondiDoc value
+            return get_fb(nome, key) or ana.get(key, "N/D")
         perf_rows.append([
             Paragraph(row["nome"][:48], SM),
             Paragraph(f"<b>{row[wcol]*100:.1f}%</b>", SM),
@@ -1323,6 +1452,13 @@ def main():
         st.markdown("""<div style='padding:1.4rem 0 .8rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Strumento di Analisi</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.6rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.2;'>Portfolio<br>Analyzer</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:10px;'></div></div>""", unsafe_allow_html=True)
         st.markdown("---")
         uploaded   = st.file_uploader("FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
+        uploaded_fb = st.file_uploader(
+            "FACTBOOK RENDIMENTI (PDF, opzionale)",
+            type=["pdf"],
+            help="Carica il Factbook AZ Investments per avere YTD/1A/3A/5A "
+                 "senza dipendere da FondiDoc. Le metriche di rischio vengono "
+                 "sempre scaricate da FondiDoc.",
+        )
         st.markdown("---")
         ptf_choice = st.radio("TIPO PORTAFOGLIO", ["📋  PTF FULL","⚡  PTF SHORT","🎨  LIBERO"])
         st.markdown("---")
@@ -1340,6 +1476,17 @@ def main():
     with st.spinner("⏳ Caricamento dati…"):
         file_bytes = uploaded.read()
         raw = parse_excel(file_bytes)
+
+    # Parse factbook PDF if uploaded
+    factbook_data: dict = {}
+    if uploaded_fb is not None:
+        with st.spinner("📖 Leggo Factbook rendimenti…"):
+            factbook_data = parse_factbook(uploaded_fb.read())
+        n_fb = len(factbook_data)
+        if n_fb:
+            st.success(f"✅ Factbook caricato — {n_fb} fondi trovati")
+        else:
+            st.warning("⚠️ Factbook caricato ma nessun dato estratto — verrà usato FondiDoc")
 
     if "LIBERO" in ptf_choice:
         df = free_portfolio_ui(raw)
@@ -1394,7 +1541,10 @@ def main():
 
     col_btn,col_inf = st.columns([1,2])
     with col_inf:
-        st.markdown(f"""<div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:1rem 1.25rem;'><div style='font-size:.8rem;color:#1d4ed8;font-weight:600;margin-bottom:.4rem;'>Il report PDF (3 sezioni) contiene:</div><div style='font-size:.82rem;color:#1e40af;line-height:1.9;'>✓ <b>Pag. 1</b> — Grafico a torta + KPI di portafoglio<br>✓ <b>Pag. 2</b> — Tavola rendimenti YTD / 1A / 3A / 5A + Rischio<br>✓ <b>Pag. 3+</b> — Scheda analitica per ciascuno degli {n_fondi} fondi<br><span style='color:#3b82f6;'>🌐 Dati live da FondiDoc per {n_urls}/{n_fondi} fondi</span></div></div>""",unsafe_allow_html=True)
+        _fb_note = (f"📖 Factbook caricato: rendimenti per {len(factbook_data)} fondi"
+                    if factbook_data
+                    else f"🌐 Dati live da FondiDoc per {n_urls}/{n_fondi} fondi")
+        st.markdown(f"""<div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:1rem 1.25rem;'><div style='font-size:.8rem;color:#1d4ed8;font-weight:600;margin-bottom:.4rem;'>Il report PDF (3 sezioni) contiene:</div><div style='font-size:.82rem;color:#1e40af;line-height:1.9;'>✓ <b>Pag. 1</b> — Grafico a torta + KPI di portafoglio<br>✓ <b>Pag. 2</b> — Tavola rendimenti YTD / 1A / 3A / 5A + Rischio<br>✓ <b>Pag. 3+</b> — Scheda analitica per ciascuno degli {n_fondi} fondi<br><span style='color:#3b82f6;'>{_fb_note}</span></div></div>""",unsafe_allow_html=True)
 
     with col_btn:
         if st.button("🔄  Carica Dati da FondiDoc + Genera PDF",use_container_width=True,
@@ -1407,7 +1557,8 @@ def main():
             try:
                 fida_df = raw.get("FIDA", pd.DataFrame())
                 pdf_bytes = generate_pdf(df_act, wcol, profile, ptf_label, fund_data,
-                                         fida_df=fida_df)
+                                         fida_df=fida_df,
+                                         factbook_data=factbook_data)
                 fname = f"Azimut_{ptf_label.replace(' ','_')}_{profile}_{datetime.date.today().strftime('%Y%m%d')}.pdf"
                 progress_bar.empty()
                 st.download_button(
