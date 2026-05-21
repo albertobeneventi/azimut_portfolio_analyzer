@@ -458,35 +458,37 @@ def make_macro_bar(df, wcol):
 # ════════════════════════════════════════════════════════════
 
 def _mpl_portfolio_pie(df, wcol, profile) -> io.BytesIO:
-    d = df[df[wcol]>0.005].sort_values(wcol, ascending=False)
-    fig, (ax_pie,ax_leg) = plt.subplots(1,2,figsize=(11,5.5),gridspec_kw={"width_ratios":[1.4,1]})
-    wedges,_,autotexts = ax_pie.pie(
+    """Donut only — la leggenda viene resa in ReportLab per permettere hyperlink."""
+    d = df[df[wcol] > 0.005].sort_values(wcol, ascending=False)
+    fig, ax = plt.subplots(figsize=(5.5, 5.5))
+    _, _, autotexts = ax.pie(
         d[wcol], colors=d["color"].tolist(),
-        autopct=lambda p:f"{p:.1f}%" if p>3.5 else "",
+        autopct=lambda p: f"{p:.1f}%" if p > 3.5 else "",
         pctdistance=0.72,
-        wedgeprops=dict(width=0.58,edgecolor="white",linewidth=2), startangle=90,
+        wedgeprops=dict(width=0.58, edgecolor="white", linewidth=2),
+        startangle=90,
     )
-    for at in autotexts: at.set_fontsize(8); at.set_color("white"); at.set_fontweight("bold")
-    ax_pie.text(0,0,profile[:4],ha="center",va="center",fontsize=15,fontweight="bold",color="#0D1B2A")
-    ax_leg.axis("off")
-    handles = [mpatches.Patch(color=r["color"],
-               label=f"{r['nome'][:32]}{'…' if len(r['nome'])>32 else ''}  {r[wcol]*100:.1f}%")
-               for _,r in d.iterrows()]
-    ax_leg.legend(handles=handles,loc="center left",frameon=False,fontsize=10,labelspacing=0.85,handlelength=1.2)
-    fig.patch.set_facecolor("#FFFFFF"); plt.tight_layout(pad=1.5)
-    buf=io.BytesIO(); fig.savefig(buf,format="png",dpi=150,bbox_inches="tight",facecolor="white")
-    plt.close(fig); buf.seek(0); return buf
+    for at in autotexts:
+        at.set_fontsize(9); at.set_color("white"); at.set_fontweight("bold")
+    ax.text(0, 0, profile[:4], ha="center", va="center",
+            fontsize=16, fontweight="bold", color="#0D1B2A")
+    fig.patch.set_facecolor("#FFFFFF")
+    plt.tight_layout(pad=0.3)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig); buf.seek(0)
+    return buf
 
 
 def _mpl_macro_pie(df, wcol) -> io.BytesIO | None:
-    """Asset-allocation donut per macro-categoria — stesso stile di _mpl_portfolio_pie."""
-    agg = df[df[wcol]>0.001].groupby("macro_cat")[wcol].sum().sort_values(ascending=False)
-    if agg.empty: return None
-    colors = [MACRO_COLORS.get(k, "#94A3B8") for k in agg.index]
-    fig, (ax_pie, ax_leg) = plt.subplots(1, 2, figsize=(11, 4.5),
-                                          gridspec_kw={"width_ratios": [1.4, 1]})
-    wedges, _, autotexts = ax_pie.pie(
-        agg.values, colors=colors,
+    """Asset allocation donut Azionario/Obbligazionario — leggenda in ReportLab."""
+    w_az  = (df[wcol] * df["az_pct"]).sum()
+    w_obb = (df[wcol] * df["obb_pct"]).sum()
+    if w_az + w_obb < 0.001:
+        return None
+    fig, ax = plt.subplots(figsize=(5.5, 5.5))
+    _, _, autotexts = ax.pie(
+        [w_az, w_obb], colors=["#1B4FBB", "#2D9D78"],
         autopct=lambda p: f"{p:.1f}%" if p >= 5 else "",
         pctdistance=0.70,
         wedgeprops=dict(width=0.58, edgecolor="white", linewidth=2.5),
@@ -494,19 +496,14 @@ def _mpl_macro_pie(df, wcol) -> io.BytesIO | None:
     )
     for at in autotexts:
         at.set_fontsize(10); at.set_color("white"); at.set_fontweight("bold")
-    ax_pie.text(0, 0, "Asset\nAlloc.", ha="center", va="center",
-                fontsize=11, fontweight="bold", color="#0D1B2A")
-    ax_leg.axis("off")
-    handles = [mpatches.Patch(color=colors[i],
-               label=f"{k}  {v*100:.1f}%")
-               for i, (k, v) in enumerate(agg.items())]
-    ax_leg.legend(handles=handles, loc="center left", frameon=False,
-                  fontsize=12, labelspacing=1.4, handlelength=1.4)
+    ax.text(0, 0, "Asset\nAlloc.", ha="center", va="center",
+            fontsize=11, fontweight="bold", color="#0D1B2A")
     fig.patch.set_facecolor("#FFFFFF")
-    plt.tight_layout(pad=1.2)
+    plt.tight_layout(pad=0.3)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig); buf.seek(0); return buf
+    plt.close(fig); buf.seek(0)
+    return buf
 
 
 def _mpl_annual_bar(annual_perf: dict, fund_name: str) -> io.BytesIO | None:
@@ -617,20 +614,73 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     ]))
     story.append(kpi)
 
-    # ── PIE CHARTS: allocazione fondi + asset allocation ────
+    # ── PIE CHARTS con legende ReportLab ────────────────────
     story.append(Paragraph("Allocazione del Portafoglio", SC))
-    pie_buf   = _mpl_portfolio_pie(d_act, wcol, profile)
+
+    PIE_W = 7.5 * cm
+    LEG_W = 17 * cm - PIE_W   # 9.5 cm
+
+    LG = S("LG", fontName="Helvetica", fontSize=10,
+           textColor=rl_colors.HexColor("#1E293B"), leading=15)
+
+    def _dot(hex_color):
+        t = Table([[""]], colWidths=[0.28*cm], rowHeights=[0.28*cm])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), rl_colors.HexColor(hex_color)),
+        ]))
+        return t
+
+    # — Grafico 1: fondi con hyperlink —
+    pie_buf = _mpl_portfolio_pie(d_act, wcol, profile)
+    pie_img = RLImage(pie_buf, width=PIE_W, height=PIE_W)
+    d_leg   = d_act[d_act[wcol] > 0.005].sort_values(wcol, ascending=False)
+    leg_rows = []
+    for _, r in d_leg.iterrows():
+        url    = (fund_data or {}).get(r["nome"], {}).get("url", "")
+        name_s = (r["nome"][:38] + "…") if len(r["nome"]) > 38 else r["nome"]
+        pct_s  = f"{r[wcol]*100:.1f}%"
+        if url:
+            lbl = Paragraph(
+                f'<link href="{url}"><font color="#1B4FBB"><u>{name_s}</u></font></link>'
+                f'  <b>{pct_s}</b>', LG)
+        else:
+            lbl = Paragraph(f'{name_s}  <b>{pct_s}</b>', LG)
+        leg_rows.append([_dot(r["color"]), lbl])
+    leg_tbl = Table(leg_rows, colWidths=[0.45*cm, LEG_W - 0.45*cm])
+    leg_tbl.setStyle(TableStyle([
+        ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",     (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING",  (0,0), (-1,-1), 3),
+        ("LEFTPADDING",    (1,0), (1,-1),  6),
+        ("LEFTPADDING",    (0,0), (0,-1),  0),
+        ("RIGHTPADDING",   (0,0), (-1,-1), 4),
+    ]))
+    combo1 = Table([[pie_img, leg_tbl]], colWidths=[PIE_W, LEG_W])
+    combo1.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
+    story.append(combo1)
+
+    # — Grafico 2: asset allocation Azionario/Obbligazionario —
     macro_buf = _mpl_macro_pie(d_act, wcol)
-    # Pie fondi — larghezza piena, centrata
-    _pie_img = RLImage(pie_buf, width=15*cm, height=6.5*cm)
-    _pie_img.hAlign = 'CENTER'
-    story.append(_pie_img)
-    # Pie asset allocation — stessa larghezza, centrata, sotto
     if macro_buf:
-        story.append(Spacer(1, 8))
-        _macro_img = RLImage(macro_buf, width=15*cm, height=5.5*cm)
-        _macro_img.hAlign = 'CENTER'
-        story.append(_macro_img)
+        story.append(Spacer(1, 14))
+        macro_img = RLImage(macro_buf, width=PIE_W, height=PIE_W)
+        w_az_v  = (d_act[wcol] * d_act["az_pct"]).sum()
+        w_obb_v = (d_act[wcol] * d_act["obb_pct"]).sum()
+        macro_leg_rows = [
+            [_dot("#1B4FBB"), Paragraph(f'Azionario  <b>{w_az_v*100:.1f}%</b>', LG)],
+            [_dot("#2D9D78"), Paragraph(f'Obbligazionario  <b>{w_obb_v*100:.1f}%</b>', LG)],
+        ]
+        macro_leg_tbl = Table(macro_leg_rows, colWidths=[0.45*cm, LEG_W - 0.45*cm])
+        macro_leg_tbl.setStyle(TableStyle([
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0), (-1,-1), 8),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+            ("LEFTPADDING",   (1,0), (1,-1),  6),
+            ("LEFTPADDING",   (0,0), (0,-1),  0),
+        ]))
+        combo2 = Table([[macro_img, macro_leg_tbl]], colWidths=[PIE_W, LEG_W])
+        combo2.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
+        story.append(combo2)
 
     story.append(PageBreak())
 
