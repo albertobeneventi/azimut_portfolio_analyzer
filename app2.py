@@ -294,6 +294,106 @@ def parse_mifid_file(fb: bytes, fname: str) -> pd.DataFrame:
     return out
 
 
+@st.cache_data(show_spinner=False)
+def parse_unp_catalog(fb: bytes, fname: str) -> pd.DataFrame:
+    """
+    Legge il catalogo prodotti UNP/IUNP Azimut.
+    Accetta Excel, CSV o PDF.
+    Restituisce DataFrame con colonne: isin, nome, unp, iunp
+    UNP = Utile Netto di Portafoglio (% annuo commissione netta advisor)
+    """
+    ISIN_RE = re.compile(r'\b([A-Z]{2}[A-Z0-9]{10})\b')
+
+    # ── PDF ───────────────────────────────────────────────────
+    if fname.lower().endswith(".pdf"):
+        text = _extract_text_from_pdf(fb)
+        if not text.strip():
+            st.warning("UNP PDF: testo non estraibile."); return pd.DataFrame()
+        lines  = [l.strip() for l in text.split("\n") if l.strip()]
+        # Regex percentuale: cattura "0,75" / "0.75" / "75" (poi normalizziamo)
+        PCT_RE = re.compile(r'(\d{1,3}[,\.]\d{1,4})')
+        records = []; seen = set()
+        for i, line in enumerate(lines):
+            for m in ISIN_RE.finditer(line):
+                isin = m.group(1)
+                if isin in seen: continue
+                seen.add(isin)
+                # cerca UNP e IUNP nelle 3 righe successive
+                ctx = " ".join(lines[i:i+4])
+                nums = PCT_RE.findall(ctx)
+                nums_f = []
+                for n in nums:
+                    try:
+                        v = float(n.replace(",","."))
+                        if 0 < v < 10: nums_f.append(round(v, 4))   # già in %
+                        elif 10 <= v <= 500: nums_f.append(round(v/100, 4))  # basis points
+                    except: pass
+                # nome = prima stringa lunga non-ISIN attorno alla riga
+                nome = ""
+                for j in range(max(0,i-1), min(len(lines),i+3)):
+                    if not ISIN_RE.search(lines[j]) and len(lines[j]) > 8:
+                        nome = lines[j][:80]; break
+                records.append({
+                    "isin":  isin,
+                    "nome":  nome,
+                    "unp":   nums_f[0] if len(nums_f) > 0 else None,
+                    "iunp":  nums_f[1] if len(nums_f) > 1 else None,
+                })
+        if not records:
+            st.warning("UNP PDF: nessun ISIN trovato."); return pd.DataFrame()
+        st.success(f"📊 UNP catalog: {len(records)} fondi estratti dal PDF.")
+        return pd.DataFrame(records)
+
+    # ── Excel / CSV ───────────────────────────────────────────
+    try:
+        df = pd.read_csv(io.BytesIO(fb)) if fname.lower().endswith(".csv") \
+             else pd.read_excel(io.BytesIO(fb))
+    except Exception as e:
+        st.error(f"Errore lettura UNP: {e}"); return pd.DataFrame()
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    isin_col = next((c for c in df.columns if "isin" in c), None)
+    nome_col = next((c for c in df.columns if any(x in c for x in
+                     ["nome","name","fondo","fund","prodotto"])), None)
+    unp_col  = next((c for c in df.columns if "unp"  in c and "i" not in c[:2]), None)
+    iunp_col = next((c for c in df.columns if "iunp" in c), None)
+    if not isin_col or not unp_col:
+        # fallback: prendi le prime colonne numeriche dopo ISIN
+        if isin_col:
+            num_cols = [c for c in df.columns
+                        if pd.to_numeric(df[c], errors="coerce").notna().sum() > len(df)*0.5]
+            if num_cols: unp_col  = num_cols[0]
+            if len(num_cols)>1: iunp_col = num_cols[1]
+    if not isin_col:
+        st.warning("Catalogo UNP: colonna ISIN non trovata."); return pd.DataFrame()
+    out = pd.DataFrame()
+    out["isin"] = df[isin_col].astype(str).str.strip().str.upper()
+    out["isin"] = out["isin"].apply(lambda x: x if re.match(r'^[A-Z]{2}[A-Z0-9]{10}$',x) else "")
+    if nome_col: out["nome"] = df[nome_col].astype(str).str.strip()
+    else:        out["nome"] = ""
+    if unp_col:
+        out["unp"] = pd.to_numeric(
+            df[unp_col].astype(str).str.replace("%","").str.replace(",","."),
+            errors="coerce")
+        # normalizza: se valori > 10 sono basis points, converti in %
+        if out["unp"].median(skipna=True) > 5:
+            out["unp"] = out["unp"] / 100
+    else:
+        out["unp"] = None
+    if iunp_col:
+        out["iunp"] = pd.to_numeric(
+            df[iunp_col].astype(str).str.replace("%","").str.replace(",","."),
+            errors="coerce")
+        if out["iunp"].median(skipna=True) > 5:
+            out["iunp"] = out["iunp"] / 100
+    else:
+        out["iunp"] = None
+    out = out[out["isin"] != ""].drop_duplicates("isin").reset_index(drop=True)
+    if out.empty:
+        st.warning("Catalogo UNP: nessun ISIN valido trovato."); return pd.DataFrame()
+    st.success(f"📊 UNP catalog: {len(out)} fondi caricati.")
+    return out
+
+
 def read_text_file(fb: bytes, fname: str) -> str:
     if fname.lower().endswith((".txt",".md")):
         return fb.decode("utf-8", errors="ignore")
@@ -689,8 +789,13 @@ def _construct_rules(funds_df, market_text, mifid_df=None):
     scored  = _score_funds(funds_df, signals, mifid_df)
 
     def _fe(r):
-        return {"nome":r["nome"],"isin":r.get("isin",""),
-                "macro_cat":r.get("macro_cat","Altro"),"color":r.get("color","#94A3B8")}
+        d = {"nome":r["nome"],"isin":r.get("isin",""),
+             "macro_cat":r.get("macro_cat","Altro"),"color":r.get("color","#94A3B8")}
+        if "unp"  in r.index and r["unp"]  is not None and str(r["unp"])  not in ("nan","None",""):
+            d["unp"]  = r["unp"]
+        if "iunp" in r.index and r["iunp"] is not None and str(r["iunp"]) not in ("nan","None",""):
+            d["iunp"] = r["iunp"]
+        return d
 
     # ── Articolato: 12 fondi, bilanciati per macro-categoria ──
     cats = [c for c in scored["macro_cat"].unique() if c != "Altro"]
@@ -784,6 +889,8 @@ def _construct_ai(funds_df, market_text, mifid_df, api_key):
 def calc_metrics(ptf_funds: list, fund_data: dict, schede_alloc: dict = None) -> dict:
     keys = ["ytd","perf_1y","perf_3y","perf_5y","vol_1y","vol_3y","var_1y","sharpe_3y","neg_vol_1y","sortino_1y"]
     tot = {k:0.0 for k in keys}; wt = {k:0.0 for k in keys}; macro_alloc = {}
+    unp_tot = 0.0; unp_wt = 0.0
+    iunp_tot = 0.0; iunp_wt = 0.0
     for f in ptf_funds:
         w    = f["peso"] / 100.0
         nome = f["nome"]
@@ -794,18 +901,28 @@ def calc_metrics(ptf_funds: list, fund_data: dict, schede_alloc: dict = None) ->
                 num = float(str(ana.get(k,"")).replace("%","").replace(",",".").strip())
                 tot[k] += num*w; wt[k] += w
             except: pass
+        # UNP / IUNP ponderati
+        unp_v  = f.get("unp");  iunp_v = f.get("iunp")
+        if unp_v  is not None:
+            try: unp_tot  += float(unp_v)  * w; unp_wt  += w
+            except: pass
+        if iunp_v is not None:
+            try: iunp_tot += float(iunp_v) * w; iunp_wt += w
+            except: pass
         # Asset allocation: usa scheda prodotto se disponibile, altrimenti macro_cat
         if schede_alloc and isin and isin in schede_alloc:
             for cat, pct in schede_alloc[isin].items():
                 macro_alloc[cat] = macro_alloc.get(cat, 0.0) + f["peso"] * pct / 100.0
             allocated = sum(schede_alloc[isin].values())
-            if allocated < 98:  # Se non copre 100%, il resto va ad "Altro"
+            if allocated < 98:
                 macro_alloc["Altro"] = macro_alloc.get("Altro", 0.0) + f["peso"] * (100 - allocated) / 100.0
         else:
             mc = f.get("macro_cat","Altro")
             macro_alloc[mc] = macro_alloc.get(mc, 0.0) + f["peso"]
     result = {k: (f"{tot[k]/wt[k]:+.2f}%" if wt[k]>0.01 else "N/D") for k in keys}
     result["macro_alloc"] = macro_alloc
+    result["unp_w"]  = round(unp_tot  / unp_wt  * 100, 3) if unp_wt  > 0.01 else None
+    result["iunp_w"] = round(iunp_tot / iunp_wt * 100, 3) if iunp_wt > 0.01 else None
     return result
 
 
@@ -1181,38 +1298,80 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
             ]))
             story += [rat, Spacer(1,7)]
 
-        # Strip KPI
+        # Strip KPI — aggiunge UNP/IUNP ponderato se disponibile
         def _kpi(k, lbl):
             v = metrics.get(k,"")
             return Paragraph(f'{kv(v)}<br/><font size="7" color="{MED}">{lbl}</font>', BD)
-        mk = Table([[_kpi("ytd","YTD"), _kpi("perf_1y","1 Anno"), _kpi("perf_3y","3 Anni"),
-                     _kpi("perf_5y","5 Anni"), _kpi("var_1y","VaR 1A"),
-                     _kpi("sharpe_3y","Sharpe 3A"), _kpi("neg_vol_1y","Vol.Neg. 1A")]],
-                   colWidths=[W/7]*7)
+        has_unp  = metrics.get("unp_w")  is not None
+        has_iunp = metrics.get("iunp_w") is not None
+        def _unp_kpi(val, lbl, color="#7C3AED"):
+            if val is None:
+                return Paragraph(f'<font color="{LGT}" size="9">n.d.</font>'
+                                 f'<br/><font size="7" color="{MED}">{lbl}</font>', BD)
+            return Paragraph(
+                f'<font color="{color}" size="13"><b>{val:.3f}%</b></font>'
+                f'<br/><font size="7" color="{MED}">{lbl}</font>', BD)
+
+        if has_unp or has_iunp:
+            # 9 celle: 7 metriche + UNP + IUNP
+            kpi_cells = [_kpi("ytd","YTD"), _kpi("perf_1y","1A"), _kpi("perf_3y","3A"),
+                         _kpi("perf_5y","5A"), _kpi("var_1y","VaR 1A"),
+                         _kpi("sharpe_3y","Sharpe"), _kpi("neg_vol_1y","Vol.Neg."),
+                         _unp_kpi(metrics.get("unp_w"),  "UNP %",  "#7C3AED"),
+                         _unp_kpi(metrics.get("iunp_w"), "IUNP %", "#5B21B6")]
+            kpi_widths = [W/9]*9
+        else:
+            kpi_cells  = [_kpi("ytd","YTD"), _kpi("perf_1y","1 Anno"), _kpi("perf_3y","3 Anni"),
+                          _kpi("perf_5y","5 Anni"), _kpi("var_1y","VaR 1A"),
+                          _kpi("sharpe_3y","Sharpe 3A"), _kpi("neg_vol_1y","Vol.Neg. 1A")]
+            kpi_widths = [W/7]*7
+
+        mk = Table([kpi_cells], colWidths=kpi_widths)
         mk.setStyle(TableStyle([
             ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
             ("INNERGRID",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
             ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F8FAFC")),
+            # Evidenzia UNP/IUNP se presenti
+            *([("BACKGROUND",(-2,0),(-1,0),rl_colors.HexColor("#F5F3FF"))] if has_unp or has_iunp else []),
             ("PADDING",(0,0),(-1,-1),8),("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
         ]))
         story += [mk, Spacer(1,8)]
 
         # Tabella fondi + torta affiancati
-        hdr = [Paragraph(f"<b>{t}</b>",HDR) for t in
-               ["Fondo","ISIN","Categoria","Peso","YTD","1A","3A","5A","VaR 1A","Sharpe"]]
+        # Determina se mostrare colonna UNP nella tabella fondi
+        _show_unp = any(f.get("unp") is not None for f in funds_list)
+        if _show_unp:
+            hdr = [Paragraph(f"<b>{t}</b>",HDR) for t in
+                   ["Fondo","ISIN","Cat.","Peso","UNP","YTD","1A","3A","5A","VaR","Sharpe"]]
+        else:
+            hdr = [Paragraph(f"<b>{t}</b>",HDR) for t in
+                   ["Fondo","ISIN","Categoria","Peso","YTD","1A","3A","5A","VaR 1A","Sharpe"]]
         rows = [hdr]
         for f in funds_list:
             nome = f["nome"]
             ana  = fund_data.get(nome,{}).get("fondidoc",{}).get("analysis",{})
             def gf(k): return ana.get(k,"—")
-            rows.append([
-                txt(nome[:36]),       txt(f.get("isin","—")),
-                txt(f.get("macro_cat","—")[:16]),
-                Paragraph(f"<b>{f['peso']:.1f}%</b>",SM),
-                pv(gf("ytd")),        pv(gf("perf_1y")),
-                pv(gf("perf_3y")),    pv(gf("perf_5y")),
-                txt(gf("var_1y")),    txt(gf("sharpe_3y")),
-            ])
+            unp_v  = f.get("unp")
+            unp_s  = f"{unp_v:.3f}%" if unp_v is not None else "—"
+            if _show_unp:
+                rows.append([
+                    txt(nome[:30]),           txt(f.get("isin","—")),
+                    txt(f.get("macro_cat","—")[:12]),
+                    Paragraph(f"<b>{f['peso']:.1f}%</b>",SM),
+                    Paragraph(f'<font color="#7C3AED"><b>{unp_s}</b></font>',SM),
+                    pv(gf("ytd")),            pv(gf("perf_1y")),
+                    pv(gf("perf_3y")),        pv(gf("perf_5y")),
+                    txt(gf("var_1y")),        txt(gf("sharpe_3y")),
+                ])
+            else:
+                rows.append([
+                    txt(nome[:36]),       txt(f.get("isin","—")),
+                    txt(f.get("macro_cat","—")[:16]),
+                    Paragraph(f"<b>{f['peso']:.1f}%</b>",SM),
+                    pv(gf("ytd")),        pv(gf("perf_1y")),
+                    pv(gf("perf_3y")),    pv(gf("perf_5y")),
+                    txt(gf("var_1y")),    txt(gf("sharpe_3y")),
+                ])
         _fund_tbl_style = TableStyle([
             ("BACKGROUND",(0,0),(-1,0),rl_colors.HexColor(NAV)),
             ("FONTSIZE",(0,0),(-1,-1),6.8),("PADDING",(0,0),(-1,-1),3),
@@ -1220,19 +1379,32 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
             ("LINEBELOW",(0,0),(-1,-1),0.3,rl_colors.HexColor("#E2E8F0")),
             ("ALIGN",(3,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
         ])
-        ft = Table(rows,
-                   colWidths=[3.5*cm,1.85*cm,1.85*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm],
-                   repeatRows=1)
+        if _show_unp:
+            ft = Table(rows,
+                       colWidths=[2.9*cm,1.8*cm,1.5*cm,0.9*cm,0.9*cm,
+                                  0.9*cm,0.85*cm,0.85*cm,0.85*cm,0.85*cm,0.85*cm],
+                       repeatRows=1)
+        else:
+            ft = Table(rows,
+                       colWidths=[3.5*cm,1.85*cm,1.85*cm,1.0*cm,1.0*cm,
+                                  1.0*cm,1.0*cm,1.0*cm,1.0*cm,1.0*cm],
+                       repeatRows=1)
         ft.setStyle(_fund_tbl_style)
 
         mb = _pie_macro(metrics.get("macro_alloc",{}))
         if mb:
             pie_img = RLImage(mb, width=5.8*cm, height=4.2*cm)
             tbl_w = W - 6.0*cm
-            # Ricostruisci tabella fondi con larghezza ridotta
-            ft2 = Table(rows,
-                        colWidths=[3.0*cm,1.6*cm,1.5*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm],
-                        repeatRows=1)
+            if _show_unp:
+                ft2 = Table(rows,
+                            colWidths=[2.4*cm,1.6*cm,1.2*cm,0.8*cm,0.8*cm,
+                                       0.8*cm,0.75*cm,0.75*cm,0.75*cm,0.75*cm,0.75*cm],
+                            repeatRows=1)
+            else:
+                ft2 = Table(rows,
+                            colWidths=[3.0*cm,1.6*cm,1.5*cm,0.9*cm,0.9*cm,
+                                       0.9*cm,0.9*cm,0.9*cm,0.9*cm,0.9*cm],
+                            repeatRows=1)
             ft2.setStyle(_fund_tbl_style)
             side = Table([[ft2, pie_img]], colWidths=[tbl_w, 6.0*cm])
             side.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP"),
@@ -1294,9 +1466,19 @@ def generate_pdf(portfolios, funds_df, fund_data, market_text, fund_sheets=None,
             fee_s  = f"Fee gest.: {gv('mgmt_fee',ov)}" if gv('mgmt_fee',ov) not in ("—","") else ""
             ms_s   = f"MS: {ms.get('ms_cat','—')}" if ms.get('ms_cat') else ""
 
+            # UNP / IUNP dal funds_df (già mergiato con catalogo)
+            _fr_row = funds_df[funds_df["nome"]==nome]
+            unp_val  = _fr_row["unp"].values[0]  if not _fr_row.empty and "unp"  in _fr_row.columns else None
+            iunp_val = _fr_row["iunp"].values[0] if not _fr_row.empty and "iunp" in _fr_row.columns else None
+            unp_s2   = (f'  ·  UNP: <font color="#7C3AED"><b>{float(unp_val):.3f}%</b></font>'
+                        if unp_val is not None and str(unp_val) not in ("nan","None","") else "")
+            iunp_s2  = (f'  ·  IUNP: <font color="#5B21B6"><b>{float(iunp_val):.3f}%</b></font>'
+                        if iunp_val is not None and str(iunp_val) not in ("nan","None","") else "")
+
             r1 = f"<b>{nome}</b>"
             r2 = (f"ISIN: <b>{isin or '—'}</b>  ·  {mc}  ·  MIFID: <b>{mifid}/7</b>"
-                  + (f"  ·  {meta}" if meta != "—" else ""))
+                  + (f"  ·  {meta}" if meta != "—" else "")
+                  + unp_s2 + iunp_s2)
             r3 = (f"YTD: {pvs(gv('ytd'))}  ·  "
                   f"1A: {pvs(gv('perf_1y'))}  ·  "
                   f"3A: {pvs(gv('perf_3y'))}  ·  "
@@ -1369,6 +1551,12 @@ def main():
         file_mercato = st.file_uploader("TXT/PDF con view di mercato",
                                          type=["txt","pdf","md"], key="u_mercato", label_visibility="collapsed")
         st.markdown("---")
+        st.markdown("<span style='color:#4a6582;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;'>CATALOGO UNP / IUNP</span>", unsafe_allow_html=True)
+        st.caption("Excel/CSV/PDF con ISIN + UNP + IUNP (catalogo prodotti Azimut)")
+        file_unp = st.file_uploader("Catalogo UNP",
+                                     type=["xlsx","xls","csv","pdf"], key="u_unp",
+                                     label_visibility="collapsed")
+        st.markdown("---")
         st.markdown("<span style='color:#4a6582;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;'>SCHEDE PRODOTTO (PDF allegati)</span>", unsafe_allow_html=True)
         files_schede = st.file_uploader("PDF schede singoli fondi (multipli)",
                                          type=["pdf"], accept_multiple_files=True,
@@ -1411,11 +1599,12 @@ def main():
         st.info("⬅️ **Carica il file fondi potenziali** per iniziare.")
         st.markdown("""
 **Flusso di lavoro:**
-1. 📁 **Fondi potenziali** *(mensile)* — Excel/CSV **oppure PDF** (es. factbook): gli ISIN vengono estratti automaticamente
-2. 📰 **Contesto mercati** *(più frequente)* — view PDF/TXT con la contest view → guida la costruzione dei portafogli
-3. 📎 **Schede prodotto** *(opzionale)* — PDF dei singoli fondi: estratta automaticamente l'asset allocation granulare
-4. ✏️ **Note** *(opzionale)* — testo libero incluso nella copertina del PDF (profilo cliente, obiettivi, vincoli)
-5. 🚀 **Genera** → 3 portafogli (Articolato · Short · Libero) con rendimenti, asset allocation, VaR, Sharpe
+1. 📁 **Fondi potenziali** *(mensile)* — Excel/CSV o PDF: gli ISIN vengono estratti automaticamente
+2. 📰 **Contesto mercati** — view PDF/TXT con la contest view → guida la costruzione dei portafogli
+3. 📊 **Catalogo UNP** *(opzionale)* — Excel/CSV/PDF con ISIN + UNP + IUNP: mostra redditività per fondo e portafoglio
+4. 📎 **Schede prodotto** *(opzionale)* — PDF singoli fondi: asset allocation granulare estratta automaticamente
+5. ✏️ **Note** *(opzionale)* — testo libero incluso nella copertina (profilo cliente, obiettivi, vincoli)
+6. 🚀 **Genera** → 3 portafogli con rendimenti, asset allocation, VaR, Sharpe e **UNP ponderato**
         """)
         return
 
@@ -1434,14 +1623,31 @@ def main():
 
     fund_sheets = [f.read() for f in files_schede] if files_schede else []
 
+    # ── PARSE CATALOGO UNP ──────────────────────────────────
+    unp_df = pd.DataFrame()
+    if file_unp:
+        with st.spinner("Lettura catalogo UNP…"):
+            unp_df = parse_unp_catalog(file_unp.read(), file_unp.name)
+    # Merge UNP in funds_df per ISIN
+    if not unp_df.empty and "isin" in unp_df.columns:
+        merge_cols = ["isin"] + [c for c in ["unp","iunp"] if c in unp_df.columns]
+        funds_df = funds_df.merge(unp_df[merge_cols], on="isin", how="left")
+        if "unp"  not in funds_df.columns: funds_df["unp"]  = None
+        if "iunp" not in funds_df.columns: funds_df["iunp"] = None
+    else:
+        funds_df["unp"]  = None
+        funds_df["iunp"] = None
+
+    n_unp = int(funds_df["unp"].notna().sum())
+
     # ── OVERVIEW UNIVERSO ───────────────────────────────────
     n_f = len(funds_df); n_isin = (funds_df["isin"]!="").sum()
     c1,c2,c3,c4 = st.columns(4)
     for col,v,l,s in [
         (c1, str(n_f),    "Fondi universo",  f"{funds_df['macro_cat'].nunique()} categorie"),
         (c2, str(n_isin), "Con ISIN",        "dati da FondiDoc + Morningstar"),
-        (c3, str(len(fund_sheets)) if fund_sheets else "—", "Schede PDF", "caricate" if fund_sheets else "nessuna caricata"),
-        (c4, "✓" if market_text else "—", "View mercato", "caricata" if market_text else "non caricata"),
+        (c3, f"{n_unp}" if n_unp else "—",   "Con UNP",   "da catalogo prodotti" if n_unp else "carica catalogo UNP"),
+        (c4, "✓" if market_text else "—",    "View mercato", "caricata" if market_text else "non caricata"),
     ]: col.markdown(f'<div class="kpi"><div class="kpi-label">{l}</div><div class="kpi-value">{v}</div><div class="kpi-sub">{s}</div></div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1449,9 +1655,10 @@ def main():
     col_l, col_r = st.columns([1.2, 0.8], gap="large")
     with col_l:
         st.markdown('<p class="sec-title">Universo Fondi</p>', unsafe_allow_html=True)
-        dc = [c for c in ["nome","isin","categoria","macro_cat","mifid"] if c in funds_df.columns]
-        st.dataframe(funds_df[dc].rename(columns={"nome":"Fondo","isin":"ISIN","categoria":"Categoria",
-                                                    "macro_cat":"Macro","mifid":"MIFID"}),
+        dc = [c for c in ["nome","isin","categoria","macro_cat","unp","iunp"] if c in funds_df.columns]
+        rename_map = {"nome":"Fondo","isin":"ISIN","categoria":"Categoria",
+                      "macro_cat":"Macro","unp":"UNP %","iunp":"IUNP %"}
+        st.dataframe(funds_df[dc].rename(columns=rename_map),
                      height=320, use_container_width=True, hide_index=True)
     with col_r:
         if market_text:
@@ -1572,9 +1779,14 @@ def main():
                     fd_r = funds_df[funds_df["nome"] == nome]
                     if fd_r.empty: continue
                     r = fd_r.iloc[0]
-                    lib_funds.append({"nome": nome, "isin": r.get("isin",""),
-                                      "macro_cat": r.get("macro_cat","Altro"),
-                                      "color": r.get("color","#94A3B8"), "peso": peso})
+                    lf = {"nome": nome, "isin": r.get("isin",""),
+                          "macro_cat": r.get("macro_cat","Altro"),
+                          "color": r.get("color","#94A3B8"), "peso": peso}
+                    if "unp"  in r.index and str(r.get("unp",""))  not in ("","nan","None"):
+                        lf["unp"]  = r["unp"]
+                    if "iunp" in r.index and str(r.get("iunp","")) not in ("","nan","None"):
+                        lf["iunp"] = r["iunp"]
+                    lib_funds.append(lf)
                 if lib_funds:
                     tot_w = sum(f["peso"] for f in lib_funds)
                     if tot_w > 0:
@@ -1654,14 +1866,27 @@ def main():
                             if not ptf or not ptf.get("funds"): st.info("Nessun dato."); continue
                             if ptf.get("rationale"): st.info(ptf["rationale"])
                             m = calc_metrics(ptf["funds"], fund_data, schede_alloc)
-                            mc2 = st.columns(6)
-                            for col2,(k2,lb) in zip(mc2,[("ytd","YTD"),("perf_1y","1A"),("perf_3y","3A"),
-                                                          ("perf_5y","5A"),("var_1y","VaR 1A"),("sharpe_3y","Sharpe 3A")]):
-                                col2.metric(lb, m.get(k2,"N/D"))
-                            disp_cols = [c for c in ["nome","isin","macro_cat","peso"] if c in pd.DataFrame(ptf["funds"]).columns]
+                            # Mostra UNP/IUNP ponderato se disponibili
+                            unp_w  = m.get("unp_w")
+                            iunp_w = m.get("iunp_w")
+                            n_kpi  = 6 + (1 if unp_w is not None else 0) + (1 if iunp_w is not None else 0)
+                            mc2 = st.columns(n_kpi)
+                            kpi_list = [("ytd","YTD"),("perf_1y","1A"),("perf_3y","3A"),
+                                        ("perf_5y","5A"),("var_1y","VaR 1A"),("sharpe_3y","Sharpe 3A")]
+                            if unp_w  is not None: kpi_list.append(("unp_w",  "UNP %"))
+                            if iunp_w is not None: kpi_list.append(("iunp_w", "IUNP %"))
+                            for col2,(k2,lb) in zip(mc2, kpi_list):
+                                v2 = m.get(k2)
+                                if k2 in ("unp_w","iunp_w"):
+                                    col2.metric(lb, f"{v2:.3f}%" if v2 is not None else "n.d.")
+                                else:
+                                    col2.metric(lb, v2 if v2 else "n.d.")
+                            disp_cols = [c for c in ["nome","isin","macro_cat","peso","unp","iunp"]
+                                         if c in pd.DataFrame(ptf["funds"]).columns]
                             st.dataframe(
                                 pd.DataFrame(ptf["funds"])[disp_cols].rename(
-                                    columns={"nome":"Fondo","isin":"ISIN","macro_cat":"Categoria","peso":"Peso %"}),
+                                    columns={"nome":"Fondo","isin":"ISIN","macro_cat":"Categoria",
+                                             "peso":"Peso %","unp":"UNP %","iunp":"IUNP %"}),
                                 hide_index=True, use_container_width=True)
 
                     st.markdown("---")
