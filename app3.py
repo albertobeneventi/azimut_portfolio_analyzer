@@ -597,9 +597,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=14))
 
     # ── KPI ─────────────────────────────────────────────────
+    KC = S("KC", fontName="Helvetica", fontSize=8.5,
+           textColor=rl_colors.HexColor("#1E293B"), leading=13, alignment=1)
     def kpi_cell(v,l):
         return Paragraph(f'<font size="18"><b>{v}</b></font><br/>'
-                         f'<font size="8" color="#64748B">{l}</font>', BD)
+                         f'<font size="8" color="#64748B">{l}</font>', KC)
     kpi = Table(
         [[kpi_cell(str(n_fondi),"Fondi"),kpi_cell(f"{w_az:.1f}%","Quota Azionaria"),
           kpi_cell(f"{w_obb:.1f}%","Quota Obbligazionaria"),
