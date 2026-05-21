@@ -69,6 +69,104 @@ MANUAL_URL_OVERRIDES = {
         "https://www.fondidoc.it/d/Index/AZPOA/LU0346933400_az-f1-allocation-balanced-fof-a-az-fund-cap-eur",
 }
 
+# ── UNP/IUNP CATALOG (Catalogo Prodotti&Servizi Azimut, settembre 2025) ──────
+# Fonte: DETTAGLIO AZ FUND — valori %UNP e %IUNP36
+UNP_CATALOG = {
+    # AZ Allocation
+    "AZ Allocation Asset Timing 2026":            (2.29, 1.14),
+    "AZ Allocation Asset Timing 2028":            (2.29, 1.14),
+    "AZ Allocation Balanced Brave":               (1.89, 0.94),
+    "AZ Allocation Balanced FoF":                 (1.89, 0.94),
+    "AZ Allocation Balanced Plus":                (1.89, 0.94),
+    "AZ Allocation Escalator 2026":               (2.29, 1.14),
+    "AZ Allocation Escalator 2028":               (2.29, 1.14),
+    "AZ Allocation Escalator 2030":               (2.29, 1.14),
+    "AZ Allocation Flexible Equity":              (1.92, 0.96),
+    "AZ Allocation Global Aggressive":            (1.89, 0.94),
+    "AZ Allocation Global Balanced":              (1.80, 0.90),
+    "AZ Allocation Global Conservative":          (1.61, 0.80),
+    "AZ Allocation Italian Trend":                (2.01, 1.00),
+    "AZ Allocation Life Plan 2040":               (2.51, 1.25),
+    "AZ Allocation PIR Italian Excellence 70":    (1.89, 0.94),
+    "AZ Allocation Potential Income Upside 2030": (1.67, 0.83),
+    "AZ Allocation Risk Parity Factors":          (1.89, 0.94),
+    "AZ Allocation Trend":                        (2.01, 1.00),
+    "AZ Allocation Turkey":                       (1.89, 0.94),
+    "AZ Allocation Italian Long Term Opp":        (2.73, 1.36),
+    "AZ Allocation Long Term Credit Opp":         (1.94, 0.97),
+    "AZ Allocation Long Term Equity Opp":         (2.73, 1.36),
+    "AZ Allocation Global Goals":                 (2.50, 1.25),
+    # AZ Alternative
+    "AZ Alternative Capital Enhanced":            (0.51, 0.25),
+    "AZ Alternative Commodity":                   (1.81, 0.90),
+    # AZ Bond
+    "AZ Bond Aggregate Bond Euro":                (1.10, 0.55),
+    "AZ Bond Asian Bond":                         (1.38, 0.69),
+    "AZ Bond Bond Value":                         (1.53, 0.76),
+    "AZ Bond COCO Bonds":                         (1.53, 0.76),
+    "AZ Bond Convertible":                        (1.62, 0.81),
+    "AZ Bond Enhanced Yield":                     (0.35, 0.17),
+    "AZ Bond Euro Corporate":                     (1.23, 0.61),
+    "AZ Bond Frontier Markets Debt":              (1.62, 0.81),
+    "AZ Bond Global Macro Bond":                  (1.29, 0.64),
+    "AZ Bond High Income FoF":                    (1.62, 0.81),
+    "AZ Bond High Yield":                         (1.47, 0.73),
+    "AZ Bond High Yield Target 2028 Climate Transition": (1.53, 0.76),
+    "AZ Bond Income Dynamic":                     (0.99, 0.49),
+    "AZ Bond International FoF":                  (1.62, 0.81),
+    "AZ Bond Latin America Bonds":                (1.53, 0.76),
+    "AZ Bond Patriot":                            (1.36, 0.68),
+    "AZ Bond Renminbi Opportunities":             (1.23, 0.61),
+    "AZ Bond Short Term Investment Grade Climate Transition": (1.53, 0.76),
+    "AZ Bond Sustainable Hybrid":                 (1.46, 0.73),
+    "AZ Bond Target 2025":                        (1.11, 0.55),
+    "AZ Bond Target 2026":                        (1.11, 0.55),
+    "AZ Bond Target 2028":                        (1.11, 0.55),
+    "AZ Bond Target 2029":                        (1.11, 0.55),
+    "AZ Bond Target 2029 USD":                    (1.23, 0.61),
+    "AZ Bond Target 2031":                        (1.11, 0.55),
+    "AZ Bond Total Return Bond":                  (1.55, 0.77),
+    "AZ Bond US Dollar Aggregate":                (1.24, 0.62),
+    "AZ Bond ABS":                                (1.23, 0.61),
+    # AZ Equity
+    "AZ Equity Al Mal Mena":                      (2.51, 1.25),
+    "AZ Equity American Opportunities":           (2.19, 1.09),
+    "AZ Equity ASEAN Countries":                  (2.19, 1.09),
+    "AZ Equity Best Value":                       (2.09, 1.04),
+    "AZ Equity Biotechnology":                    (2.51, 1.25),
+    "AZ Equity Borletti Global Lifestyle":        (2.30, 1.15),
+    "AZ Equity Brazil Trend":                     (2.19, 1.09),
+    "AZ Equity China":                            (2.19, 1.09),
+    "AZ Equity Egypt":                            (2.51, 1.25),
+    "AZ Equity Emerging Asia FoF":                (2.51, 1.25),
+    "AZ Equity Emerging Markets Technology":      (2.51, 1.25),
+    "AZ Equity Escalator":                        (2.29, 1.14),
+    "AZ Equity Europe":                           (2.19, 1.09),
+    "AZ Equity Food Agriculture":                 (2.40, 1.20),
+    "AZ Equity Global Dividend":                  (2.51, 1.25),
+    "AZ Equity Global Emerging FoF":              (2.51, 1.25),
+    "AZ Equity Global ESG":                       (2.51, 1.25),
+    "AZ Equity Global FoF":                       (2.51, 1.25),
+    "AZ Equity Global Growth":                    (2.40, 1.20),
+    "AZ Equity Global Healthcare":                (2.40, 1.20),
+    "AZ Equity Global Infrastructure":            (2.26, 1.13),
+    "AZ Equity Global Quality":                   (2.18, 1.09),
+    "AZ Equity Global Value FoF":                 (2.51, 1.25),
+    "AZ Equity Industrial Revolution 40":         (2.51, 1.25),
+    "AZ Equity Japan":                            (2.20, 1.10),
+    "AZ Equity Mexico":                           (2.51, 1.25),
+    "AZ Equity Momentum":                         (2.19, 1.09),
+    "AZ Equity Small Cap Europe FoF":             (2.51, 1.25),
+    "AZ Equity Special Needs Inclusion":          (2.51, 1.25),
+    "AZ Equity Water Renewable Resources":        (2.40, 1.20),
+    "AZ Equity World Minimum Volatility":         (2.19, 1.09),
+    "AZ Equity Future Opportunities":             (2.51, 1.25),
+    "AZ Equity New Generation":                   (2.79, 1.39),
+    "AZ Equity Space":                            (2.79, 1.39),
+    # AZ Islamic
+    "AZ Islamic Global Sukuk":                    (1.36, 0.68),
+}
+
 # ── CSS ──────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -142,6 +240,48 @@ def pct_color(val_str: str) -> str:
         return "pos" if v > 0 else ("neg" if v < 0 else "neu")
     except:
         return "neu"
+
+
+# ── UNP/IUNP lookup helpers ──────────────────────────────────
+
+def _normalize_for_unp(name: str) -> str:
+    """Normalise a fund name for UNP catalog lookup."""
+    n = name.strip()
+    # Expand AZ Fund short forms
+    n = re.sub(r'AZ\s+F\.1\s+All\.\s*',  'AZ Allocation ',  n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Eq\.\s*',   'AZ Equity ',      n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Bd\.\s*',   'AZ Bond ',        n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Alt\.\s*',  'AZ Alternative ', n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Isl\.\s*',  'AZ Islamic ',     n, flags=re.IGNORECASE)
+    # Strip share-class suffix e.g. " A Cap EUR", " B Acc USD", " I Dis GBP"
+    n = re.sub(r'\s+[A-Z]\s+(Cap|Acc|Dis|Inc)\s+\w{3}\s*$', '', n, flags=re.IGNORECASE)
+    n = re.sub(r'\s+[A-Z]\s+(Cap|Acc|Dis|Inc)\s*$',          '', n, flags=re.IGNORECASE)
+    n = re.sub(r'\s+Cap\s+\w{3}\s*$',                         '', n, flags=re.IGNORECASE)
+    # Normalise punctuation and whitespace
+    n = re.sub(r'[-–—]', ' ', n)
+    n = re.sub(r'[^\w\s]', ' ', n)
+    n = re.sub(r'\s+', ' ', n).strip().lower()
+    return n
+
+
+_UNP_CATALOG_NORMALIZED: dict = {
+    _normalize_for_unp(k): v for k, v in UNP_CATALOG.items()
+}
+
+
+def lookup_unp(fund_name: str):
+    """Return (unp_pct, iunp36_pct) for a fund, or (None, None) if not found."""
+    norm = _normalize_for_unp(fund_name)
+    # 1. exact match
+    if norm in _UNP_CATALOG_NORMALIZED:
+        return _UNP_CATALOG_NORMALIZED[norm]
+    # 2. longest substring match (catalog key contained in fund name or vice versa)
+    best, best_len = None, 0
+    for cat_key, val in _UNP_CATALOG_NORMALIZED.items():
+        if cat_key in norm or norm in cat_key:
+            if len(cat_key) > best_len:
+                best, best_len = val, len(cat_key)
+    return best if best is not None else (None, None)
 
 
 # ════════════════════════════════════════════════════════════
@@ -879,6 +1019,80 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             "◆ I valori del Portafoglio sono medie ponderate per peso dei singoli fondi. "
             "La volatilità di portafoglio effettiva dipende anche dalle correlazioni tra i fondi. "
             "Dati forniti a titolo indicativo.", NOTE),
+    ]))
+
+    story.append(Spacer(1, 14))
+
+    # ── UNP / IUNP TABLE ─────────────────────────────────────
+    # Pre-compute per-fund UNP/IUNP and portfolio weighted average
+    _fund_unp: dict = {}
+    _wtd_unp = _wtd_iunp = _cov_w = 0.0
+    for _, _row in d_sorted.iterrows():
+        _u, _iu = lookup_unp(_row["nome"])
+        _fund_unp[_row["nome"]] = (_u, _iu)
+        if _u is not None:
+            _w = _row[wcol]
+            _wtd_unp  += _u  * _w
+            _wtd_iunp += _iu * _w
+            _cov_w    += _w
+
+    if _cov_w > 0.01:
+        _ptf_unp_str  = f"{_wtd_unp  / _cov_w:.2f}%"
+        _ptf_iunp_str = f"{_wtd_iunp / _cov_w:.2f}%"
+    else:
+        _ptf_unp_str = _ptf_iunp_str = "N/D"
+
+    unp_hdr_row = [Paragraph(f"<b>{t}</b>", HDR) for t in
+                   ["Fondo", "Peso", "%UNP", "%IUNP36"]]
+    unp_ptf_row = [
+        Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
+        Paragraph("<b>100%</b>", WH),
+        Paragraph(f"<b>{_ptf_unp_str}</b>",  WH),
+        Paragraph(f"<b>{_ptf_iunp_str}</b>", WH),
+    ]
+    unp_fund_rows = []
+    for _, _row in d_sorted.iterrows():
+        _u, _iu = _fund_unp[_row["nome"]]
+        unp_fund_rows.append([
+            Paragraph(_row["nome"][:55], SM),
+            Paragraph(f"{_row[wcol]*100:.1f}%", SM),
+            Paragraph(f"{_u:.2f}%"  if _u  is not None else "—", SM),
+            Paragraph(f"{_iu:.2f}%" if _iu is not None else "—", SM),
+        ])
+
+    unp_tbl = Table(
+        [unp_hdr_row, unp_ptf_row] + unp_fund_rows,
+        colWidths=[8.5*cm, 2.0*cm, 3.25*cm, 3.25*cm],
+        repeatRows=1,
+    )
+    unp_tbl.setStyle(TableStyle([
+        ("BACKGROUND",  (0,0), (-1,0),  rl_colors.HexColor("#0D1B2A")),
+        ("TEXTCOLOR",   (0,0), (-1,0),  rl_colors.white),
+        ("FONTNAME",    (0,0), (-1,0),  "Helvetica-Bold"),
+        ("BACKGROUND",  (0,1), (-1,1),  rl_colors.HexColor("#1B4FBB")),
+        ("LINEBELOW",   (0,1), (-1,1),  2, rl_colors.HexColor("#C9A84C")),
+        ("FONTSIZE",    (0,0), (-1,-1), 8),
+        ("PADDING",     (0,0), (-1,-1), 5),
+        ("ROWBACKGROUNDS", (0,2), (-1,-1),
+         [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
+        ("LINEBELOW",   (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+        ("ALIGN",       (1,0), (-1,-1), "CENTER"),
+        ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
+    ]))
+
+    NOTE_U = S("NTU", fontName="Helvetica-Oblique", fontSize=6.5,
+               textColor=rl_colors.HexColor("#94A3B8"), leading=9)
+    story.append(KeepTogether([
+        Paragraph("UNP e IUNP dei Fondi in Portafoglio", SC),
+        unp_tbl,
+        Spacer(1, 6),
+        Paragraph(
+            "◆ UNP (Utile Netto di Portafoglio): commissione annua netta percepita dal consulente. "
+            "IUNP36: indice UNP calcolato su orizzonte triennale. "
+            "Fonte: Catalogo Prodotti & Servizi Azimut, settembre 2025. "
+            "La riga Portafoglio è la media ponderata per peso dei fondi per cui il dato è disponibile. "
+            "Il simbolo — indica che il fondo non è presente nel catalogo.",
+            NOTE_U),
     ]))
 
     story.append(PageBreak())
