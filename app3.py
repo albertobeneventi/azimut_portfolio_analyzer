@@ -459,7 +459,7 @@ def make_macro_bar(df, wcol):
 
 def _mpl_portfolio_pie(df, wcol, profile) -> io.BytesIO:
     d = df[df[wcol]>0.005].sort_values(wcol, ascending=False)
-    fig, (ax_pie,ax_leg) = plt.subplots(1,2,figsize=(11,5.5),gridspec_kw={"width_ratios":[1.3,1]})
+    fig, (ax_pie,ax_leg) = plt.subplots(1,2,figsize=(11,5.5),gridspec_kw={"width_ratios":[1.4,1]})
     wedges,_,autotexts = ax_pie.pie(
         d[wcol], colors=d["color"].tolist(),
         autopct=lambda p:f"{p:.1f}%" if p>3.5 else "",
@@ -472,7 +472,7 @@ def _mpl_portfolio_pie(df, wcol, profile) -> io.BytesIO:
     handles = [mpatches.Patch(color=r["color"],
                label=f"{r['nome'][:32]}{'…' if len(r['nome'])>32 else ''}  {r[wcol]*100:.1f}%")
                for _,r in d.iterrows()]
-    ax_leg.legend(handles=handles,loc="center left",frameon=False,fontsize=7.8,labelspacing=0.85,handlelength=1.2)
+    ax_leg.legend(handles=handles,loc="center left",frameon=False,fontsize=10,labelspacing=0.85,handlelength=1.2)
     fig.patch.set_facecolor("#FFFFFF"); plt.tight_layout(pad=1.5)
     buf=io.BytesIO(); fig.savefig(buf,format="png",dpi=150,bbox_inches="tight",facecolor="white")
     plt.close(fig); buf.seek(0); return buf
@@ -483,8 +483,8 @@ def _mpl_macro_pie(df, wcol) -> io.BytesIO | None:
     agg = df[df[wcol]>0.001].groupby("macro_cat")[wcol].sum().sort_values(ascending=False)
     if agg.empty: return None
     colors = [MACRO_COLORS.get(k, "#94A3B8") for k in agg.index]
-    fig, (ax_pie, ax_leg) = plt.subplots(1, 2, figsize=(10, 4),
-                                          gridspec_kw={"width_ratios": [1.2, 1]})
+    fig, (ax_pie, ax_leg) = plt.subplots(1, 2, figsize=(11, 4.5),
+                                          gridspec_kw={"width_ratios": [1.4, 1]})
     wedges, _, autotexts = ax_pie.pie(
         agg.values, colors=colors,
         autopct=lambda p: f"{p:.1f}%" if p >= 5 else "",
@@ -501,7 +501,7 @@ def _mpl_macro_pie(df, wcol) -> io.BytesIO | None:
                label=f"{k}  {v*100:.1f}%")
                for i, (k, v) in enumerate(agg.items())]
     ax_leg.legend(handles=handles, loc="center left", frameon=False,
-                  fontsize=9.5, labelspacing=1.2, handlelength=1.4)
+                  fontsize=12, labelspacing=1.4, handlelength=1.4)
     fig.patch.set_facecolor("#FFFFFF")
     plt.tight_layout(pad=1.2)
     buf = io.BytesIO()
