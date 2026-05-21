@@ -4,6 +4,8 @@
 # ============================================================
 
 import re
+import json
+from pathlib import Path
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -68,6 +70,34 @@ MANUAL_URL_OVERRIDES = {
     "AZ F.1 All. Balanced FoF A Cap EUR":
         "https://www.fondidoc.it/d/Index/AZPOA/LU0346933400_az-f1-allocation-balanced-fof-a-az-fund-cap-eur",
 }
+
+# ── FUND DATA CACHE ──────────────────────────────────────────────────────────
+# fund_cache.json is bundled in the repo and updated by the user after a fresh
+# FondiDoc fetch (download button → commit to git).
+CACHE_FILE = Path("data/fund_cache.json")
+
+def load_fund_cache() -> tuple:
+    """Load cached FondiDoc data. Returns (fund_data_dict, last_updated_str)."""
+    try:
+        if CACHE_FILE.exists():
+            payload = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+            return payload.get("fund_data", {}), payload.get("last_updated", "")
+    except Exception:
+        pass
+    return {}, ""
+
+def save_fund_cache(fund_data: dict):
+    """Persist fund data to data/fund_cache.json (overwrites)."""
+    try:
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "last_updated": datetime.date.today().isoformat(),
+            "fund_data": fund_data,
+        }
+        CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                              encoding="utf-8")
+    except Exception:
+        pass
 
 # ── UNP/IUNP CATALOG (Catalogo Prodotti&Servizi Azimut, settembre 2025) ──────
 # Fonte: DETTAGLIO AZ FUND — valori %UNP e %IUNP36
@@ -354,10 +384,11 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
     result: dict = {}
 
     def _to_pct(s):
+        """Convert a factbook value string to a signed '%' string, or None."""
         if not s:
             return None
         s = str(s).strip()
-        if s in ('-', 'n.d.', 'N/D', '', 'None', 'n/d'):
+        if s in ('-', 'n.d.', 'N/D', '', 'None', 'n/d', 'nd'):
             return None
         s = s.replace('−', '-').replace('–', '-').replace('—', '-')
         s = s.replace(',', '.').replace('%', '').strip()
@@ -366,22 +397,60 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
         except Exception:
             return None
 
+    def _annualize(pct_str, years: float):
+        """Convert a cumulative return string to annualized (CAGR)."""
+        if not pct_str:
+            return None
+        try:
+            v = float(pct_str.replace('%','').replace('+','').strip()) / 100
+            ann = ((1 + v) ** (1 / years) - 1) * 100
+            return f"{ann:+.2f}%"
+        except Exception:
+            return None
+
+    def _plausible(pct_str, max_abs: float = 80.0):
+        """Return True if pct_str is None OR in [-max_abs, +max_abs]."""
+        if pct_str is None:
+            return True
+        try:
+            return abs(float(pct_str.replace('%','').replace('+',''))) <= max_abs
+        except Exception:
+            return True  # keep on parse error
+
     def _store(name_raw: str, cols_vals: list):
-        """Normalise name and store performance data if not already seen."""
+        """Normalise name and store performance data if not already seen.
+
+        cols_vals: [1M, 3M, 6M, 12M, 24M, 36M, 60M, YTD]
+        3Y (36M) and 5Y (60M) are stored as ANNUALIZED CAGR to match FondiDoc.
+        """
         if not name_raw:
             return
         norm = _normalize_for_unp(name_raw.strip())
         norm = _FUND_ALIASES.get(norm, norm)
         if not norm or norm in result:
             return
-        # cols_vals is expected to be [1M, 3M, 6M, 12M, 24M, 36M, 60M, YTD]
-        # indices:                        0   1   2    3    4    5    6    7
-        ytd  = _to_pct(cols_vals[7]) if len(cols_vals) > 7 else _to_pct(cols_vals[-1] if cols_vals else None)
-        p1y  = _to_pct(cols_vals[3]) if len(cols_vals) > 3 else None
-        p3y  = _to_pct(cols_vals[5]) if len(cols_vals) > 5 else None
-        p5y  = _to_pct(cols_vals[6]) if len(cols_vals) > 6 else None
-        if any(v is not None for v in (ytd, p1y, p3y, p5y)):
-            result[norm] = {"ytd": ytd, "perf_1y": p1y, "perf_3y": p3y, "perf_5y": p5y}
+        # ── extract raw cumulative values ─────────────────────────────
+        n = len(cols_vals)
+        ytd_raw = _to_pct(cols_vals[7]) if n > 7 else _to_pct(cols_vals[-1] if cols_vals else None)
+        p1y_raw = _to_pct(cols_vals[3]) if n > 3 else None
+        p3y_cum = _to_pct(cols_vals[5]) if n > 5 else None   # 36M cumulative
+        p5y_cum = _to_pct(cols_vals[6]) if n > 6 else None   # 60M cumulative
+
+        # ── sanity check: YTD and 1Y must be in ±80 % range ──────────
+        # Values outside this range indicate NAV prices, year numbers, or
+        # misaligned columns from individual fund pages (not summary table).
+        if not _plausible(ytd_raw, 80) or not _plausible(p1y_raw, 80):
+            return
+
+        # ── annualize 3Y and 5Y (factbook stores cumulative) ─────────
+        p3y = _annualize(p3y_cum, 3)
+        p5y = _annualize(p5y_cum, 5)
+
+        if any(v is not None for v in (ytd_raw, p1y_raw, p3y, p5y)):
+            result[norm] = {
+                "ytd": ytd_raw, "perf_1y": p1y_raw,
+                "perf_3y": p3y, "perf_5y": p5y,
+            }
 
     try:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
@@ -408,9 +477,14 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                     tokens = line.split()
                     if len(tokens) < 6:
                         continue
-                    # Find first all-digit token (= AUM integer like "81", "1050")
+                    # Find first all-digit token (= AUM in M€, e.g. "81", "1050")
+                    # Skip year-like tokens (2010-2030) which appear in annual-return
+                    # tables on individual fund pages and would misalign columns.
                     num_idx = next(
-                        (i for i, t in enumerate(tokens) if re.match(r'^\d{1,6}$', t) and i > 0),
+                        (i for i, t in enumerate(tokens)
+                         if re.match(r'^\d{1,6}$', t)
+                         and i > 0
+                         and not re.match(r'^20[12]\d$', t)),  # skip 2010-2029
                         None
                     )
                     if num_idx is None:
@@ -1539,36 +1613,89 @@ def main():
     fida_urls = raw.get("fida_urls", {})
     n_urls = sum(1 for nome in df_act["nome"].unique() if nome in fida_urls)
 
+    # ── Load cached FondiDoc data (bundled in repo) ──────────────────────────
+    cached_fd, cache_date = load_fund_cache()
+
     col_btn,col_inf = st.columns([1,2])
     with col_inf:
-        _fb_note = (f"📖 Factbook caricato: rendimenti per {len(factbook_data)} fondi"
-                    if factbook_data
-                    else f"🌐 Dati live da FondiDoc per {n_urls}/{n_fondi} fondi")
-        st.markdown(f"""<div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:1rem 1.25rem;'><div style='font-size:.8rem;color:#1d4ed8;font-weight:600;margin-bottom:.4rem;'>Il report PDF (3 sezioni) contiene:</div><div style='font-size:.82rem;color:#1e40af;line-height:1.9;'>✓ <b>Pag. 1</b> — Grafico a torta + KPI di portafoglio<br>✓ <b>Pag. 2</b> — Tavola rendimenti YTD / 1A / 3A / 5A + Rischio<br>✓ <b>Pag. 3+</b> — Scheda analitica per ciascuno degli {n_fondi} fondi<br><span style='color:#3b82f6;'>{_fb_note}</span></div></div>""",unsafe_allow_html=True)
+        if factbook_data:
+            _src_note = f"📖 Factbook: rendimenti per <b>{len(factbook_data)}</b> fondi"
+        elif cached_fd:
+            _src_note = f"💾 Cache FondiDoc aggiornata al: <b>{cache_date}</b>"
+        else:
+            _src_note = f"🌐 Dati live da FondiDoc per {n_urls}/{n_fondi} fondi"
+        st.markdown(
+            f"<div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;"
+            f"padding:1rem 1.25rem;'>"
+            f"<div style='font-size:.8rem;color:#1d4ed8;font-weight:600;margin-bottom:.4rem;'>"
+            f"Il report PDF (3 sezioni) contiene:</div>"
+            f"<div style='font-size:.82rem;color:#1e40af;line-height:1.9;'>"
+            f"✓ <b>Pag. 1</b> — Grafico a torta + KPI di portafoglio<br>"
+            f"✓ <b>Pag. 2</b> — Tavola rendimenti YTD / 1A / 3A / 5A + Rischio<br>"
+            f"✓ <b>Pag. 3+</b> — Schede analitiche per {n_fondi} fondi<br>"
+            f"<span style='color:#3b82f6;'>{_src_note}</span></div></div>",
+            unsafe_allow_html=True)
+
+    fida_df = raw.get("FIDA", pd.DataFrame())
+
+    def _gen_pdf(fund_data_used: dict, label: str):
+        try:
+            pdf_bytes = generate_pdf(df_act, wcol, profile, ptf_label, fund_data_used,
+                                     fida_df=fida_df, factbook_data=factbook_data)
+            fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
+                     f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
+            st.download_button("📥   Scarica Report PDF", data=pdf_bytes,
+                               file_name=fname, mime="application/pdf",
+                               use_container_width=True)
+            st.success(f"✅ PDF pronto — {label}")
+        except Exception as e:
+            st.error(f"Errore PDF: {e}")
 
     with col_btn:
-        if st.button("🔄  Carica Dati da FondiDoc + Genera PDF",use_container_width=True,
-                     type="primary"):
-            progress_bar = st.progress(0, text="Scarico dati FondiDoc…")
-            def upd(v): progress_bar.progress(v, text=f"FondiDoc: {int(v*100)}% completato…")
-            fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
-            progress_bar.progress(1.0, text="✅ Dati ricevuti — Genero PDF…")
+        # ── If cache or factbook available: instant PDF (no FondiDoc needed) ──
+        if cached_fd or factbook_data:
+            if st.button("⚡  Genera PDF (cache/factbook)",
+                         use_container_width=True, type="primary"):
+                _gen_pdf(cached_fd, f"dati del {cache_date or 'factbook'}")
 
-            try:
-                fida_df = raw.get("FIDA", pd.DataFrame())
-                pdf_bytes = generate_pdf(df_act, wcol, profile, ptf_label, fund_data,
-                                         fida_df=fida_df,
-                                         factbook_data=factbook_data)
-                fname = f"Azimut_{ptf_label.replace(' ','_')}_{profile}_{datetime.date.today().strftime('%Y%m%d')}.pdf"
-                progress_bar.empty()
+            with st.expander("🔄  Aggiorna dati da FondiDoc"):
+                if st.button("Scarica dati FondiDoc freschi + Rigenera PDF",
+                             use_container_width=True):
+                    pb = st.progress(0, text="Scarico dati FondiDoc…")
+                    def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+                    fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
+                    pb.progress(1.0, text="✅ Salvo cache e genero PDF…")
+                    save_fund_cache(fund_data)
+                    _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
+                    # Download updated cache JSON for git commit
+                    cache_json = json.dumps(
+                        {"last_updated": datetime.date.today().isoformat(),
+                         "fund_data": fund_data},
+                        ensure_ascii=False, indent=2)
+                    st.download_button(
+                        "💾  Scarica cache aggiornata (da committare su git)",
+                        data=cache_json, file_name="fund_cache.json",
+                        mime="application/json", use_container_width=True)
+                    pb.empty()
+        else:
+            # ── No cache: must fetch from FondiDoc ──────────────────────────
+            if st.button("🔄  Carica Dati da FondiDoc + Genera PDF",
+                         use_container_width=True, type="primary"):
+                pb = st.progress(0, text="Scarico dati FondiDoc…")
+                def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+                fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
+                pb.progress(1.0, text="✅ Salvo cache e genero PDF…")
+                save_fund_cache(fund_data)
+                _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
+                cache_json = json.dumps(
+                    {"last_updated": datetime.date.today().isoformat(),
+                     "fund_data": fund_data},
+                    ensure_ascii=False, indent=2)
                 st.download_button(
-                    label="📥   Scarica Report PDF",
-                    data=pdf_bytes, file_name=fname, mime="application/pdf",
-                    use_container_width=True,
-                )
-                st.success(f"✅ PDF pronto — {n_fondi} fondi, {len(fund_data)} schede caricate da FondiDoc")
-            except Exception as e:
-                st.error(f"Errore PDF: {e}")
+                    "💾  Scarica cache aggiornata (da committare su git)",
+                    data=cache_json, file_name="fund_cache.json",
+                    mime="application/json", use_container_width=True)
+                pb.empty()
 
     st.markdown("<br><br>",unsafe_allow_html=True)
 
