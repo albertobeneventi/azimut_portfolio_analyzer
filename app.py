@@ -545,7 +545,8 @@ def _mpl_annual_bar(annual_perf: dict, fund_name: str) -> io.BytesIO | None:
 
 def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                  ptf_name: str, fund_data: dict = None,
-                 fida_df: pd.DataFrame = None) -> bytes:
+                 fida_df: pd.DataFrame = None,
+                 unp_w: float = None, iunp_w: float = None) -> bytes:
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -599,15 +600,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=14))
 
     # ── KPI ─────────────────────────────────────────────────
-    def kpi_cell(v,l):
-        return Paragraph(f'<font size="18"><b>{v}</b></font><br/>'
+    def kpi_cell(v, l, color="#0D1B2A"):
+        return Paragraph(f'<font size="18" color="{color}"><b>{v}</b></font><br/>'
                          f'<font size="8" color="#64748B">{l}</font>', BD)
-    kpi = Table(
-        [[kpi_cell(str(n_fondi),"Fondi"),kpi_cell(f"{w_az:.1f}%","Quota Azionaria"),
-          kpi_cell(f"{w_obb:.1f}%","Quota Obbligazionaria"),
-          kpi_cell(datetime.date.today().strftime("%m/%Y"),"Data Report")]],
-        colWidths=[4.25*cm]*4
-    )
+    kpi_vals = [kpi_cell(str(n_fondi),"Fondi"),
+                kpi_cell(f"{w_az:.1f}%","Quota Azionaria"),
+                kpi_cell(f"{w_obb:.1f}%","Quota Obbligazionaria"),
+                kpi_cell(datetime.date.today().strftime("%m/%Y"),"Data Report")]
+    if unp_w is not None:
+        unp_lbl = f"UNP  {'· IUNP '+f'{iunp_w:.3f}%' if iunp_w is not None else ''}"
+        kpi_vals.append(kpi_cell(f"{unp_w:.3f}%", unp_lbl, "#7C3AED"))
+    n_kpi = len(kpi_vals)
+    kpi = Table([kpi_vals], colWidths=[(17*cm)/n_kpi]*n_kpi)
     kpi.setStyle(TableStyle([
         ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
         ("INNERGRID",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
@@ -698,20 +702,41 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     perf_keys = ["ytd","perf_1y","perf_3y","perf_5y","vol_1y","sharpe_1y"]
     ptf_p = ptf_wavg(perf_keys)
 
-    perf_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
-                ["Fondo","Peso","YTD","1 Anno","3 Anni","5 Anni","Vol. 1A","Sharpe 1A"]]
+    _show_unp = unp_w is not None or any(
+        str(row.get("unp","")) not in ("","nan","None") for _, row in d_sorted.iterrows()
+        if "unp" in row.index)
 
-    # Portfolio summary row (row index 1 — gold background)
-    ptf_perf_row = [
-        Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
-        Paragraph(f"<b>100%</b>", WH),
-        pstyle_w(ptf_p.get("ytd","N/D")),
-        pstyle_w(ptf_p.get("perf_1y","N/D")),
-        pstyle_w(ptf_p.get("perf_3y","N/D")),
-        pstyle_w(ptf_p.get("perf_5y","N/D")),
-        Paragraph(ptf_p.get("vol_1y","N/D"), WH),
-        Paragraph(ptf_p.get("sharpe_1y","N/D"), WH),
-    ]
+    if _show_unp:
+        perf_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
+                    ["Fondo","Peso","UNP","YTD","1 Anno","3 Anni","5 Anni","Vol. 1A","Sharpe 1A"]]
+    else:
+        perf_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
+                    ["Fondo","Peso","YTD","1 Anno","3 Anni","5 Anni","Vol. 1A","Sharpe 1A"]]
+
+    # Portfolio summary row
+    def _unp_cell_w(v):
+        if v is None: return Paragraph("—", WH)
+        return Paragraph(f'<font color="#C4B5FD"><b>{v:.3f}%</b></font>', WH)
+
+    if _show_unp:
+        ptf_perf_row = [
+            Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
+            Paragraph("<b>100%</b>", WH),
+            _unp_cell_w(unp_w),
+            pstyle_w(ptf_p.get("ytd","N/D")),   pstyle_w(ptf_p.get("perf_1y","N/D")),
+            pstyle_w(ptf_p.get("perf_3y","N/D")),pstyle_w(ptf_p.get("perf_5y","N/D")),
+            Paragraph(ptf_p.get("vol_1y","N/D"), WH),
+            Paragraph(ptf_p.get("sharpe_1y","N/D"), WH),
+        ]
+    else:
+        ptf_perf_row = [
+            Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
+            Paragraph("<b>100%</b>", WH),
+            pstyle_w(ptf_p.get("ytd","N/D")),   pstyle_w(ptf_p.get("perf_1y","N/D")),
+            pstyle_w(ptf_p.get("perf_3y","N/D")),pstyle_w(ptf_p.get("perf_5y","N/D")),
+            Paragraph(ptf_p.get("vol_1y","N/D"), WH),
+            Paragraph(ptf_p.get("sharpe_1y","N/D"), WH),
+        ]
 
     perf_rows = [perf_hdr, ptf_perf_row]
 
@@ -719,20 +744,35 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         fd  = (fund_data or {}).get(row["nome"], {})
         ana = fd.get("analysis", {})
         def gv(key): return ana.get(key,"N/D")
-        perf_rows.append([
-            Paragraph(row["nome"][:48], SM),
-            Paragraph(f"<b>{row[wcol]*100:.1f}%</b>", SM),
-            Paragraph(pstyle(gv("ytd")),     SM),
-            Paragraph(pstyle(gv("perf_1y")), SM),
-            Paragraph(pstyle(gv("perf_3y")), SM),
-            Paragraph(pstyle(gv("perf_5y")), SM),
-            Paragraph(gv("vol_1y"),           SM),
-            Paragraph(gv("sharpe_1y"),        SM),
-        ])
+        unp_v = row.get("unp") if "unp" in row.index else None
+        unp_s = (f'<font color="#7C3AED"><b>{float(unp_v):.3f}%</b></font>'
+                 if unp_v is not None and str(unp_v) not in ("nan","None","") else "—")
+        if _show_unp:
+            perf_rows.append([
+                Paragraph(row["nome"][:42], SM),
+                Paragraph(f"<b>{row[wcol]*100:.1f}%</b>", SM),
+                Paragraph(unp_s, SM),
+                Paragraph(pstyle(gv("ytd")),     SM), Paragraph(pstyle(gv("perf_1y")), SM),
+                Paragraph(pstyle(gv("perf_3y")), SM), Paragraph(pstyle(gv("perf_5y")), SM),
+                Paragraph(gv("vol_1y"),           SM), Paragraph(gv("sharpe_1y"),       SM),
+            ])
+        else:
+            perf_rows.append([
+                Paragraph(row["nome"][:48], SM),
+                Paragraph(f"<b>{row[wcol]*100:.1f}%</b>", SM),
+                Paragraph(pstyle(gv("ytd")),     SM), Paragraph(pstyle(gv("perf_1y")), SM),
+                Paragraph(pstyle(gv("perf_3y")), SM), Paragraph(pstyle(gv("perf_5y")), SM),
+                Paragraph(gv("vol_1y"),           SM), Paragraph(gv("sharpe_1y"),       SM),
+            ])
 
-    perf_tbl = Table(perf_rows,
-        colWidths=[5.2*cm,1.4*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
-        repeatRows=1)
+    if _show_unp:
+        perf_tbl = Table(perf_rows,
+            colWidths=[4.2*cm,1.2*cm,1.3*cm,1.3*cm,1.4*cm,1.4*cm,1.4*cm,1.4*cm,1.4*cm],
+            repeatRows=1)
+    else:
+        perf_tbl = Table(perf_rows,
+            colWidths=[5.2*cm,1.4*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
+            repeatRows=1)
     ts_perf = [
         ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),  # header
         ("TEXTCOLOR",(0,0),(-1,0),  rl_colors.white),
@@ -914,6 +954,14 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ]))
 
         # ── Dettagli fondo ───────────────────────────────────
+        _row_unp  = row.get("unp")  if "unp"  in row.index else None
+        _row_iunp = row.get("iunp") if "iunp" in row.index else None
+        _unp_line = ""
+        if _row_unp is not None and str(_row_unp) not in ("nan","None",""):
+            _unp_line += f'<font color="#7C3AED"><b>UNP: {float(_row_unp):.3f}%</b></font>'
+        if _row_iunp is not None and str(_row_iunp) not in ("nan","None",""):
+            _unp_line += f'  |  IUNP: {float(_row_iunp):.3f}%'
+
         det_data = [
             [Paragraph("<b>Dettagli Fondo</b>", BD)],
             [Paragraph(f"Data avvio: {gv('start_date',ov,'—')}", SM)],
@@ -922,7 +970,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             [Paragraph(f"Gestione: {gv('mgmt_fee',ov,'—')}  |  Perf.: {gv('perf_fee',ov,'—')}", SM)],
             [Paragraph(f"Sottoscrizione: {gv('sub_fee',ov,'—')}", SM)],
             [Paragraph(f"<b>FIDArating:</b> {gv('fida_rating',ov,'—')}  |  Score: {gv('fida_score',ov,'—')}", SM)],
-        ]
+        ] + ([[ Paragraph(_unp_line, SM) ]] if _unp_line else [])
         det_tbl = Table([[d[0]] for d in det_data], colWidths=[7.3*cm])
         det_tbl.setStyle(TableStyle([
             ("PADDING",(0,0),(-1,-1), 3),
@@ -967,6 +1015,100 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     doc.build(story)
     buf.seek(0)
     return buf.read()
+
+
+# ════════════════════════════════════════════════════════════
+# UNP CATALOG PARSER
+# ════════════════════════════════════════════════════════════
+
+@st.cache_data(show_spinner=False)
+def parse_unp_catalog(fb: bytes, fname: str) -> pd.DataFrame:
+    """
+    Legge il catalogo UNP/IUNP Azimut (Excel, CSV o PDF).
+    Ritorna DataFrame con colonne: isin, nome, unp, iunp
+    UNP = Utile Netto di Portafoglio (% annua commissione netta advisor)
+    """
+    import re as _re
+
+    ISIN_RE = re.compile(r'\b([A-Z]{2}[A-Z0-9]{10})\b')
+
+    # ── PDF ───────────────────────────────────────────────────
+    if fname.lower().endswith(".pdf"):
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(fb))
+            text = "\n".join(p.extract_text() or "" for p in reader.pages)
+        except Exception:
+            st.warning("UNP PDF: pypdf non disponibile o errore lettura."); return pd.DataFrame()
+        if not text.strip():
+            st.warning("UNP PDF: testo non estraibile."); return pd.DataFrame()
+        lines   = [l.strip() for l in text.split("\n") if l.strip()]
+        PCT_RE  = re.compile(r'(\d{1,3}[,\.]\d{1,4})')
+        records = []; seen = set()
+        for i, line in enumerate(lines):
+            for m in ISIN_RE.finditer(line):
+                isin = m.group(1)
+                if isin in seen: continue
+                seen.add(isin)
+                ctx  = " ".join(lines[i:i+4])
+                nums = []
+                for n in PCT_RE.findall(ctx):
+                    try:
+                        v = float(n.replace(",", "."))
+                        if 0 < v < 10:   nums.append(round(v, 4))
+                        elif 10 <= v <= 500: nums.append(round(v / 100, 4))
+                    except: pass
+                nome = ""
+                for j in range(max(0, i-1), min(len(lines), i+3)):
+                    if not ISIN_RE.search(lines[j]) and len(lines[j]) > 8:
+                        nome = lines[j][:80]; break
+                records.append({"isin": isin, "nome": nome,
+                                 "unp":  nums[0] if len(nums) > 0 else None,
+                                 "iunp": nums[1] if len(nums) > 1 else None})
+        if not records:
+            st.warning("UNP PDF: nessun ISIN trovato."); return pd.DataFrame()
+        st.success(f"📊 UNP: {len(records)} fondi estratti dal PDF.")
+        return pd.DataFrame(records)
+
+    # ── Excel / CSV ───────────────────────────────────────────
+    try:
+        df = pd.read_csv(io.BytesIO(fb)) if fname.lower().endswith(".csv") \
+             else pd.read_excel(io.BytesIO(fb))
+    except Exception as e:
+        st.error(f"Errore lettura catalogo UNP: {e}"); return pd.DataFrame()
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    isin_col = next((c for c in df.columns if "isin" in c), None)
+    nome_col = next((c for c in df.columns
+                     if any(x in c for x in ["nome","name","fondo","fund","prodotto"])), None)
+    unp_col  = next((c for c in df.columns if "unp" in c and not c.startswith("i")), None)
+    iunp_col = next((c for c in df.columns if "iunp" in c), None)
+    # fallback: prime due colonne numeriche dopo ISIN
+    if isin_col and not unp_col:
+        num_cols = [c for c in df.columns
+                    if c != isin_col and
+                    pd.to_numeric(df[c], errors="coerce").notna().sum() > len(df) * 0.4]
+        if num_cols:       unp_col  = num_cols[0]
+        if len(num_cols)>1: iunp_col = num_cols[1]
+    if not isin_col:
+        st.warning("Catalogo UNP: colonna ISIN non trovata."); return pd.DataFrame()
+    out = pd.DataFrame()
+    out["isin"] = df[isin_col].astype(str).str.strip().str.upper()
+    out["isin"] = out["isin"].apply(
+        lambda x: x if re.match(r'^[A-Z]{2}[A-Z0-9]{10}$', x) else "")
+    out["nome"] = df[nome_col].astype(str).str.strip() if nome_col else ""
+    def _tonumeric(col):
+        s = pd.to_numeric(
+            df[col].astype(str).str.replace("%","").str.replace(",","."),
+            errors="coerce")
+        if s.median(skipna=True) > 5: s = s / 100  # basis points → %
+        return s
+    out["unp"]  = _tonumeric(unp_col)  if unp_col  else None
+    out["iunp"] = _tonumeric(iunp_col) if iunp_col else None
+    out = out[out["isin"] != ""].drop_duplicates("isin").reset_index(drop=True)
+    if out.empty:
+        st.warning("Catalogo UNP: nessun ISIN valido."); return pd.DataFrame()
+    st.success(f"📊 UNP: {len(out)} fondi caricati.")
+    return out
 
 
 # ════════════════════════════════════════════════════════════
@@ -1041,6 +1183,11 @@ def main():
         st.markdown("---")
         uploaded   = st.file_uploader("FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
         st.markdown("---")
+        st.markdown("<span style='color:#4a6582;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;'>CATALOGO UNP / IUNP</span>", unsafe_allow_html=True)
+        st.caption("Excel/CSV/PDF — ISIN + UNP + IUNP")
+        file_unp = st.file_uploader("Catalogo UNP", type=["xlsx","xls","csv","pdf"],
+                                     key="u_unp", label_visibility="collapsed")
+        st.markdown("---")
         ptf_choice = st.radio("TIPO PORTAFOGLIO", ["📋  PTF FULL","⚡  PTF SHORT","🎨  LIBERO"])
         st.markdown("---")
         profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=3)
@@ -1058,6 +1205,12 @@ def main():
         file_bytes = uploaded.read()
         raw = parse_excel(file_bytes)
 
+    # ── PARSE E MERGE CATALOGO UNP ───────────────────────────
+    unp_df = pd.DataFrame()
+    if file_unp:
+        with st.spinner("Lettura catalogo UNP…"):
+            unp_df = parse_unp_catalog(file_unp.read(), file_unp.name)
+
     if "LIBERO" in ptf_choice:
         df = free_portfolio_ui(raw)
     else:
@@ -1071,20 +1224,58 @@ def main():
     wcol   = PROFILE_W_COL[profile]
     df_act = df[df[wcol]>0.001].copy()
 
+    # ── MERGE UNP via ISIN dal foglio FIDA ──────────────────
+    fida_df = raw.get("FIDA", pd.DataFrame())
+    if not unp_df.empty and not fida_df.empty and "isin" in fida_df.columns:
+        isin_lookup = {r["nome"]: str(r["isin"]).strip()
+                       for _, r in fida_df.iterrows()
+                       if r.get("isin") and str(r.get("isin","")).strip()}
+        df_act["_isin_tmp"] = df_act["nome"].map(isin_lookup).fillna("")
+        df_act = df_act.merge(
+            unp_df[["isin"] + [c for c in ["unp","iunp"] if c in unp_df.columns]]
+                  .rename(columns={"isin":"_isin_tmp"}),
+            on="_isin_tmp", how="left").drop(columns=["_isin_tmp"])
+    if "unp"  not in df_act.columns: df_act["unp"]  = None
+    if "iunp" not in df_act.columns: df_act["iunp"] = None
+
+    # UNP ponderato di portafoglio
+    def _wavg_unp(col):
+        s = df_act[[wcol, col]].dropna(subset=[col])
+        if s.empty: return None
+        tot = (s[wcol] * pd.to_numeric(s[col], errors="coerce")).sum()
+        wt  = s[wcol].sum()
+        return round(tot / wt * 100, 3) if wt > 0 else None
+    unp_w  = _wavg_unp("unp")
+    iunp_w = _wavg_unp("iunp")
+
     # KPI row
     n_fondi = len(df_act)
     w_az    = (df_act[wcol]*df_act["az_pct"]).sum()*100
     w_obb   = (df_act[wcol]*df_act["obb_pct"]).sum()*100
     srri    = max(1,min(7,round(w_az/100*6+1)))
 
-    c1,c2,c3,c4 = st.columns(4)
-    for col,val,lbl,sub in [
-        (c1,str(n_fondi),"Fondi in Portafoglio",f"{df_act['gruppo'].nunique()} gruppi"),
-        (c2,f"{w_az:.1f}%","Quota Azionaria","ponderata per peso"),
-        (c3,f"{w_obb:.1f}%","Quota Obbligazionaria","ponderata per peso"),
-        (c4,f"{srri} / 7","Risk Score (SRRI proxy)","basato su quota azionaria"),
-    ]:
-        col.markdown(f'<div class="kpi"><div class="kpi-label">{lbl}</div><div class="kpi-value">{val}</div><div class="kpi-sub">{sub}</div></div>',unsafe_allow_html=True)
+    if unp_w is not None:
+        c1,c2,c3,c4,c5 = st.columns(5)
+        kpi_items = [
+            (c1, str(n_fondi),     "Fondi in Portafoglio",    f"{df_act['gruppo'].nunique()} gruppi"),
+            (c2, f"{w_az:.1f}%",   "Quota Azionaria",         "ponderata per peso"),
+            (c3, f"{w_obb:.1f}%",  "Quota Obbligazionaria",   "ponderata per peso"),
+            (c4, f"{srri} / 7",    "Risk Score (SRRI proxy)", "basato su quota azionaria"),
+            (c5, f"{unp_w:.3f}%",  "UNP Portafoglio",
+             f"IUNP: {iunp_w:.3f}%" if iunp_w is not None else "utile netto advisor"),
+        ]
+    else:
+        c1,c2,c3,c4 = st.columns(4)
+        kpi_items = [
+            (c1, str(n_fondi),    "Fondi in Portafoglio",    f"{df_act['gruppo'].nunique()} gruppi"),
+            (c2, f"{w_az:.1f}%",  "Quota Azionaria",         "ponderata per peso"),
+            (c3, f"{w_obb:.1f}%", "Quota Obbligazionaria",   "ponderata per peso"),
+            (c4, f"{srri} / 7",   "Risk Score (SRRI proxy)", "basato su quota azionaria"),
+        ]
+    for col, val, lbl, sub in kpi_items:
+        col.markdown(f'<div class="kpi"><div class="kpi-label">{lbl}</div>'
+                     f'<div class="kpi-value" style="{"color:#7C3AED;" if "UNP" in lbl else ""}">{val}</div>'
+                     f'<div class="kpi-sub">{sub}</div></div>', unsafe_allow_html=True)
 
     st.markdown("<br>",unsafe_allow_html=True)
 
@@ -1099,7 +1290,19 @@ def main():
         st.markdown('<p class="sec-title">Composizione del Portafoglio</p>',unsafe_allow_html=True)
         for gruppo in df_act["gruppo"].unique():
             sub = df_act[df_act["gruppo"]==gruppo].sort_values(wcol,ascending=False)
-            rows_html = "".join([f"""<div class="fund-row"><div class="fund-dot" style="background:{r['color']};"></div><div style="flex:1;min-width:0;"><div class="fund-name">{r['nome']}</div><div class="fund-cat">{r['categoria'][:48]+'…' if r['categoria'] and len(r['categoria'])>48 else (r['categoria'] or '—')}</div></div><div class="fund-pct">{r[wcol]*100:.1f}%</div></div>""" for _,r in sub.iterrows()])
+            def _fund_row_html(r):
+                unp_badge = ""
+                if r.get("unp") is not None and str(r["unp"]) not in ("nan","None",""):
+                    unp_badge = (f"<span style='margin-left:6px;background:#F5F3FF;color:#7C3AED;"
+                                 f"border-radius:4px;padding:1px 5px;font-size:.65rem;font-weight:600;'>"
+                                 f"UNP {float(r['unp']):.3f}%</span>")
+                cat_txt = r['categoria'][:48]+'…' if r['categoria'] and len(r['categoria'])>48 else (r['categoria'] or '—')
+                return (f'<div class="fund-row"><div class="fund-dot" style="background:{r["color"]};"></div>'
+                        f'<div style="flex:1;min-width:0;">'
+                        f'<div class="fund-name">{r["nome"]}{unp_badge}</div>'
+                        f'<div class="fund-cat">{cat_txt}</div>'
+                        f'</div><div class="fund-pct">{r[wcol]*100:.1f}%</div></div>')
+            rows_html = "".join([_fund_row_html(r) for _, r in sub.iterrows()])
             st.markdown(f'<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden;"><div class="fund-group-hdr">{gruppo}</div>{rows_html}</div>',unsafe_allow_html=True)
 
     # ── DOWNLOAD SECTION ─────────────────────────────────────
@@ -1124,7 +1327,8 @@ def main():
             try:
                 fida_df = raw.get("FIDA", pd.DataFrame())
                 pdf_bytes = generate_pdf(df_act, wcol, profile, ptf_label, fund_data,
-                                         fida_df=fida_df)
+                                         fida_df=fida_df,
+                                         unp_w=unp_w, iunp_w=iunp_w)
                 fname = f"Azimut_{ptf_label.replace(' ','_')}_{profile}_{datetime.date.today().strftime('%Y%m%d')}.pdf"
                 progress_bar.empty()
                 st.download_button(
