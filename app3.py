@@ -606,7 +606,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         [[kpi_cell(str(n_fondi),"Fondi"),kpi_cell(f"{w_az:.1f}%","Quota Azionaria"),
           kpi_cell(f"{w_obb:.1f}%","Quota Obbligazionaria"),
           kpi_cell(datetime.date.today().strftime("%m/%Y"),"Data Report")]],
-        colWidths=[4.25*cm]*4
+        colWidths=[4.25*cm]*4,
+        rowHeights=[2.2*cm],
     )
     kpi.setStyle(TableStyle([
         ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
@@ -620,12 +621,16 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Paragraph("Allocazione del Portafoglio", SC))
     pie_buf   = _mpl_portfolio_pie(d_act, wcol, profile)
     macro_buf = _mpl_macro_pie(d_act, wcol)
-    # Pie fondi — larghezza piena
-    story.append(RLImage(pie_buf, width=15*cm, height=6.5*cm))
-    # Pie asset allocation — stessa larghezza, stesso stile, sotto
+    # Pie fondi — larghezza piena, centrata
+    _pie_img = RLImage(pie_buf, width=15*cm, height=6.5*cm)
+    _pie_img.hAlign = 'CENTER'
+    story.append(_pie_img)
+    # Pie asset allocation — stessa larghezza, centrata, sotto
     if macro_buf:
         story.append(Spacer(1, 8))
-        story.append(RLImage(macro_buf, width=15*cm, height=5.5*cm))
+        _macro_img = RLImage(macro_buf, width=15*cm, height=5.5*cm)
+        _macro_img.hAlign = 'CENTER'
+        story.append(_macro_img)
 
     story.append(PageBreak())
 
