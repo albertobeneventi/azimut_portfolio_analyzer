@@ -71,100 +71,102 @@ MANUAL_URL_OVERRIDES = {
 
 # ── UNP/IUNP CATALOG (Catalogo Prodotti&Servizi Azimut, settembre 2025) ──────
 # Fonte: DETTAGLIO AZ FUND — valori %UNP e %IUNP36
+# Estratto da pdftotext su tutte le pagine del PDF (93 voci).
+# Nomi fondi esattamente come nel PDF; _normalize_for_unp() gestisce la
+# corrispondenza con i nomi abbreviati dell'Excel (es. "AZ F.1 Bd. ...").
 UNP_CATALOG = {
-    # AZ Allocation
-    "AZ Allocation Asset Timing 2026":            (2.29, 1.14),
-    "AZ Allocation Asset Timing 2028":            (2.29, 1.14),
-    "AZ Allocation Balanced Brave":               (1.89, 0.94),
-    "AZ Allocation Balanced FoF":                 (1.89, 0.94),
-    "AZ Allocation Balanced Plus":                (1.89, 0.94),
-    "AZ Allocation Escalator 2026":               (2.29, 1.14),
-    "AZ Allocation Escalator 2028":               (2.29, 1.14),
-    "AZ Allocation Escalator 2030":               (2.29, 1.14),
-    "AZ Allocation Flexible Equity":              (1.92, 0.96),
-    "AZ Allocation Global Aggressive":            (1.89, 0.94),
-    "AZ Allocation Global Balanced":              (1.80, 0.90),
-    "AZ Allocation Global Conservative":          (1.61, 0.80),
-    "AZ Allocation Italian Trend":                (2.01, 1.00),
-    "AZ Allocation Life Plan 2040":               (2.51, 1.25),
-    "AZ Allocation PIR Italian Excellence 70":    (1.89, 0.94),
-    "AZ Allocation Potential Income Upside 2030": (1.67, 0.83),
-    "AZ Allocation Risk Parity Factors":          (1.89, 0.94),
-    "AZ Allocation Trend":                        (2.01, 1.00),
-    "AZ Allocation Turkey":                       (1.89, 0.94),
-    "AZ Allocation Italian Long Term Opp":        (2.73, 1.36),
-    "AZ Allocation Long Term Credit Opp":         (1.94, 0.97),
-    "AZ Allocation Long Term Equity Opp":         (2.73, 1.36),
-    "AZ Allocation Global Goals":                 (2.50, 1.25),
-    # AZ Alternative
-    "AZ Alternative Capital Enhanced":            (0.51, 0.25),
-    "AZ Alternative Commodity":                   (1.81, 0.90),
-    # AZ Bond
-    "AZ Bond Aggregate Bond Euro":                (1.10, 0.55),
-    "AZ Bond Asian Bond":                         (1.38, 0.69),
-    "AZ Bond Bond Value":                         (1.53, 0.76),
-    "AZ Bond COCO Bonds":                         (1.53, 0.76),
-    "AZ Bond Convertible":                        (1.62, 0.81),
-    "AZ Bond Enhanced Yield":                     (0.35, 0.17),
-    "AZ Bond Euro Corporate":                     (1.23, 0.61),
-    "AZ Bond Frontier Markets Debt":              (1.62, 0.81),
-    "AZ Bond Global Macro Bond":                  (1.29, 0.64),
-    "AZ Bond High Income FoF":                    (1.62, 0.81),
-    "AZ Bond High Yield":                         (1.47, 0.73),
-    "AZ Bond High Yield Target 2028 Climate Transition": (1.53, 0.76),
-    "AZ Bond Income Dynamic":                     (0.99, 0.49),
-    "AZ Bond International FoF":                  (1.62, 0.81),
-    "AZ Bond Latin America Bonds":                (1.53, 0.76),
-    "AZ Bond Patriot":                            (1.36, 0.68),
-    "AZ Bond Renminbi Opportunities":             (1.23, 0.61),
-    "AZ Bond Short Term Investment Grade Climate Transition": (1.53, 0.76),
-    "AZ Bond Sustainable Hybrid":                 (1.46, 0.73),
-    "AZ Bond Target 2025":                        (1.11, 0.55),
-    "AZ Bond Target 2026":                        (1.11, 0.55),
-    "AZ Bond Target 2028":                        (1.11, 0.55),
-    "AZ Bond Target 2029":                        (1.11, 0.55),
-    "AZ Bond Target 2029 USD":                    (1.23, 0.61),
-    "AZ Bond Target 2031":                        (1.11, 0.55),
-    "AZ Bond Total Return Bond":                  (1.55, 0.77),
-    "AZ Bond US Dollar Aggregate":                (1.24, 0.62),
-    "AZ Bond ABS":                                (1.23, 0.61),
-    # AZ Equity
-    "AZ Equity Al Mal Mena":                      (2.51, 1.25),
-    "AZ Equity American Opportunities":           (2.19, 1.09),
-    "AZ Equity ASEAN Countries":                  (2.19, 1.09),
-    "AZ Equity Best Value":                       (2.09, 1.04),
-    "AZ Equity Biotechnology":                    (2.51, 1.25),
-    "AZ Equity Borletti Global Lifestyle":        (2.30, 1.15),
-    "AZ Equity Brazil Trend":                     (2.19, 1.09),
-    "AZ Equity China":                            (2.19, 1.09),
-    "AZ Equity Egypt":                            (2.51, 1.25),
-    "AZ Equity Emerging Asia FoF":                (2.51, 1.25),
-    "AZ Equity Emerging Markets Technology":      (2.51, 1.25),
-    "AZ Equity Escalator":                        (2.29, 1.14),
-    "AZ Equity Europe":                           (2.19, 1.09),
-    "AZ Equity Food Agriculture":                 (2.40, 1.20),
-    "AZ Equity Global Dividend":                  (2.51, 1.25),
-    "AZ Equity Global Emerging FoF":              (2.51, 1.25),
-    "AZ Equity Global ESG":                       (2.51, 1.25),
-    "AZ Equity Global FoF":                       (2.51, 1.25),
-    "AZ Equity Global Growth":                    (2.40, 1.20),
-    "AZ Equity Global Healthcare":                (2.40, 1.20),
-    "AZ Equity Global Infrastructure":            (2.26, 1.13),
-    "AZ Equity Global Quality":                   (2.18, 1.09),
-    "AZ Equity Global Value FoF":                 (2.51, 1.25),
-    "AZ Equity Industrial Revolution 40":         (2.51, 1.25),
-    "AZ Equity Japan":                            (2.20, 1.10),
-    "AZ Equity Mexico":                           (2.51, 1.25),
-    "AZ Equity Momentum":                         (2.19, 1.09),
-    "AZ Equity Small Cap Europe FoF":             (2.51, 1.25),
-    "AZ Equity Special Needs Inclusion":          (2.51, 1.25),
-    "AZ Equity Water Renewable Resources":        (2.40, 1.20),
-    "AZ Equity World Minimum Volatility":         (2.19, 1.09),
-    "AZ Equity Future Opportunities":             (2.51, 1.25),
-    "AZ Equity New Generation":                   (2.79, 1.39),
-    "AZ Equity Space":                            (2.79, 1.39),
-    # AZ Islamic
-    "AZ Islamic Global Sukuk":                    (1.36, 0.68),
+    # ── AZ Allocation ─────────────────────────────────────────────────────────
+    "AZ Allocation - Asset Timing 2026":                               (2.29, 1.14),
+    "AZ Allocation - Asset Timing 2028":                               (2.29, 1.14),
+    "AZ Allocation - Balanced Brave":                                  (1.89, 0.94),
+    "AZ Allocation - Balanced FoF":                                    (1.89, 0.94),
+    "AZ Allocation - Balanced Plus":                                   (1.89, 0.94),
+    "AZ Allocation - Escalator 2026":                                  (2.29, 1.14),
+    "AZ Allocation - Escalator 2028":                                  (2.29, 1.14),
+    "AZ Allocation - Escalator 2030":                                  (2.29, 1.14),
+    "AZ Allocation - Flexible Equity":                                 (1.92, 0.96),
+    "AZ Allocation - Global Aggressive":                               (1.89, 0.94),
+    "AZ Allocation - Global Balanced":                                 (1.80, 0.90),
+    "AZ Allocation - Global Conservative":                             (1.61, 0.80),
+    "AZ Allocation - Global Conservative (Classe C)":                  (0.95, 0.47),
+    "AZ Allocation - Italian Trend":                                   (2.01, 1.00),
+    "AZ Allocation - Life Plan 2040":                                  (2.51, 1.25),
+    "AZ Allocation - PIR Italian Excellence 70%":                      (1.89, 0.94),
+    "AZ Allocation - Potential Income Upside 2030":                    (1.67, 0.83),
+    "AZ Allocation - Risk Parity Factors":                             (1.89, 0.94),
+    "AZ Allocation - Trend":                                           (2.01, 1.00),
+    "AZ Allocation - Turkey":                                          (1.89, 0.94),
+    # ── AZ Alternative ────────────────────────────────────────────────────────
+    "AZ Alternative - Capital Enhanced":                               (0.51, 0.25),
+    "AZ Alternative - Commodity":                                      (1.81, 0.90),
+    # ── AZ Bond ───────────────────────────────────────────────────────────────
+    "AZ Bond - Aggregate Bond Euro":                                   (1.10, 0.55),
+    "AZ Bond - Asian Bond":                                            (1.38, 0.69),
+    "AZ Bond - Bond Value":                                            (1.53, 0.76),
+    "AZ Bond - COCO Bonds":                                            (1.53, 0.76),
+    "AZ Bond - Convertible":                                           (1.62, 0.81),
+    "AZ Bond - Enhanced Yield":                                        (0.35, 0.17),
+    "AZ Bond - Euro Corporate":                                        (1.23, 0.61),
+    "AZ Bond - Frontier Markets Debt":                                 (1.62, 0.81),
+    "AZ Bond - Global Macro Bond":                                     (1.29, 0.64),
+    "AZ Bond - High Income FoF":                                       (1.62, 0.81),
+    "AZ Bond - High Yield":                                            (1.47, 0.73),
+    "AZ Bond - High Yield Target 2028 Climate Transition":             (1.53, 0.76),
+    "AZ Bond - High Yield Target 2028 Climate Transition (Classe C)":  (0.52, 0.26),
+    "AZ Bond - Income Dynamic":                                        (0.99, 0.49),
+    "AZ Bond - International FoF":                                     (1.62, 0.81),
+    "AZ Bond - Latin America Bonds":                                   (1.53, 0.76),
+    "AZ Bond - Patriot":                                               (1.36, 0.68),
+    "AZ Bond - Renminbi Opportunities":                                (1.23, 0.61),
+    "AZ Bond - Short Term Investment Grade Climate Transition":        (1.53, 0.76),
+    "AZ Bond - Short Term Investment Grade Climate Transition (Classe C)": (0.43, 0.21),
+    "AZ Bond - Sustainable Hybrid":                                    (1.46, 0.73),
+    "AZ Bond - Target 2025":                                           (1.11, 0.55),
+    "AZ Bond - Target 2026":                                           (1.11, 0.55),
+    "AZ Bond - Target 2028":                                           (1.11, 0.55),
+    "AZ Bond - Target 2029":                                           (1.11, 0.55),
+    "AZ Bond - Target 2029 USD":                                       (1.23, 0.61),
+    "AZ Bond - Target 2031":                                           (1.11, 0.55),
+    "AZ Bond - Total Return Bond":                                     (1.55, 0.77),
+    "AZ Bond - US Dollar Aggregate":                                   (1.24, 0.62),
+    # ── AZ Equity ─────────────────────────────────────────────────────────────
+    "AZ Equity - Al Mal Mena":                                         (2.51, 1.25),
+    "AZ Equity - American Opportunities":                              (2.19, 1.09),
+    "AZ Equity - ASEAN Countries":                                     (2.19, 1.09),
+    "AZ Equity - Best Value":                                          (2.09, 1.04),
+    "AZ Equity - Biotechnology":                                       (2.51, 1.25),
+    "AZ Equity - Borletti Global Lifestyle":                           (2.30, 1.15),
+    "AZ Equity - Brazil Trend":                                        (2.19, 1.09),
+    "AZ Equity - China":                                               (2.19, 1.09),
+    "AZ Equity - Egypt":                                               (2.51, 1.25),
+    "AZ Equity - Emerging Asia FoF":                                   (2.51, 1.25),
+    "AZ Equity - Emerging Markets Technology":                         (2.51, 1.25),
+    "AZ Equity - Escalator":                                           (2.29, 1.14),
+    "AZ Equity - Europe":                                              (2.19, 1.09),
+    "AZ Equity - Food & Agriculture":                                  (2.40, 1.20),
+    "AZ Equity - Global Dividend":                                     (2.51, 1.25),
+    "AZ Equity - Global Emerging FoF":                                 (2.51, 1.25),
+    "AZ Equity - Global ESG":                                          (2.51, 1.25),
+    "AZ Equity - Global FoF":                                          (2.51, 1.25),
+    "AZ Equity - Global Growth":                                       (2.40, 1.20),
+    "AZ Equity - Global Healthcare":                                   (2.40, 1.20),
+    "AZ Equity - Global Infrastructure":                               (2.26, 1.13),
+    "AZ Equity - Global Quality":                                      (2.18, 1.09),
+    "AZ Equity - Global Value FoF":                                    (2.51, 1.25),
+    "AZ Equity - Industrial Revolution 4.0":                           (2.51, 1.25),
+    "AZ Equity - Japan":                                               (2.20, 1.10),
+    "AZ Equity - Mexico":                                              (2.51, 1.25),
+    "AZ Equity - Momentum":                                            (2.19, 1.09),
+    "AZ Equity - Small Cap Europe FoF":                                (2.51, 1.25),
+    "AZ Equity - Special Needs & Inclusion":                           (2.51, 1.25),
+    "AZ Equity - Water & Renewable Resources":                         (2.40, 1.20),
+    "AZ Equity - World Minimum Volatility":                            (2.19, 1.09),
+    # ── AZ Islamic ────────────────────────────────────────────────────────────
+    "AZ Islamic - Global Sukuk":                                       (1.36, 0.68),
+    # ── Azimut Thematic Fund ──────────────────────────────────────────────────
+    "Azimut Thematic Fund - AZ Allocation - Global Goals":             (2.50, 1.25),
+    "Azimut Thematic Fund - AZ Equity - New Generation":               (2.79, 1.39),
+    "Azimut Thematic Fund - AZ Equity - Space":                        (2.79, 1.39),
 }
 
 # ── CSS ──────────────────────────────────────────────────────
@@ -245,7 +247,16 @@ def pct_color(val_str: str) -> str:
 # ── UNP/IUNP lookup helpers ──────────────────────────────────
 
 def _normalize_for_unp(name: str) -> str:
-    """Normalise a fund name for UNP catalog lookup."""
+    """Normalise a fund name for UNP catalog lookup.
+
+    Handles:
+    - AZ F.1 short forms  (AZ F.1 All. → AZ Allocation, etc.)
+    - Share-class suffix  (" A Cap EUR", " B Acc USD", " I Dis GBP")
+    - Classe C suffix     ("(Classe C)")
+    - Dashes / en-dashes  (removed; so "AZ Bond - Global Macro Bond" ==
+                           "AZ Bond Global Macro Bond")
+    - & and other punct   (removed)
+    """
     n = name.strip()
     # Expand AZ Fund short forms
     n = re.sub(r'AZ\s+F\.1\s+All\.\s*',  'AZ Allocation ',  n, flags=re.IGNORECASE)
@@ -253,12 +264,15 @@ def _normalize_for_unp(name: str) -> str:
     n = re.sub(r'AZ\s+F\.1\s+Bd\.\s*',   'AZ Bond ',        n, flags=re.IGNORECASE)
     n = re.sub(r'AZ\s+F\.1\s+Alt\.\s*',  'AZ Alternative ', n, flags=re.IGNORECASE)
     n = re.sub(r'AZ\s+F\.1\s+Isl\.\s*',  'AZ Islamic ',     n, flags=re.IGNORECASE)
+    # Strip "(Classe C)" / "(classe c)" / "(Class C)" variants
+    n = re.sub(r'\s*\(clas[se]+\s+c\)\s*$', '', n, flags=re.IGNORECASE)
     # Strip share-class suffix e.g. " A Cap EUR", " B Acc USD", " I Dis GBP"
     n = re.sub(r'\s+[A-Z]\s+(Cap|Acc|Dis|Inc)\s+\w{3}\s*$', '', n, flags=re.IGNORECASE)
     n = re.sub(r'\s+[A-Z]\s+(Cap|Acc|Dis|Inc)\s*$',          '', n, flags=re.IGNORECASE)
     n = re.sub(r'\s+Cap\s+\w{3}\s*$',                         '', n, flags=re.IGNORECASE)
-    # Normalise punctuation and whitespace
+    # Normalise dashes, ampersands and remaining punctuation → space
     n = re.sub(r'[-–—]', ' ', n)
+    n = re.sub(r'&', ' ', n)
     n = re.sub(r'[^\w\s]', ' ', n)
     n = re.sub(r'\s+', ' ', n).strip().lower()
     return n
