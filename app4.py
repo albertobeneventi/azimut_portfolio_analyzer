@@ -881,32 +881,6 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
     if _ref_date:
         result["_ref_date"] = _ref_date
 
-    # ── DEBUG: write extraction summary to data/factbook_debug.json ──────────
-    try:
-        import json as _json, pathlib as _pl
-        _dbg = {
-            "n_result_keys":  len(result),
-            "n_metrics_keys": len(_metrics),
-            "metrics_keys":   sorted(_metrics.keys()),
-            "metrics_sample": {
-                k: v for k, v in list(_metrics.items())[:10]
-            },
-            "result_with_duration": [
-                k for k, v in result.items()
-                if isinstance(v, dict) and "duration" in v
-            ][:20],
-            "result_with_rating": [
-                k for k, v in result.items()
-                if isinstance(v, dict) and "credit_rating" in v
-            ][:20],
-        }
-        _dbg_path = _pl.Path(__file__).parent / "data" / "factbook_debug.json"
-        _dbg_path.parent.mkdir(exist_ok=True)
-        _dbg_path.write_text(
-            _json.dumps(_dbg, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-
     return result
 
 
@@ -2125,30 +2099,6 @@ def main():
             st.success(f"✅ Factbook caricato — {n_fb} fondi trovati")
         else:
             st.warning("⚠️ Factbook caricato ma nessun dato estratto — verrà usato FondiDoc")
-        # ── DEBUG: show extraction stats in sidebar ──────────────────────
-        _n_dur = sum(1 for v in factbook_data.values()
-                     if isinstance(v, dict) and "duration" in v)
-        _n_rat = sum(1 for v in factbook_data.values()
-                     if isinstance(v, dict) and "credit_rating" in v)
-        _n_ytm = sum(1 for v in factbook_data.values()
-                     if isinstance(v, dict) and "ytm" in v)
-        _n_az  = sum(1 for v in factbook_data.values()
-                     if isinstance(v, dict) and "fb_az_pct" in v)
-        _dur_sample = [(k, v) for k, v in factbook_data.items()
-                       if isinstance(v, dict) and "duration" in v][:3]
-        _all_keys   = [k for k in factbook_data.keys()
-                       if k != "_ref_date"][:5]
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("**🔍 Debug Factbook**")
-        st.sidebar.write(
-            f"dur:{_n_dur} rat:{_n_rat} ytm:{_n_ytm} az:{_n_az}")
-        if _dur_sample:
-            for _k, _v in _dur_sample:
-                st.sidebar.write(f"`{_k[:30]}` dur={_v.get('duration')}")
-        else:
-            st.sidebar.warning("NO duration estratta")
-            st.sidebar.write("Chiavi: " + str(_all_keys))
-        # ── END DEBUG ────────────────────────────────────────────────────
 
     if "LIBERO" in ptf_choice:
         df = free_portfolio_ui(raw)
