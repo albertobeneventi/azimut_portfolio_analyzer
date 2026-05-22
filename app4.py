@@ -608,106 +608,190 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                         if _yt is not None: _metrics[_fn]['ytm']           = _yt
                         if _dur is not None: _metrics[_fn]['duration']     = _dur
 
-                # ── D: COMPOSIZIONE AZIONARIA/OBBLIGAZIONARIA ─────────────
-                # Runs on every fund page; extracts equity% and bond% split.
-                # Typical factbook formats:
-                #   "Azionario 52,3%"   (inline)
-                #   "Azionario\n52,3%"  (two-line)
-                _lp_d = text.split('\n')
-                _fn_d = None
-                for _i_d, _ln_d in enumerate(_lp_d[:25]):
-                    _ls_d = _ln_d.strip()
-                    if re.match(
-                            r'^AZ\s+(BOND|ALLOCATION|EQUITY|ALTERNATIVE|ISLAMIC)\s*$',
-                            _ls_d, re.IGNORECASE):
-                        for _j_d in range(_i_d + 1, min(_i_d + 5, len(_lp_d))):
-                            _nl_d = _lp_d[_j_d].strip()
-                            if _nl_d and not re.match(
-                                    r'^([A-Z]{2}\d{10}|ISIN|\d+\s*$)',
-                                    _nl_d, re.IGNORECASE):
-                                _nrm_d = _normalize_for_unp(_ls_d + ' ' + _nl_d)
+                # ── D: SCOMPOSIZIONE PORTAFOGLIO - ASSET CLASS ────────────
+                # Only AZ ALLOCATION / BALANCED funds have this section.
+                # AZ EQUITY and AZ BOND funds do NOT → Excel binary (0/1) is
+                # the correct fallback for them; we don't overwrite here.
+                #
+                # pdfplumber layout quirks on this section:
+                #  • "Equity" label appears on its own line WITHOUT a value.
+                #    Its value (e.g. "54%") appears AFTER the x-axis scale
+                #    labels (-10%, 0%, 10%, …40%) because the Equity bar
+                #    physically extends to the right of the shorter bars.
+                #    Marker: "Cash Offset" ends the data rows; the first
+                #    non-round (not multiple of 10) positive % after that
+                #    is the Equity value.
+                #  • Bond components ("Sovereign", "Corporate", …) appear
+                #    either inline ("Sovereign  28%") or in two lines
+                #    ("Sovereign\n28%").  We sum them for fb_obb_pct.
+                #  • Two-column merge: pdfplumber may merge rows from both
+                #    columns, so we use re.search (CONTAINS) not re.match.
+                if re.search(
+                        r'SCOMPOSIZIONE\s+PORTAFOGLIO.*?ASSET\s+CLASS',
+                        text, re.IGNORECASE):
+                    _lp_d = text.split('\n')
+                    _fn_d = None
+                    for _i_d, _ln_d in enumerate(_lp_d[:25]):
+                        _ls_d = _ln_d.strip()
+                        if re.match(
+                                r'^AZ\s+(BOND|ALLOCATION|EQUITY|ALTERNATIVE|ISLAMIC)\s*$',
+                                _ls_d, re.IGNORECASE):
+                            for _j_d in range(_i_d + 1, min(_i_d + 5, len(_lp_d))):
+                                _nl_d = _lp_d[_j_d].strip()
+                                if _nl_d and not re.match(
+                                        r'^([A-Z]{2}\d{10}|ISIN|\d+\s*$)',
+                                        _nl_d, re.IGNORECASE):
+                                    _nrm_d = _normalize_for_unp(_ls_d + ' ' + _nl_d)
+                                    _fn_d  = _FUND_ALIASES.get(_nrm_d, _nrm_d)
+                                    break
+                            if _fn_d:
+                                break
+                        _m1_d = re.match(
+                            r'^(AZ\s+(?:BOND|ALLOCATION|EQUITY|ALTERNATIVE|ISLAMIC))'
+                            r'\s*[-–]?\s+(.+)$', _ls_d, re.IGNORECASE)
+                        if _m1_d and len(_m1_d.group(2).strip()) > 2:
+                            _sub_d = _m1_d.group(2).strip()
+                            if not re.match(r'^(\d+|[A-Z]{2}\d{10})', _sub_d):
+                                _nrm_d = _normalize_for_unp(
+                                    _m1_d.group(1).strip() + ' ' + _sub_d)
                                 _fn_d  = _FUND_ALIASES.get(_nrm_d, _nrm_d)
                                 break
-                        if _fn_d:
-                            break
-                    _m1_d = re.match(
-                        r'^(AZ\s+(?:BOND|ALLOCATION|EQUITY|ALTERNATIVE|ISLAMIC))'
-                        r'\s*[-–]?\s+(.+)$', _ls_d, re.IGNORECASE)
-                    if _m1_d and len(_m1_d.group(2).strip()) > 2:
-                        _sub_d = _m1_d.group(2).strip()
-                        if not re.match(r'^(\d+|[A-Z]{2}\d{10})', _sub_d):
-                            _nrm_d = _normalize_for_unp(
-                                _m1_d.group(1).strip() + ' ' + _sub_d)
-                            _fn_d  = _FUND_ALIASES.get(_nrm_d, _nrm_d)
-                            break
-                if _fn_d:
-                    # Strict label patterns (full line = label only)
-                    _AZ_ONLY = re.compile(
-                        r'^(azionari[oa]?|azioni)\s*$', re.IGNORECASE)
-                    _OBB_ONLY = re.compile(
-                        r'^(obbligazionari[oa]?|obbligazioni)\s*$', re.IGNORECASE)
-                    # Inline: "Azionario 52,3%"
-                    _AZ_IL = re.compile(
-                        r'^(azionari[oa]?|azioni)\s+([\d]+[,\.]\d+)\s*%\s*$',
-                        re.IGNORECASE)
-                    _OBB_IL = re.compile(
-                        r'^(obbligazionari[oa]?|obbligazioni)\s+([\d]+[,\.]\d+)\s*%\s*$',
-                        re.IGNORECASE)
-                    # Standalone percentage on its own line
-                    _PCT_OL = re.compile(r'^([\d]+[,\.]\d+)\s*%\s*$')
-                    _comp_az = _comp_obb = None
-                    for _ci_d, _cl_d in enumerate(_lp_d):
-                        _cln_d = _cl_d.strip()
-                        if not _cln_d:
-                            continue
-                        _maz = _AZ_IL.match(_cln_d)
-                        if _maz and _comp_az is None:
-                            try:
-                                _comp_az = float(_maz.group(2).replace(',', '.')) / 100
-                            except Exception:
-                                pass
-                            continue
-                        _mobb = _OBB_IL.match(_cln_d)
-                        if _mobb and _comp_obb is None:
-                            try:
-                                _comp_obb = float(_mobb.group(2).replace(',', '.')) / 100
-                            except Exception:
-                                pass
-                            continue
-                        if _AZ_ONLY.match(_cln_d) and _comp_az is None:
-                            for _nk_d in range(_ci_d + 1, min(_ci_d + 3, len(_lp_d))):
-                                _nl2_d = _lp_d[_nk_d].strip()
-                                if _nl2_d:
-                                    _pm_d = _PCT_OL.match(_nl2_d)
-                                    if _pm_d:
-                                        try:
-                                            _comp_az = float(
-                                                _pm_d.group(1).replace(',', '.')) / 100
-                                        except Exception:
-                                            pass
+                    if _fn_d:
+                        # Locate the section header
+                        _ALLOC_SEC_RE = re.compile(
+                            r'SCOMPOSIZIONE\s+PORTAFOGLIO.*?ASSET\s+CLASS',
+                            re.IGNORECASE)
+                        _sec_start = next(
+                            (i for i, l in enumerate(_lp_d)
+                             if _ALLOC_SEC_RE.search(l)), None)
+                        if _sec_start is not None:
+                            # Bond-component keywords (English, as used in factbook)
+                            _BD_KW = re.compile(
+                                r'\b(sovereign|government|corporate|'
+                                r'dm\s+corporate|em\s+sovereign|'
+                                r'eu\s+sovereign|us\s+sovereign|'
+                                r'high\s+yield|convertible|'
+                                r'fixed\s+income)\b', re.IGNORECASE)
+                            _EQ_KW   = re.compile(r'\bequity\b', re.IGNORECASE)
+                            _SKIP_KW = re.compile(
+                                r'\b(cash|mixed|commodity|mmkt|offset|'
+                                r'allocation)\b', re.IGNORECASE)
+                            _STOP_RE = re.compile(
+                                r'SCOMPOSIZIONE\s+(OBBLIGAZIONARIA|AZIONARIA)'
+                                r'|SHARE\s+CLASS',
+                                re.IGNORECASE)
+                            # Inline: label + % on same line (handles merged cols)
+                            # Decimal separator is optional (e.g. "28%" and "28,5%")
+                            _INLINE = re.compile(
+                                r'\b(equity|sovereign|government|corporate|'
+                                r'dm\s+corporate|em\s+sovereign|'
+                                r'eu\s+sovereign|us\s+sovereign|'
+                                r'high\s+yield|convertible|fixed\s+income)\b'
+                                r'.*?(-?[\d]+(?:[,\.]\d*)?)\s*%',
+                                re.IGNORECASE)
+                            # Standalone %: "-10%", "0%", "54%", "28%" …
+                            _PCT_SA = re.compile(
+                                r'^(-?[\d]+(?:[,\.][\d]+)?)\s*%\s*$')
+
+                            _equity_v   = None
+                            _bond_sum   = 0.0
+                            _last_label = None   # 'equity' | 'bond' | None
+                            _saw_offset = False
+
+                            for _ll2 in _lp_d[_sec_start: _sec_start + 80]:
+                                _ll2s = _ll2.strip()
+                                if not _ll2s:
+                                    continue
+                                if _STOP_RE.search(_ll2s):
                                     break
-                        if _OBB_ONLY.match(_cln_d) and _comp_obb is None:
-                            for _nk_d in range(_ci_d + 1, min(_ci_d + 3, len(_lp_d))):
-                                _nl2_d = _lp_d[_nk_d].strip()
-                                if _nl2_d:
-                                    _pm_d = _PCT_OL.match(_nl2_d)
-                                    if _pm_d:
-                                        try:
-                                            _comp_obb = float(
-                                                _pm_d.group(1).replace(',', '.')) / 100
-                                        except Exception:
-                                            pass
-                                    break
-                    # Sanity check: 0 ≤ value ≤ 1
-                    _ok_az  = _comp_az  is not None and 0.0 <= _comp_az  <= 1.0
-                    _ok_obb = _comp_obb is not None and 0.0 <= _comp_obb <= 1.0
-                    if _ok_az or _ok_obb:
-                        if _fn_d not in _metrics:
-                            _metrics[_fn_d] = {}
-                        if _ok_az and 'fb_az_pct' not in _metrics[_fn_d]:
-                            _metrics[_fn_d]['fb_az_pct']  = round(_comp_az,  4)
-                        if _ok_obb and 'fb_obb_pct' not in _metrics[_fn_d]:
-                            _metrics[_fn_d]['fb_obb_pct'] = round(_comp_obb, 4)
+
+                                # Cash Offset marks end of data rows
+                                if re.search(r'cash\s+offset', _ll2s,
+                                             re.IGNORECASE):
+                                    _saw_offset = True
+                                    _last_label = None
+                                    continue
+
+                                # Skip non-data rows (Cash, Mixed, MMkt…)
+                                if _SKIP_KW.search(_ll2s):
+                                    _last_label = None
+                                    continue
+
+                                # ── Try inline: keyword + % on same line ──
+                                _mi = _INLINE.search(_ll2s)
+                                if _mi:
+                                    _lk = _mi.group(1).lower()
+                                    try:
+                                        _pv = float(
+                                            _mi.group(2).replace(',', '.'))
+                                    except Exception:
+                                        _last_label = None
+                                        continue
+                                    if _pv <= 0:
+                                        _last_label = None
+                                        continue
+                                    if _EQ_KW.search(_lk) \
+                                            and _equity_v is None:
+                                        _equity_v = _pv / 100
+                                    elif _BD_KW.search(_lk):
+                                        _bond_sum += _pv / 100
+                                    _last_label = None
+                                    continue
+
+                                # ── Keyword-only line (no % found) ──
+                                _pm2 = _PCT_SA.match(_ll2s)
+                                if not _pm2:
+                                    if _EQ_KW.search(_ll2s):
+                                        _last_label = 'equity'
+                                    elif _BD_KW.search(_ll2s) \
+                                            and not _SKIP_KW.search(_ll2s):
+                                        _last_label = 'bond'
+                                    else:
+                                        _last_label = None
+                                    continue
+
+                                # ── Standalone % line ──
+                                try:
+                                    _pv = float(
+                                        _pm2.group(1).replace(',', '.'))
+                                except Exception:
+                                    _last_label = None
+                                    continue
+
+                                if _last_label == 'equity' \
+                                        and _equity_v is None \
+                                        and _pv > 0:
+                                    _equity_v = _pv / 100
+                                    _last_label = None
+                                elif _last_label == 'bond' and _pv > 0:
+                                    _bond_sum += _pv / 100
+                                    _last_label = None
+                                elif _saw_offset \
+                                        and _equity_v is None \
+                                        and _pv > 0:
+                                    # After Cash Offset the Equity bar value
+                                    # appears here; axis labels are multiples
+                                    # of 10 (or negative), so skip those
+                                    if _pv > 0 and round(_pv) % 10 != 0:
+                                        _equity_v = _pv / 100
+                                else:
+                                    _last_label = None
+
+                            # Persist valid values
+                            _ok_eq = (_equity_v is not None
+                                      and 0.0 < _equity_v <= 1.0)
+                            _ok_bd = _bond_sum > 0.005
+                            if _ok_eq or _ok_bd:
+                                if _fn_d not in _metrics:
+                                    _metrics[_fn_d] = {}
+                                if _ok_eq \
+                                        and 'fb_az_pct' not in _metrics[_fn_d]:
+                                    _metrics[_fn_d]['fb_az_pct'] = \
+                                        round(_equity_v, 4)
+                                if _ok_bd \
+                                        and 'fb_obb_pct' not in _metrics[_fn_d]:
+                                    _metrics[_fn_d]['fb_obb_pct'] = \
+                                        round(_bond_sum, 4)
 
     except Exception:
         pass
