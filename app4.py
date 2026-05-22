@@ -2139,6 +2139,33 @@ def main():
             st.success(f"✅ Factbook caricato — {n_fb} fondi trovati")
         else:
             st.warning("⚠️ Factbook caricato ma nessun dato estratto — verrà usato FondiDoc")
+        # ── DEBUG: show extraction stats ─────────────────────────────────
+        with st.expander("🔍 Debug Factbook (rimuovere dopo analisi)", expanded=True):
+            n_dur  = sum(1 for v in factbook_data.values()
+                         if isinstance(v, dict) and "duration" in v)
+            n_rat  = sum(1 for v in factbook_data.values()
+                         if isinstance(v, dict) and "credit_rating" in v)
+            n_ytm  = sum(1 for v in factbook_data.values()
+                         if isinstance(v, dict) and "ytm" in v)
+            n_az   = sum(1 for v in factbook_data.values()
+                         if isinstance(v, dict) and "fb_az_pct" in v)
+            st.write(f"Totale chiavi: **{n_fb}** | duration: **{n_dur}** | "
+                     f"credit_rating: **{n_rat}** | ytm: **{n_ytm}** | "
+                     f"fb_az_pct: **{n_az}**")
+            # show first 5 entries that have duration
+            dur_entries = {k: v for k, v in factbook_data.items()
+                           if isinstance(v, dict) and "duration" in v}
+            if dur_entries:
+                st.write("**Campione fondi con duration:**")
+                for _k, _v in list(dur_entries.items())[:5]:
+                    st.write(f"  `{_k}` → {_v}")
+            else:
+                st.write("⚠️ **Nessun fondo con duration estratto**")
+                # show first 5 keys to help debug name matching
+                st.write("Prime 5 chiavi in factbook_data:")
+                for _k in list(factbook_data.keys())[:5]:
+                    st.write(f"  `{_k}`")
+        # ── END DEBUG ────────────────────────────────────────────────────
 
     if "LIBERO" in ptf_choice:
         df = free_portfolio_ui(raw)
