@@ -206,43 +206,7 @@ UNP_CATALOG = {
     "AZ Equity - Future Opportunities":                                (2.51, 1.25),
 }
 
-# ── CSS ──────────────────────────────────────────────────────
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
-html,body,[class*="css"]{font-family:'DM Sans',sans-serif;}
-h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
-[data-testid="stSidebar"]{background:linear-gradient(170deg,#06101e 0%,#0d1f3c 55%,#0a1628 100%);border-right:1px solid #1a3050;}
-[data-testid="stSidebar"] .stFileUploader label,[data-testid="stSidebar"] .stRadio > label,[data-testid="stSidebar"] .stSelectbox > label{color:#4a6582 !important;font-size:.68rem !important;letter-spacing:.12em !important;text-transform:uppercase !important;font-weight:600 !important;}
-[data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p{color:#c0cfe0 !important;font-size:.9rem !important;}
-[data-testid="stSidebar"] .stSelectbox>div>div{background:#132035 !important;border:1px solid #243d5a !important;color:#dde6f0 !important;border-radius:6px !important;}
-[data-testid="stSidebar"] .stFileUploader>div{background:#132035 !important;border:1px dashed #2a4a6a !important;border-radius:8px !important;}
-[data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.8rem !important;}
-.main{background:#f6f8fb !important;}.block-container{padding-top:1.8rem !important;max-width:1300px;}
-.az-header{background:linear-gradient(130deg,#081420 0%,#0f2644 50%,#162e52 100%);border-radius:16px;padding:2rem 2.5rem;margin-bottom:1.8rem;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.15);}
-.az-header::after{content:'';position:absolute;bottom:-60px;right:-40px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,76,.18) 0%,transparent 70%);}
-.az-eyebrow{font-size:.65rem;letter-spacing:.2em;color:#4a7098;text-transform:uppercase;font-weight:600;}
-.az-title{font-family:'Cormorant Garamond',serif;font-size:2.1rem;font-weight:700;color:#f0f6ff;margin:.2rem 0 .4rem;line-height:1.1;}
-.az-rule{width:38px;height:3px;background:#C9A84C;border-radius:2px;margin:.6rem 0;}
-.az-meta{font-size:.88rem;color:#6b8fb0;}
-.kpi{background:#fff;border:1px solid #e4eaf3;border-radius:12px;padding:1.2rem 1.4rem;box-shadow:0 1px 4px rgba(0,0,0,.05);}
-.kpi-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8;font-weight:500;margin-bottom:.3rem;}
-.kpi-value{font-size:1.9rem;font-weight:700;color:#0d1b2a;font-family:'Cormorant Garamond',serif;line-height:1;}
-.kpi-sub{font-size:.75rem;color:#64748b;margin-top:.3rem;}
-.sec-title{font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:#0d1b2a;border-bottom:2px solid #c9a84c;display:inline-block;padding-bottom:.4rem;margin-bottom:.9rem;}
-.fund-group-hdr{background:#f0f4f9;padding:.45rem 1rem;font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;}
-.fund-row{display:flex;align-items:center;gap:10px;padding:.65rem 1rem;border-bottom:1px solid #f1f5f9;}
-.fund-row:last-child{border-bottom:none;}
-.fund-dot{width:8px;height:34px;border-radius:3px;flex-shrink:0;}
-.fund-name{font-size:.83rem;color:#1e293b;font-weight:500;flex:1;min-width:0;}
-.fund-cat{font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.fund-pct{font-size:1rem;font-weight:700;color:#0d1b2a;min-width:2.8rem;text-align:right;}
-[data-testid="stDownloadButton"]>button{background:linear-gradient(135deg,#0f2d6b 0%,#1b4fbb 100%) !important;color:#fff !important;font-size:1.05rem !important;font-weight:600 !important;padding:.9rem 2rem !important;border-radius:10px !important;border:none !important;width:100% !important;letter-spacing:.02em !important;box-shadow:0 4px 18px rgba(27,79,187,.35) !important;}
-[data-testid="stDownloadButton"]>button:hover{box-shadow:0 6px 24px rgba(27,79,187,.55) !important;transform:translateY(-2px) !important;}
-.w-ok{background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#065f46;}
-.w-warn{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#92400e;}
-</style>
-""", unsafe_allow_html=True)
+# CSS is injected inside main() to keep it within the error-handler scope.
 
 
 # ════════════════════════════════════════════════════════════
@@ -2210,7 +2174,46 @@ def free_portfolio_ui(data):
 # MAIN APP
 # ════════════════════════════════════════════════════════════
 
+_APP_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+html,body,[class*="css"]{font-family:'DM Sans',sans-serif;}
+h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
+[data-testid="stSidebar"]{background:linear-gradient(170deg,#06101e 0%,#0d1f3c 55%,#0a1628 100%);border-right:1px solid #1a3050;}
+[data-testid="stSidebar"] .stFileUploader label,[data-testid="stSidebar"] .stRadio > label,[data-testid="stSidebar"] .stSelectbox > label{color:#4a6582 !important;font-size:.68rem !important;letter-spacing:.12em !important;text-transform:uppercase !important;font-weight:600 !important;}
+[data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p{color:#c0cfe0 !important;font-size:.9rem !important;}
+[data-testid="stSidebar"] .stSelectbox>div>div{background:#132035 !important;border:1px solid #243d5a !important;color:#dde6f0 !important;border-radius:6px !important;}
+[data-testid="stSidebar"] .stFileUploader>div{background:#132035 !important;border:1px dashed #2a4a6a !important;border-radius:8px !important;}
+[data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.8rem !important;}
+.main{background:#f6f8fb !important;}.block-container{padding-top:1.8rem !important;max-width:1300px;}
+.az-header{background:linear-gradient(130deg,#081420 0%,#0f2644 50%,#162e52 100%);border-radius:16px;padding:2rem 2.5rem;margin-bottom:1.8rem;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.15);}
+.az-header::after{content:'';position:absolute;bottom:-60px;right:-40px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,76,.18) 0%,transparent 70%);}
+.az-eyebrow{font-size:.65rem;letter-spacing:.2em;color:#4a7098;text-transform:uppercase;font-weight:600;}
+.az-title{font-family:'Cormorant Garamond',serif;font-size:2.1rem;font-weight:700;color:#f0f6ff;margin:.2rem 0 .4rem;line-height:1.1;}
+.az-rule{width:38px;height:3px;background:#C9A84C;border-radius:2px;margin:.6rem 0;}
+.az-meta{font-size:.88rem;color:#6b8fb0;}
+.kpi{background:#fff;border:1px solid #e4eaf3;border-radius:12px;padding:1.2rem 1.4rem;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.kpi-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8;font-weight:500;margin-bottom:.3rem;}
+.kpi-value{font-size:1.9rem;font-weight:700;color:#0d1b2a;font-family:'Cormorant Garamond',serif;line-height:1;}
+.kpi-sub{font-size:.75rem;color:#64748b;margin-top:.3rem;}
+.sec-title{font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:#0d1b2a;border-bottom:2px solid #c9a84c;display:inline-block;padding-bottom:.4rem;margin-bottom:.9rem;}
+.fund-group-hdr{background:#f0f4f9;padding:.45rem 1rem;font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;}
+.fund-row{display:flex;align-items:center;gap:10px;padding:.65rem 1rem;border-bottom:1px solid #f1f5f9;}
+.fund-row:last-child{border-bottom:none;}
+.fund-dot{width:8px;height:34px;border-radius:3px;flex-shrink:0;}
+.fund-name{font-size:.83rem;color:#1e293b;font-weight:500;flex:1;min-width:0;}
+.fund-cat{font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fund-pct{font-size:1rem;font-weight:700;color:#0d1b2a;min-width:2.8rem;text-align:right;}
+[data-testid="stDownloadButton"]>button{background:linear-gradient(135deg,#0f2d6b 0%,#1b4fbb 100%) !important;color:#fff !important;font-size:1.05rem !important;font-weight:600 !important;padding:.9rem 2rem !important;border-radius:10px !important;border:none !important;width:100% !important;letter-spacing:.02em !important;box-shadow:0 4px 18px rgba(27,79,187,.35) !important;}
+[data-testid="stDownloadButton"]>button:hover{box-shadow:0 6px 24px rgba(27,79,187,.55) !important;transform:translateY(-2px) !important;}
+.w-ok{background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#065f46;}
+.w-warn{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#92400e;}
+</style>
+"""
+
+
 def main():
+    st.markdown(_APP_CSS, unsafe_allow_html=True)
     with st.sidebar:
         st.markdown("""<div style='padding:1.4rem 0 .8rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Strumento di Analisi</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.6rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.2;'>Portfolio<br>Analyzer</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:10px;'></div></div>""", unsafe_allow_html=True)
         st.markdown("---")
@@ -2403,11 +2406,18 @@ def main():
     st.markdown("<br><br>",unsafe_allow_html=True)
 
 
-if __name__ == "__main__":
-    import traceback as _tb
+# ── Entry point ─────────────────────────────────────────────────────────────
+# Call main() directly (not behind __name__ guard) so it always runs on
+# Streamlit Cloud regardless of how the script is executed.
+import traceback as _tb
+try:
+    main()
+except (SystemExit, KeyboardInterrupt):
+    raise
+except BaseException as _e:
     try:
-        main()
-    except Exception as _e:
-        st.error(f"**Errore imprevisto:** {_e}")
+        st.error(f"**Errore imprevisto:** {type(_e).__name__}: {_e}")
         with st.expander("🔍 Dettaglio tecnico (per il debug)"):
             st.code(_tb.format_exc())
+    except Exception:
+        pass
