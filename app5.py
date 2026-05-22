@@ -48,6 +48,23 @@ _ANA_KEYS = [
     "numero_documento", "data_rilascio", "data_scadenza", "ente_rilascio",
 ]
 
+# Map anagrafica keys → widget session-state keys
+_WIDGET_KEY = {
+    "cognome":          "a_cog",
+    "nome":             "a_nom",
+    "data_nascita":     "a_dn",
+    "luogo_nascita":    "a_ln",
+    "codice_fiscale":   "a_cf",
+    "indirizzo":        "a_ind",
+    "comune":           "a_com",
+    "cap":              "a_cap",
+    "sesso":            "a_ses",
+    "numero_documento": "a_ndoc",
+    "data_rilascio":    "a_drl",
+    "data_scadenza":    "a_dsc",
+    "ente_rilascio":    "a_ent",
+}
+
 def _init():
     if "anagrafica" not in st.session_state:
         st.session_state.anagrafica = {k: "" for k in _ANA_KEYS}
@@ -461,6 +478,19 @@ with st.sidebar:
         st.rerun()
 
 # ─────────────────────────────────────────────────────────────
+# HELPER: aggiorna anagrafica E i widget key contemporaneamente
+# ─────────────────────────────────────────────────────────────
+def _set_anagrafica(data: dict):
+    """Write extracted values to both anagrafica dict and widget session-state keys."""
+    for k, v in data.items():
+        if k in _ANA_KEYS:
+            st.session_state.anagrafica[k] = v
+            wk = _WIDGET_KEY.get(k)
+            if wk:
+                st.session_state[wk] = v
+
+
+# ─────────────────────────────────────────────────────────────
 # CACHE UPLOADED BYTES & AUTO-EXTRACT
 # ─────────────────────────────────────────────────────────────
 
@@ -471,14 +501,20 @@ if id_up:
         st.session_state.id_name  = id_up.name
         if id_up.type == "application/pdf":
             with st.spinner("Estrazione dati anagrafici…"):
-                extracted = parse_identity(st.session_state.id_bytes)
-                if extracted:
-                    for k, v in extracted.items():
-                        st.session_state.anagrafica[k] = v
-                    st.toast(f"✅ Estratti {len(extracted)} campi anagrafici", icon="🪪")
+                raw_text = pdf_text(st.session_state.id_bytes)
+                if not raw_text.strip():
+                    st.session_state["_id_scanned"] = True
+                    st.toast("⚠️ PDF scansionato (nessun testo) — inserisci i dati manualmente", icon="⚠️")
                 else:
-                    st.toast("⚠️ Nessun dato trovato — inserisci manualmente", icon="⚠️")
+                    st.session_state["_id_scanned"] = False
+                    extracted = parse_identity(st.session_state.id_bytes)
+                    if extracted:
+                        _set_anagrafica(extracted)
+                        st.toast(f"✅ Estratti {len(extracted)} campi anagrafici", icon="🪪")
+                    else:
+                        st.toast("⚠️ Testo trovato ma nessun campo riconosciuto — inserisci manualmente", icon="⚠️")
         else:
+            st.session_state["_id_scanned"] = True
             st.toast("Immagine caricata — inserisci i dati anagrafici manualmente", icon="ℹ️")
 
 # Azimut position
@@ -539,32 +575,43 @@ tab_ana, tab_fondi, tab_moduli, tab_dl = st.tabs([
 with tab_ana:
     st.markdown('<div class="section-title">Dati estratti dal documento d\'identità</div>',
                 unsafe_allow_html=True)
-    st.caption("Verifica e correggi i campi se necessario prima di compilare i moduli.")
+
+    if st.session_state.get("_id_scanned"):
+        st.warning(
+            "⚠️ Il PDF caricato è una scansione (immagine) — il testo non è estraibile automaticamente. "
+            "Compila i campi manualmente oppure carica un PDF testuale."
+        )
+    else:
+        st.caption("Verifica e correggi i campi se necessario prima di compilare i moduli.")
+
+    # Legge i valori dal session_state dei widget (se già impostati) oppure da anagrafica
+    def _val(wk, ana_k):
+        return st.session_state.get(wk) or st.session_state.anagrafica.get(ana_k, "")
 
     ana = st.session_state.anagrafica
     r1c1, r1c2, r1c3 = st.columns(3)
     with r1c1:
-        ana["cognome"]        = st.text_input("Cognome",          value=ana["cognome"],       key="a_cog")
-        ana["data_nascita"]   = st.text_input("Data di nascita",  value=ana["data_nascita"],  key="a_dn")
-        ana["codice_fiscale"] = st.text_input("Codice Fiscale",   value=ana["codice_fiscale"],key="a_cf")
+        ana["cognome"]        = st.text_input("Cognome",          value=_val("a_cog","cognome"),       key="a_cog")
+        ana["data_nascita"]   = st.text_input("Data di nascita",  value=_val("a_dn","data_nascita"),   key="a_dn")
+        ana["codice_fiscale"] = st.text_input("Codice Fiscale",   value=_val("a_cf","codice_fiscale"), key="a_cf")
     with r1c2:
-        ana["nome"]           = st.text_input("Nome",             value=ana["nome"],          key="a_nom")
-        ana["luogo_nascita"]  = st.text_input("Luogo di nascita", value=ana["luogo_nascita"], key="a_ln")
-        ana["sesso"]          = st.text_input("Sesso (M/F)",      value=ana["sesso"],         key="a_ses", max_chars=1)
+        ana["nome"]           = st.text_input("Nome",             value=_val("a_nom","nome"),          key="a_nom")
+        ana["luogo_nascita"]  = st.text_input("Luogo di nascita", value=_val("a_ln","luogo_nascita"),  key="a_ln")
+        ana["sesso"]          = st.text_input("Sesso (M/F)",      value=_val("a_ses","sesso"),         key="a_ses", max_chars=1)
     with r1c3:
-        ana["indirizzo"]      = st.text_input("Indirizzo",        value=ana["indirizzo"],     key="a_ind")
-        ana["comune"]         = st.text_input("Comune",           value=ana["comune"],        key="a_com")
-        ana["cap"]            = st.text_input("CAP",              value=ana["cap"],           key="a_cap", max_chars=5)
+        ana["indirizzo"]      = st.text_input("Indirizzo",        value=_val("a_ind","indirizzo"),     key="a_ind")
+        ana["comune"]         = st.text_input("Comune",           value=_val("a_com","comune"),        key="a_com")
+        ana["cap"]            = st.text_input("CAP",              value=_val("a_cap","cap"),           key="a_cap", max_chars=5)
 
     st.markdown('<div class="section-title">Documento</div>', unsafe_allow_html=True)
     r2c1, r2c2, r2c3 = st.columns(3)
     with r2c1:
-        ana["numero_documento"] = st.text_input("N° Documento",     value=ana["numero_documento"], key="a_ndoc")
+        ana["numero_documento"] = st.text_input("N° Documento",  value=_val("a_ndoc","numero_documento"), key="a_ndoc")
     with r2c2:
-        ana["data_rilascio"]    = st.text_input("Data rilascio",    value=ana["data_rilascio"],    key="a_drl")
-        ana["ente_rilascio"]    = st.text_input("Ente rilascio",    value=ana["ente_rilascio"],    key="a_ent")
+        ana["data_rilascio"]    = st.text_input("Data rilascio", value=_val("a_drl","data_rilascio"),     key="a_drl")
+        ana["ente_rilascio"]    = st.text_input("Ente rilascio", value=_val("a_ent","ente_rilascio"),     key="a_ent")
     with r2c3:
-        ana["data_scadenza"]    = st.text_input("Data scadenza",    value=ana["data_scadenza"],    key="a_dsc")
+        ana["data_scadenza"]    = st.text_input("Data scadenza", value=_val("a_dsc","data_scadenza"),     key="a_dsc")
 
 # ══════════════════════════════════════════════════════════════
 # TAB 2 — FONDI AZIMUT
