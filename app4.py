@@ -534,6 +534,14 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                     _store(name_raw, data_cols)
 
                 # ── C: METRICHE FIXED INCOME ─────────────────────────────
+                # Two-column layout: the labels AND their values are on the
+                # SAME line (right column merges with left column text).
+                # Actual pdfplumber line examples:
+                #  "...non è un indicatore   METRICHE FIXED INCOME"
+                #  "...considerazione        Credit Rating medio         BBB"
+                #  "                         Portfolio Yield To Maturity (EUR)  4,15%"
+                #  "...strategia.            Portfolio Duration"
+                #  "                                                     9,80"   ← next line
                 if 'METRICHE FIXED INCOME' in text.upper():
                     _lines_p = text.split('\n')
                     _fn = None
@@ -565,48 +573,68 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                                 _fn  = _FUND_ALIASES.get(_nrm, _nrm)
                                 break
                     if _fn:
-                        _in_fi = False; _seen_hdr = False
+                        _in_fi      = False
+                        _after_dur  = False   # True once "Portfolio Duration" seen
                         _cr = _yt = _dur = None
                         for _lt in _lines_p:
                             _ls2 = _lt.strip()
                             if not _ls2:
                                 continue
                             if 'METRICHE FIXED INCOME' in _ls2.upper():
-                                _in_fi = True; continue
+                                _in_fi = True
+                                continue
                             if not _in_fi:
                                 continue
-                            if re.search(
-                                    r'credit\s+rating|yield\s+to\s+maturity|'
-                                    r'portfolio\s+duration', _ls2, re.IGNORECASE):
-                                _seen_hdr = True; continue
-                            if not _seen_hdr:
-                                continue
-                            if _cr is None:
-                                _mc = re.match(
-                                    r'^([A-D][A-Za-z]*[+\-]?)\s+'
-                                    r'([\d]+[,\.]\d+)\s*%?', _ls2)
-                                if _mc and _mc.group(1).upper() in RATING_SCALE:
-                                    _cr = _mc.group(1).upper()
-                                    try:
-                                        _yt = round(
-                                            float(_mc.group(2).replace(',', '.')), 2)
-                                    except Exception:
-                                        pass
-                                continue
-                            if _dur is None:
-                                _md = re.match(r'^([\d]+[,\.]\d+)\s*$', _ls2)
+
+                            # "Portfolio Duration" line: value is on the NEXT
+                            # non-empty line (still in right column whitespace)
+                            if _after_dur and _dur is None:
+                                _md = re.match(
+                                    r'^([\d]+[,\.]\d+)\s*$', _ls2)
                                 if _md:
                                     try:
                                         _dur = round(
                                             float(_md.group(1).replace(',', '.')), 2)
                                     except Exception:
                                         pass
-                                break
+                                _after_dur = False
+                                if _cr is not None and _yt is not None:
+                                    break
+                                continue
+
+                            # "Credit Rating medio ... BBB" (value at line end)
+                            if re.search(r'credit\s+rating', _ls2,
+                                         re.IGNORECASE) and _cr is None:
+                                _mcr = re.search(
+                                    r'\b([A-D][A-Za-z]*[+\-]?)\s*$', _ls2)
+                                if _mcr and _mcr.group(1).upper() in RATING_SCALE:
+                                    _cr = _mcr.group(1).upper()
+                                continue
+
+                            # "Portfolio Yield To Maturity (EUR) 4,15%" (value at end)
+                            if re.search(r'yield\s+to\s+maturity', _ls2,
+                                         re.IGNORECASE) and _yt is None:
+                                _myt = re.search(
+                                    r'([\d]+[,\.]\d+)\s*%\s*$', _ls2)
+                                if _myt:
+                                    try:
+                                        _yt = round(
+                                            float(_myt.group(1).replace(',', '.')), 2)
+                                    except Exception:
+                                        pass
+                                continue
+
+                            # "Portfolio Duration" label — value follows on next line
+                            if re.search(r'portfolio\s+duration', _ls2,
+                                         re.IGNORECASE) and _dur is None:
+                                _after_dur = True
+                                continue
+
                         if _fn not in _metrics:
                             _metrics[_fn] = {}
-                        if _cr:             _metrics[_fn]['credit_rating'] = _cr
-                        if _yt is not None: _metrics[_fn]['ytm']           = _yt
-                        if _dur is not None: _metrics[_fn]['duration']     = _dur
+                        if _cr:              _metrics[_fn]['credit_rating'] = _cr
+                        if _yt  is not None: _metrics[_fn]['ytm']           = _yt
+                        if _dur is not None: _metrics[_fn]['duration']      = _dur
 
                 # ── D: SCOMPOSIZIONE PORTAFOGLIO - ASSET CLASS ────────────
                 # Only AZ ALLOCATION / BALANCED funds have this section.
