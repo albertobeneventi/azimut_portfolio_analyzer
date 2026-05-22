@@ -431,6 +431,68 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
         except Exception:
             return True  # keep on parse error
 
+    def _get_fi_from_src(src: str):
+        """Extract Credit Rating, YTM, Duration from one pdfplumber text source.
+        Defined once here (not inside the page loop) to avoid repeated closure
+        creation and potential caching issues.
+        """
+        _lines = [ln.strip() for ln in src.split('\n') if ln.strip()]
+        _txt   = '\n'.join(_lines)
+        _r = _y = _d = None
+        _RATING_PAT = (
+            r'(AAA|AA[+\-]|AA|A[+\-]|A'
+            r'|BBB[+\-]|BBB|BB[+\-]|BB|B[+\-]|B'
+            r'|CCC[+\-]|CCC|CC|C|D)'
+            r'(?=[^A-Za-z]|$)')
+        # Credit Rating – inline ("...Credit Rating medio  BB+")
+        #              or next-line ("...Credit Rating medio\n  BB+")
+        _m = re.search(
+            r'Credit\s+Rating[^\n]{0,60}?' + _RATING_PAT,
+            _txt, re.IGNORECASE | re.MULTILINE)
+        if not _m:
+            _m = re.search(
+                r'Credit\s+Rating[^\n]*\n\s*' + _RATING_PAT,
+                _txt, re.IGNORECASE)
+        if _m and _m.group(1).upper() in RATING_SCALE:
+            _r = _m.group(1).upper()
+        # YTM – inline or next-line
+        _m = re.search(
+            r'Yield\s+To\s+Maturity[^\n]{0,60}?([\d]+[,\.][\d]+)\s*%',
+            _txt, re.IGNORECASE | re.MULTILINE)
+        if not _m:
+            _m = re.search(
+                r'Yield\s+To\s+Maturity[^\n]*\n\s*([\d]+[,\.][\d]+)\s*%',
+                _txt, re.IGNORECASE)
+        if _m:
+            try:
+                _y = round(float(_m.group(1).replace(',', '.')), 2)
+            except Exception:
+                pass
+        # Duration – scan up to 10 lines after "Portfolio Duration" label
+        _dn = next(
+            (i for i, ln in enumerate(_lines)
+             if re.search(r'portfolio\s+duration', ln, re.IGNORECASE)), None)
+        if _dn is not None:
+            for _dl in _lines[_dn:_dn + 10]:
+                if re.search(r'portfolio\s+duration', _dl, re.IGNORECASE):
+                    _dm = re.search(
+                        r'Duration\D{0,20}([\d]+[,\.][\d]+)(?!\s*%)',
+                        _dl, re.IGNORECASE)
+                else:
+                    _dm = re.search(r'^([\d]+[,\.][\d]+)\s*$', _dl)
+                    if not _dm:
+                        _dm = re.search(
+                            r'(?<![%\d,\.])([\d]{1,2}[,\.][\d]{2})\s*$', _dl)
+                if _dm:
+                    try:
+                        _v = float(_dm.group(1).replace(',', '.'))
+                        if 0 < _v < 40:
+                            _d = round(_v, 2)
+                            break
+                    except Exception:
+                        pass
+        return _r, _y, _d
+
     def _store(name_raw: str, cols_vals: list):
         """Normalise name and store performance data if not already seen.
 
@@ -583,98 +645,7 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                                 _fn  = _FUND_ALIASES.get(_nrm, _nrm)
                                 break
                     if _fn:
-                        # ── Extract metrics from a single text source ───────
-                        # Process each source independently so the 6-line
-                        # window after "Portfolio Duration" stays within that
-                        # source and doesn't miss values that only appear in
-                        # one of the two pdfplumber representations.
-                        def _get_fi_from_src(src):
-                            _lines = [l.strip()
-                                      for l in src.split('\n') if l.strip()]
-                            _txt   = '\n'.join(_lines)
-                            _r = _y = _d = None
-                            # Credit Rating (inline or next-line)
-                            _RATING_PAT = (
-                                r'(AAA|AA[+\-]|AA|A[+\-]|A'
-                                r'|BBB[+\-]|BBB|BB[+\-]|BB|B[+\-]|B'
-                                r'|CCC[+\-]|CCC|CC|C|D)'
-                                r'(?=[^A-Za-z]|$)')
-                            _m = re.search(
-                                r'Credit\s+Rating[^\n]{0,60}?' + _RATING_PAT,
-                                _txt, re.IGNORECASE | re.MULTILINE)
-                            if not _m:
-                                _m = re.search(
-                                    r'Credit\s+Rating[^\n]*\n\s*' + _RATING_PAT,
-                                    _txt, re.IGNORECASE)
-                            if _m and _m.group(1).upper() in RATING_SCALE:
-                                _r = _m.group(1).upper()
-                            # YTM (inline or next-line)
-                            _m = re.search(
-                                r'Yield\s+To\s+Maturity[^\n]{0,60}?'
-                                r'([\d]+[,\.][\d]+)\s*%',
-                                _txt, re.IGNORECASE | re.MULTILINE)
-                            if not _m:
-                                _m = re.search(
-                                    r'Yield\s+To\s+Maturity[^\n]*\n\s*'
-                                    r'([\d]+[,\.][\d]+)\s*%',
-                                    _txt, re.IGNORECASE)
-                            if _m:
-                                try:
-                                    _y = round(
-                                        float(_m.group(1).replace(',', '.')), 2)
-                                except Exception:
-                                    pass
-                            # Duration – scan up to 10 lines after the label
-                            _dn = next(
-                                (i for i, l in enumerate(_lines)
-                                 if re.search(r'portfolio\s+duration', l,
-                                              re.IGNORECASE)), None)
-                            if _dn is not None:
-                                for _dl in _lines[_dn:_dn + 10]:
-                                    if re.search(r'portfolio\s+duration',
-                                                 _dl, re.IGNORECASE):
-                                        _dm = re.search(
-                                            r'Duration\D{0,20}'
-                                            r'([\d]+[,\.][\d]+)(?!\s*%)',
-                                            _dl, re.IGNORECASE)
-                                    else:
-                                        _dm = re.search(
-                                            r'^([\d]+[,\.][\d]+)\s*$', _dl)
-                                        if not _dm:
-                                            _dm = re.search(
-                                                r'(?<![%\d,\.])'
-                                                r'([\d]{1,2}[,\.][\d]{2})\s*$',
-                                                _dl)
-                                    if _dm:
-                                        try:
-                                            _v = float(
-                                                _dm.group(1).replace(',', '.'))
-                                            if 0 < _v < 40:
-                                                _d = round(_v, 2)
-                                                break
-                                        except Exception:
-                                            pass
-                            # Fallback: search the whole text for
-                            # "Portfolio Duration" followed (within 200 chars)
-                            # by a bare decimal that isn't a percentage
-                            if _d is None:
-                                _mfb = re.search(
-                                    r'Portfolio\s+Duration'
-                                    r'[\s\S]{0,200}?'
-                                    r'(?<![%\d,\.])'
-                                    r'([\d]{1,2}[,\.][\d]{1,3})'
-                                    r'(?!\s*%)',
-                                    _txt, re.IGNORECASE)
-                                if _mfb:
-                                    try:
-                                        _v = float(
-                                            _mfb.group(1).replace(',', '.'))
-                                        if 0 < _v < 40:
-                                            _d = round(_v, 2)
-                                    except Exception:
-                                        pass
-                            return _r, _y, _d
-
+                        # _get_fi_from_src is defined once above the page loop.
                         # Try layout text first (richer for two-column pages),
                         # then default text; merge – prefer first non-None.
                         _cr1, _yt1, _dur1 = (
@@ -890,6 +861,104 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
     # Aggiungi metadato data di riferimento (chiave speciale)
     if _ref_date:
         result["_ref_date"] = _ref_date
+
+    return result
+
+
+# ── Factbook Excel export / import ──────────────────────────────────────────
+
+_FB_COLS = [
+    ("fondo",         "Fondo (chiave normalizzata)"),
+    ("credit_rating", "Credit Rating Medio"),
+    ("duration",      "Duration (anni)"),
+    ("ytm",           "YTM (%)"),
+    ("az_pct",        "% Azionario (0-1)"),
+    ("obb_pct",       "% Obbligazionario (0-1)"),
+    ("ytd",           "YTD"),
+    ("perf_1y",       "Rend. 1A"),
+    ("perf_3y",       "Rend. 3A ann."),
+    ("perf_5y",       "Rend. 5A ann."),
+]
+_FB_INTERNAL_KEYS = {
+    "az_pct":  "fb_az_pct",
+    "obb_pct": "fb_obb_pct",
+}
+
+
+def factbook_to_excel_bytes(fb: dict) -> bytes:
+    """Serialise the factbook data dict to a downloadable Excel file.
+
+    The Excel has one row per fund with human-readable column headers.
+    Numeric fields (duration, ytm, az_pct, obb_pct) are stored as floats.
+    The 'fondo' column is the normalised key used internally for matching.
+    """
+    rows = []
+    for norm, data in fb.items():
+        if norm == "_ref_date" or not isinstance(data, dict):
+            continue
+        row = {"fondo": norm}
+        row["credit_rating"] = data.get("credit_rating", "")
+        row["duration"]      = data.get("duration", "")
+        row["ytm"]           = data.get("ytm", "")
+        row["az_pct"]        = data.get("fb_az_pct", "")
+        row["obb_pct"]       = data.get("fb_obb_pct", "")
+        row["ytd"]           = data.get("ytd", "")
+        row["perf_1y"]       = data.get("perf_1y", "")
+        row["perf_3y"]       = data.get("perf_3y", "")
+        row["perf_5y"]       = data.get("perf_5y", "")
+        rows.append(row)
+
+    int_keys = [k for k, _ in _FB_COLS]
+    hdr_map  = {k: h for k, h in _FB_COLS}
+    df = pd.DataFrame(rows, columns=int_keys) if rows else pd.DataFrame(columns=int_keys)
+    df.rename(columns=hdr_map, inplace=True)
+
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Factbook")
+        ws = writer.sheets["Factbook"]
+        ws.column_dimensions["A"].width = 38
+        for col in ["B", "C", "D", "E", "F", "G", "H", "I", "J"]:
+            ws.column_dimensions[col].width = 18
+    return buf.getvalue()
+
+
+def factbook_from_excel(excel_bytes: bytes) -> dict:
+    """Load a factbook Excel cache (produced by factbook_to_excel_bytes).
+
+    Returns the same dict structure as parse_factbook().
+    """
+    try:
+        df = pd.read_excel(io.BytesIO(excel_bytes), sheet_name="Factbook",
+                           dtype=str)
+    except Exception:
+        return {}
+
+    # Map header labels back to internal keys
+    hdr_to_int = {h: k for k, h in _FB_COLS}
+    df.rename(columns=hdr_to_int, inplace=True)
+
+    result: dict = {}
+    _float_keys = {"duration", "ytm", "az_pct", "obb_pct"}
+
+    for _, row in df.iterrows():
+        norm = str(row.get("fondo", "")).strip()
+        if not norm or norm == "nan":
+            continue
+        entry: dict = {}
+        for int_key in [k for k, _ in _FB_COLS if k != "fondo"]:
+            raw = str(row.get(int_key, "")).strip()
+            if not raw or raw in ("nan", "None", ""):
+                continue
+            if int_key in _float_keys:
+                try:
+                    entry[_FB_INTERNAL_KEYS.get(int_key, int_key)] = float(raw)
+                except ValueError:
+                    pass
+            else:
+                entry[_FB_INTERNAL_KEYS.get(int_key, int_key)] = raw
+        if entry:
+            result[norm] = entry
 
     return result
 
@@ -2073,15 +2142,21 @@ def main():
     with st.sidebar:
         st.markdown("""<div style='padding:1.4rem 0 .8rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Strumento di Analisi</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.6rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.2;'>Portfolio<br>Analyzer</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:10px;'></div></div>""", unsafe_allow_html=True)
         st.markdown("---")
-        st.caption("v2.1 — fix Duration extraction")
+        st.caption("v2.2 — factbook Excel cache")
         st.markdown("---")
         uploaded   = st.file_uploader("FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
         uploaded_fb = st.file_uploader(
-            "FACTBOOK RENDIMENTI (PDF, opzionale)",
+            "FACTBOOK PDF (prima estrazione)",
             type=["pdf"],
-            help="Carica il Factbook AZ Investments per avere YTD/1A/3A/5A "
-                 "senza dipendere da FondiDoc. Le metriche di rischio vengono "
-                 "sempre scaricate da FondiDoc.",
+            help="Carica il Factbook PDF per estrarre Duration, Rating e Asset "
+                 "Allocation. Dopo la prima estrazione scarica il file Excel "
+                 "e ricaricalo la prossima volta: è più veloce.",
+        )
+        uploaded_fb_xl = st.file_uploader(
+            "DATI FACTBOOK (Excel, dopo prima estrazione)",
+            type=["xlsx","xls"],
+            help="Carica il file Excel scaricato dopo la prima estrazione del "
+                 "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
         )
         st.markdown("---")
         ptf_choice = st.radio("TIPO PORTAFOGLIO", ["📋  PTF FULL","⚡  PTF SHORT","🎨  LIBERO"])
@@ -2101,16 +2176,39 @@ def main():
         file_bytes = uploaded.read()
         raw = parse_excel(file_bytes)
 
-    # Parse factbook PDF if uploaded
+    # ── Factbook data: Excel cache (fast) > PDF (first-time extraction) ──────
     factbook_data: dict = {}
-    if uploaded_fb is not None:
-        with st.spinner("📖 Leggo Factbook rendimenti…"):
+
+    if uploaded_fb_xl is not None:
+        # Fast path: load previously exported Excel cache
+        factbook_data = factbook_from_excel(uploaded_fb_xl.read())
+        n_fb = len(factbook_data)
+        if n_fb:
+            st.success(f"✅ Dati Factbook caricati da Excel — {n_fb} fondi")
+        else:
+            st.warning("⚠️ Excel Factbook caricato ma vuoto — "
+                       "ricarica il PDF per una nuova estrazione")
+
+    elif uploaded_fb is not None:
+        # First-time path: parse the PDF, then offer Excel download
+        with st.spinner("📖 Estraggo dati dal Factbook PDF…"):
             factbook_data = parse_factbook(uploaded_fb.read())
         n_fb = len(factbook_data)
         if n_fb:
-            st.success(f"✅ Factbook caricato — {n_fb} fondi trovati")
+            st.success(f"✅ Factbook PDF estratto — {n_fb} fondi trovati")
+            xl_bytes = factbook_to_excel_bytes(factbook_data)
+            st.download_button(
+                label="💾  Scarica dati Factbook (Excel)",
+                data=xl_bytes,
+                file_name="factbook_dati.xlsx",
+                mime="application/vnd.openxmlformats-officedocument"
+                     ".spreadsheetml.sheet",
+                help="Salva questo file ed usalo come 'DATI FACTBOOK (Excel)' "
+                     "nelle prossime sessioni: evita di ricaricare il PDF.",
+            )
         else:
-            st.warning("⚠️ Factbook caricato ma nessun dato estratto — verrà usato FondiDoc")
+            st.warning("⚠️ Factbook PDF caricato ma nessun dato estratto — "
+                       "verrà usato FondiDoc")
 
     if "LIBERO" in ptf_choice:
         df = free_portfolio_ui(raw)
