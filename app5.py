@@ -81,9 +81,11 @@ def _init():
     if "filled" not in st.session_state:
         st.session_state.filled = {}          # slot_idx -> {bytes, name, values}
     # Byte caches (to survive reruns after file_uploader disappears)
-    for k in ["id_bytes", "id_name", "az_bytes", "az_name"]:
+    for k in ["id_bytes", "id_files_key", "az_bytes", "az_name"]:
         if k not in st.session_state:
             st.session_state[k] = None
+    if "id_files_bytes" not in st.session_state:
+        st.session_state.id_files_bytes = []
     for i in range(5):
         for k in [f"fb_{i}", f"fn_{i}"]:
             if k not in st.session_state:
@@ -239,78 +241,110 @@ def _first(patterns: list, text: str) -> str:
 
 
 def _parse_identity_from_text(text: str) -> dict:
-    """Parsa i dati anagrafici da testo grezzo (pdfplumber o OCR)."""
+    """Parsa i dati anagrafici da testo grezzo (pdfplumber o OCR).
+
+    Gestisce sia il formato inline  (COGNOME: ROSSI)
+    sia il formato su riga successiva  (COGNOME\\nROSSI)
+    tipico della CIE (Carta d'Identità Elettronica) italiana.
+    """
     t = text.upper()
     d = {}
 
-    d["cognome"] = _first([
-        r"COGNOME[:\s/]+([A-Z][A-Z\s'\-]{1,30})(?:\n|NOME|$)",
-        r"SURNAME[:\s]+([A-Z][A-Z\s'\-]{1,30})(?:\n|NAME|$)",
-    ], t)
+    # Parole che sono etichette del documento — non devono mai essere catturate come valori
+    _LABELS = (
+        r"DATA\b|LUOGO\b|NOME\b|COGNOME\b|SESSO\b|CODICE\b|COMUNE\b|INDIRIZZO\b|"
+        r"RESIDENZA\b|NAZIONAL|STATURA\b|RILASCI|VALIDA\b|SCADENZA\b|PATENTE\b|"
+        r"PASSPORT|SURNAME|BIRTHDATE|PLACE\b|SEX\b|HEIGHT\b|NATIONALITY|FISCAL|"
+        r"REPUBLIC|ITALIAN|EUROPEA|UNIONE\b|NUMBER\b|NUMERO\b|DOCUMENT"
+    )
 
-    d["nome"] = _first([
-        r"(?:^|\n|\s)NOME[:\s/]+([A-Z][A-Z\s'\-]{1,30})(?:\n|DATA|LUOGO|SESSO|$)",
-        r"GIVEN\s+NAME[S]?[:\s]+([A-Z][A-Z\s'\-]{1,30})(?:\n|$)",
-    ], t)
+    # Valore-nome: max 3 parole di sole lettere (include apostrofo e trattino)
+    # NON deve iniziare con un'etichetta nota
+    _NV = fr"(?!(?:{_LABELS}))([A-Z][A-Z'À-ÜÙÀÈÌ\-]*(?:\s+[A-Z][A-Z'À-ÜÙÀÈÌ\-]*{{0,2}})?)"
+
+    # Terminatore: nuova riga o inizio di un'altra etichetta nota
+    _STOP = fr"(?=\s*\n|\s*(?:{_LABELS})|$)"
+
+    def _name_patterns(label: str, alt_label: str = ""):
+        """Costruisce pattern per cognome/nome che gestisce inline e next-line."""
+        alts = [alt_label] if alt_label else []
+        pats = []
+        for lbl in [label] + alts:
+            # Formato "COGNOME / SURNAME\nROSSI" (CIE)
+            pats.append(fr"{lbl}[\w\s/]*\n\s*{_NV}\s*\n")
+            # Formato "COGNOME: ROSSI" o "COGNOME ROSSI" (inline)
+            pats.append(fr"{lbl}\s*[:/]?\s+{_NV}{_STOP}")
+        return pats
+
+    d["cognome"] = _first(_name_patterns("COGNOME", "SURNAME"), t)
+    d["nome"]    = _first(_name_patterns("(?:^|\n)NOME", "GIVEN NAME"), t)
+
+    # Date: formato dd/mm/yyyy oppure dd.mm.yyyy — validazione mese 01-12
+    _DATE = r"(\d{2}[/.\-](?:0[1-9]|1[0-2])[/.\-]\d{4})"
 
     d["data_nascita"] = _first([
-        r"DATA\s+DI\s+NASCITA[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
-        r"NATO[/A]*\s+IL[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
-        r"DATE\s+OF\s+BIRTH[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
-        r"NASCITA[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
-        r"\b(\d{2}[/.\-]\d{2}[/.\-]\d{4})\b",   # fallback: prima data trovata
+        fr"DATA\s+DI\s+NASCITA[\s\S]{{0,40}}{_DATE}",
+        fr"LUOGO\s+E\s+DATA\s+DI\s+NASCITA[\s\S]{{0,60}}{_DATE}",
+        fr"NATO[/A]*\s+IL\s*[:\n]\s*{_DATE}",
+        fr"DATE\s+OF\s+BIRTH[\s\S]{{0,20}}{_DATE}",
+        fr"NASCITA[:\s]+{_DATE}",
     ], t)
 
     d["luogo_nascita"] = _first([
-        r"LUOGO\s+DI\s+NASCITA[:\s]+([A-Z][A-Z\s\(\)]{2,40})(?:\n|DATA|$)",
-        r"COMUNE\s+DI\s+NASCITA[:\s]+([A-Z][A-Z\s]{2,30})(?:\n|PROV|$)",
-        r"PLACE\s+OF\s+BIRTH[:\s]+([A-Z][A-Z\s,]{2,40})(?:\n|DATE|$)",
+        # "LUOGO E DATA DI NASCITA\nCITTA 01/01/1980" — prende solo la città
+        r"LUOGO\s+E\s+DATA\s+DI\s+NASCITA\s*\n\s*([A-Z][A-Z\s\(\)]{2,30}?)\s+\d{2}[/.\-]",
+        r"LUOGO\s+DI\s+NASCITA\s*[:\n]\s*([A-Z][A-Z\s\(\)]{2,30}?)(?:\s*\n|\s*\d)",
+        r"COMUNE\s+DI\s+NASCITA\s*[:\n]\s*([A-Z][A-Z\s]{2,25}?)(?:\n|PROV)",
+        r"PLACE\s+OF\s+BIRTH\s*[:\n]\s*([A-Z][A-Z\s,]{2,30}?)(?:\n|DATE)",
     ], t)
 
+    # Codice fiscale: pattern univoco — 6 lettere, 2 cifre, lettera, 2 cifre, lettera, 3 cifre, lettera
     d["codice_fiscale"] = _first([
-        r"CODICE\s+FISCALE[:\s]+([A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])",
-        r"\bCF[:\s]+([A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])",
-        r"([A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])",
+        r"CODICE\s+FISCALE\s*[:\n]\s*([A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])",
+        r"\bCF\s*[:\n]\s*([A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])",
+        r"\b([A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])\b",
     ], t)
 
     d["indirizzo"] = _first([
-        r"(?:INDIRIZZO|RESIDENZA|DOMICILIO)[:\s]+(.+?)(?:\n|CAP|COMUNE|$)",
-        r"VIA\s+(.+?)(?:\n|CAP|$)",
-        r"PIAZZA\s+(.+?)(?:\n|CAP|$)",
+        r"INDIRIZZO\s+DI\s+RESIDENZA\s*[:\n]\s*(.+?)(?:\n|CAP|$)",
+        r"(?:INDIRIZZO|RESIDENZA|DOMICILIO)\s*[:\n]\s*(.+?)(?:\n|CAP|COMUNE|$)",
+        r"\b(VIA\s+.+?)(?:\n|CAP|$)",
+        r"\b(PIAZZA\s+.+?)(?:\n|CAP|$)",
+        r"\b(CORSO\s+.+?)(?:\n|CAP|$)",
     ], t)
 
     d["sesso"] = _first([
-        r"\bSESSO[:\s]+([MF])\b",
-        r"\bSEX[:\s]+([MF])\b",
+        r"\bSESSO\s*[:\n/]\s*([MF])\b",
+        r"\bSEX\s*[:\n/]\s*([MF])\b",
+        r"(?:SESSO|SEX)[^\n]{0,20}\n\s*([MF])\b",
     ], t)
 
     d["numero_documento"] = _first([
-        r"N[°\.]?\s*DOCUMENTO[:\s]+([A-Z0-9]{6,12})",
-        r"NUMERO\s+DOCUMENTO[:\s]+([A-Z0-9]{6,12})",
-        r"DOCUMENT\s+N[O°]?[:\s]+([A-Z0-9]{6,12})",
-        r"\bNR[.\s]+([A-Z]{2}\d{5,7})\b",
+        r"N[°\.]?\s*DOCUMENTO\s*[:\n]\s*([A-Z0-9]{6,12})",
+        r"NUMERO\s+DOCUMENTO\s*[:\n]\s*([A-Z0-9]{6,12})",
+        r"DOCUMENT\s+N[O°]?\s*[:\n]\s*([A-Z0-9]{6,12})",
         r"\b([A-Z]{2}\d{5}[A-Z0-9]{0,3})\b",
     ], t)
 
     d["data_rilascio"] = _first([
-        r"DATA\s+(?:DI\s+)?(?:RILASCIO|EMISSIONE)[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
-        r"RILASCIATA?\s+IL[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
-        r"DATE\s+OF\s+ISSUE[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
+        fr"DATA\s+(?:DI\s+)?(?:RILASCIO|EMISSIONE)\s*[:\n]\s*{_DATE}",
+        fr"RILASCIATA?\s+IL\s*[:\n]\s*{_DATE}",
+        fr"DATE\s+OF\s+ISSUE\s*[:\n]\s*{_DATE}",
     ], t)
 
     d["data_scadenza"] = _first([
-        r"(?:DATA\s+DI\s+)?SCADENZA[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
-        r"VALIDA?\s+FINO\s+AL[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
-        r"DATE\s+OF\s+EXPIRY[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
-        r"EXPIRY\s+DATE[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
+        fr"(?:DATA\s+DI\s+)?SCADENZA\s*[:\n]\s*{_DATE}",
+        fr"VALIDA?\s+FINO\s+AL\s*[:\n]?\s*{_DATE}",
+        fr"DATE\s+OF\s+EXPIRY\s*[:\n]\s*{_DATE}",
+        fr"EXPIRY\s+DATE\s*[:\n]\s*{_DATE}",
     ], t)
 
     d["ente_rilascio"] = _first([
-        r"RILASCIATA?\s+DA[:\s]+(.+?)(?:\n|IL\s+\d|$)",
-        r"ISSUED\s+BY[:\s]+(.+?)(?:\n|ON\s+\d|$)",
+        r"RILASCIATA?\s+DA\s*[:\n]\s*(.+?)(?:\n|IL\s+\d|$)",
+        r"ISSUED\s+BY\s*[:\n]\s*(.+?)(?:\n|ON\s+\d|$)",
     ], t)
 
-    return {k: v for k, v in d.items() if v}
+    return {k: v.strip() for k, v in d.items() if v and v.strip()}
 
 
 def parse_identity(b: bytes) -> dict:
@@ -473,11 +507,13 @@ with st.sidebar:
     st.divider()
 
     st.markdown("### 1️⃣ Documento d'Identità")
-    id_up = st.file_uploader(
+    st.caption("Puoi caricare fronte e retro insieme")
+    id_ups = st.file_uploader(
         "Carta d'identità / Passaporto / Patente",
         type=["pdf", "jpg", "jpeg", "png"],
         key="id_up",
-        help="PDF (o immagine) del documento d'identità del cliente",
+        help="Carica fronte e retro del documento (anche insieme)",
+        accept_multiple_files=True,
     )
 
     st.markdown("### 2️⃣ Posizione Azimut")
@@ -522,63 +558,46 @@ def _set_anagrafica(data: dict):
 # CACHE UPLOADED BYTES & AUTO-EXTRACT
 # ─────────────────────────────────────────────────────────────
 
-# Identity document
-if id_up:
-    if st.session_state.id_name != id_up.name:
-        st.session_state.id_bytes = id_up.read()
-        st.session_state.id_name  = id_up.name
-        if id_up.type == "application/pdf":
-            with st.spinner("Estrazione dati anagrafici…"):
-                raw_text = pdf_text(st.session_state.id_bytes)
+# Identity document — supporta più file (fronte + retro)
+if id_ups:
+    new_key = tuple(sorted(f.name for f in id_ups))
+    if st.session_state.id_files_key != new_key:
+        files_data = [(f.name, f.type, f.read()) for f in id_ups]
+        st.session_state.id_files_bytes = [d[2] for d in files_data]
+        st.session_state.id_files_key   = new_key
+        st.session_state.id_bytes       = st.session_state.id_files_bytes[0]
 
-                # Se il PDF non ha testo (scansione), prova OCR
-                if not raw_text.strip():
-                    if _OCR_AVAILABLE:
-                        with st.spinner("PDF scansionato — avvio OCR con Tesseract…"):
-                            raw_text = ocr_pdf(st.session_state.id_bytes)
-                        if raw_text.strip():
-                            st.session_state["_id_scanned"] = False
-                        else:
-                            st.session_state["_id_scanned"] = True
-                    else:
-                        st.session_state["_id_scanned"] = True
-
-                if not raw_text.strip():
-                    st.toast("⚠️ Impossibile estrarre testo — inserisci i dati manualmente", icon="⚠️")
+        combined_text = ""
+        with st.spinner(f"Lettura {len(files_data)} file documento…"):
+            for fname, ftype, fbytes in files_data:
+                if "pdf" in ftype:
+                    text = pdf_text(fbytes)
+                    if not text.strip() and _OCR_AVAILABLE:
+                        text = ocr_pdf(fbytes)
                 else:
-                    st.session_state["_id_scanned"] = False
-                    extracted = parse_identity(st.session_state.id_bytes)
-                    # parse_identity usa pdfplumber internamente; se era OCR, passa il testo diretto
-                    if not extracted and raw_text.strip():
-                        from io import StringIO
-                        extracted = _parse_identity_from_text(raw_text)
-                    if extracted:
-                        _set_anagrafica(extracted)
-                        st.toast(f"✅ Estratti {len(extracted)} campi anagrafici", icon="🪪")
+                    if _OCR_AVAILABLE:
+                        try:
+                            from PIL import Image as PILImage
+                            img = PILImage.open(io.BytesIO(fbytes))
+                            text = pytesseract.image_to_string(img, lang="ita+eng")
+                        except Exception:
+                            text = ""
                     else:
-                        st.toast("⚠️ Dati non riconosciuti — verifica e correggi manualmente", icon="⚠️")
-        else:
-            # Immagine JPG/PNG: OCR diretto
-            if _OCR_AVAILABLE:
-                with st.spinner("Lettura immagine con OCR…"):
-                    try:
-                        from PIL import Image
-                        img = Image.open(io.BytesIO(st.session_state.id_bytes))
-                        raw_text = pytesseract.image_to_string(img, lang="ita+eng")
-                        extracted = _parse_identity_from_text(raw_text)
-                        if extracted:
-                            _set_anagrafica(extracted)
-                            st.session_state["_id_scanned"] = False
-                            st.toast(f"✅ Estratti {len(extracted)} campi dall'immagine", icon="🪪")
-                        else:
-                            st.session_state["_id_scanned"] = True
-                            st.toast("⚠️ OCR completato ma dati non riconosciuti — inserisci manualmente", icon="⚠️")
-                    except Exception:
-                        st.session_state["_id_scanned"] = True
-                        st.toast("⚠️ Errore OCR — inserisci i dati manualmente", icon="⚠️")
+                        text = ""
+                if text.strip():
+                    combined_text += "\n" + text
+
+        if combined_text.strip():
+            st.session_state["_id_scanned"] = False
+            extracted = _parse_identity_from_text(combined_text)
+            if extracted:
+                _set_anagrafica(extracted)
+                st.toast(f"✅ Estratti {len(extracted)} campi da {len(files_data)} file", icon="🪪")
             else:
-                st.session_state["_id_scanned"] = True
-                st.toast("Immagine caricata — inserisci i dati anagrafici manualmente", icon="ℹ️")
+                st.toast("⚠️ Testo letto ma dati non riconosciuti — verifica manualmente", icon="⚠️")
+        else:
+            st.session_state["_id_scanned"] = True
+            st.toast("⚠️ Impossibile estrarre testo — inserisci i dati manualmente", icon="⚠️")
 
 # Azimut position
 if az_up:
@@ -610,7 +629,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-loaded_id  = st.session_state.id_bytes is not None
+loaded_id  = bool(st.session_state.id_files_bytes)
 loaded_az  = st.session_state.az_bytes is not None
 n_forms    = sum(1 for i in range(5) if st.session_state[f"fb_{i}"] is not None)
 
