@@ -624,13 +624,13 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                                         float(_m.group(1).replace(',', '.')), 2)
                                 except Exception:
                                     pass
-                            # Duration – scan up to 6 lines after the label
+                            # Duration – scan up to 10 lines after the label
                             _dn = next(
                                 (i for i, l in enumerate(_lines)
                                  if re.search(r'portfolio\s+duration', l,
                                               re.IGNORECASE)), None)
                             if _dn is not None:
-                                for _dl in _lines[_dn:_dn + 6]:
+                                for _dl in _lines[_dn:_dn + 10]:
                                     if re.search(r'portfolio\s+duration',
                                                  _dl, re.IGNORECASE):
                                         _dm = re.search(
@@ -654,6 +654,25 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                                                 break
                                         except Exception:
                                             pass
+                            # Fallback: search the whole text for
+                            # "Portfolio Duration" followed (within 200 chars)
+                            # by a bare decimal that isn't a percentage
+                            if _d is None:
+                                _mfb = re.search(
+                                    r'Portfolio\s+Duration'
+                                    r'[\s\S]{0,200}?'
+                                    r'(?<![%\d,\.])'
+                                    r'([\d]{1,2}[,\.][\d]{1,3})'
+                                    r'(?!\s*%)',
+                                    _txt, re.IGNORECASE)
+                                if _mfb:
+                                    try:
+                                        _v = float(
+                                            _mfb.group(1).replace(',', '.'))
+                                        if 0 < _v < 40:
+                                            _d = round(_v, 2)
+                                    except Exception:
+                                        pass
                             return _r, _y, _d
 
                         # Try layout text first (richer for two-column pages),
@@ -2053,6 +2072,8 @@ def free_portfolio_ui(data):
 def main():
     with st.sidebar:
         st.markdown("""<div style='padding:1.4rem 0 .8rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Strumento di Analisi</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.6rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.2;'>Portfolio<br>Analyzer</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:10px;'></div></div>""", unsafe_allow_html=True)
+        st.markdown("---")
+        st.caption("v2.1 — fix Duration extraction")
         st.markdown("---")
         uploaded   = st.file_uploader("FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
         uploaded_fb = st.file_uploader(
