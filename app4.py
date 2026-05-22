@@ -963,6 +963,80 @@ def factbook_from_excel(excel_bytes: bytes) -> dict:
     return result
 
 
+# ── Factbook JSON persistence (auto-load / GitHub API save) ─────────────────
+
+_FB_JSON_PATH = Path(__file__).parent / "data" / "factbook_dati.json"
+_FB_REPO      = "albertobeneventi/azimut_portfolio_analyzer"
+_FB_REPO_PATH = "data/factbook_dati.json"
+_FB_BRANCH    = "master"
+
+
+@st.cache_data(show_spinner=False)
+def load_factbook_auto() -> dict:
+    """Load factbook data from data/factbook_dati.json (committed in the repo).
+    Returns {} when the file is absent or empty.
+    Cached so the file is read only once per app session.
+    """
+    import json
+    try:
+        if _FB_JSON_PATH.exists() and _FB_JSON_PATH.stat().st_size > 5:
+            with open(_FB_JSON_PATH, encoding="utf-8") as fh:
+                data = json.load(fh)
+                if isinstance(data, dict) and data:
+                    return data
+    except Exception:
+        pass
+    return {}
+
+
+def save_factbook_to_repo(fb_data: dict) -> bool:
+    """Commit data/factbook_dati.json to GitHub via the Contents API.
+
+    Requires a Streamlit secret  GITHUB_TOKEN  with 'contents: write'
+    permission (fine-grained PAT) or  repo  scope (classic PAT).
+
+    Returns True on success, False on any error.
+    """
+    import json, base64
+    try:
+        token = st.secrets.get("GITHUB_TOKEN", "")
+        if not token:
+            return False
+
+        content_str = json.dumps(fb_data, ensure_ascii=False, indent=2,
+                                 default=str)
+        content_b64 = base64.b64encode(
+            content_str.encode("utf-8")).decode()
+
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        url = (f"https://api.github.com/repos/{_FB_REPO}"
+               f"/contents/{_FB_REPO_PATH}")
+
+        # Need existing SHA to update (not create) the file
+        r_get = requests.get(url, headers=headers,
+                             params={"ref": _FB_BRANCH}, timeout=10)
+        sha = (r_get.json().get("sha")
+               if r_get.status_code == 200 else None)
+
+        payload: dict = {
+            "message": (f"auto: aggiorna dati factbook "
+                        f"{datetime.date.today().isoformat()}"),
+            "content": content_b64,
+            "branch": _FB_BRANCH,
+        }
+        if sha:
+            payload["sha"] = sha
+
+        r_put = requests.put(url, json=payload, headers=headers, timeout=15)
+        return r_put.status_code in (200, 201)
+    except Exception:
+        return False
+
+
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
     ws = wb[sheet_name]
     rows = list(ws.iter_rows(values_only=True))
@@ -2176,39 +2250,57 @@ def main():
         file_bytes = uploaded.read()
         raw = parse_excel(file_bytes)
 
-    # ── Factbook data: Excel cache (fast) > PDF (first-time extraction) ──────
-    factbook_data: dict = {}
+    # ── Factbook data ──────────────────────────────────────────────────────────
+    # Priority:
+    #   1. Excel uploaded manually (override / fix)
+    #   2. PDF uploaded (first-time extraction → auto-save to repo)
+    #   3. Auto-load from data/factbook_dati.json committed in the repo
+    factbook_data: dict = load_factbook_auto()
+    _fb_source = f"repository ({len(factbook_data)} fondi)" if factbook_data else ""
 
-    if uploaded_fb_xl is not None:
-        # Fast path: load previously exported Excel cache
-        factbook_data = factbook_from_excel(uploaded_fb_xl.read())
-        n_fb = len(factbook_data)
-        if n_fb:
-            st.success(f"✅ Dati Factbook caricati da Excel — {n_fb} fondi")
-        else:
-            st.warning("⚠️ Excel Factbook caricato ma vuoto — "
-                       "ricarica il PDF per una nuova estrazione")
-
-    elif uploaded_fb is not None:
-        # First-time path: parse the PDF, then offer Excel download
+    if uploaded_fb is not None:
+        # First-time (or refresh): parse PDF, auto-save, offer Excel
         with st.spinner("📖 Estraggo dati dal Factbook PDF…"):
-            factbook_data = parse_factbook(uploaded_fb.read())
-        n_fb = len(factbook_data)
-        if n_fb:
-            st.success(f"✅ Factbook PDF estratto — {n_fb} fondi trovati")
-            xl_bytes = factbook_to_excel_bytes(factbook_data)
-            st.download_button(
-                label="💾  Scarica dati Factbook (Excel)",
-                data=xl_bytes,
-                file_name="factbook_dati.xlsx",
-                mime="application/vnd.openxmlformats-officedocument"
-                     ".spreadsheetml.sheet",
-                help="Salva questo file ed usalo come 'DATI FACTBOOK (Excel)' "
-                     "nelle prossime sessioni: evita di ricaricare il PDF.",
-            )
+            _new = parse_factbook(uploaded_fb.read())
+        if _new:
+            factbook_data = _new
+            _fb_source = f"PDF ({len(_new)} fondi)"
+            st.success(f"✅ Factbook estratto — {len(_new)} fondi trovati")
+            # Auto-save to GitHub repo (needs GITHUB_TOKEN secret)
+            with st.spinner("💾 Salvo dati nel repository…"):
+                _saved = save_factbook_to_repo(_new)
+            if _saved:
+                st.info(
+                    "🔄 Dati salvati nel repository. "
+                    "Al prossimo accesso non servirà ricaricare il PDF "
+                    "(l'app si riavvierà automaticamente entro ~1 min).")
+            else:
+                # Fallback: offer Excel download so user can re-use data
+                xl_bytes = factbook_to_excel_bytes(_new)
+                st.download_button(
+                    label="💾  Scarica dati Factbook (Excel)",
+                    data=xl_bytes,
+                    file_name="factbook_dati.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument"
+                         ".spreadsheetml.sheet",
+                    help="Il salvataggio automatico non è riuscito (token "
+                         "mancante?). Scarica questo Excel e caricalo "
+                         "nella casella 'DATI FACTBOOK (Excel)' oppure "
+                         "aggiorna il secret GITHUB_TOKEN.",
+                )
         else:
             st.warning("⚠️ Factbook PDF caricato ma nessun dato estratto — "
                        "verrà usato FondiDoc")
+
+    if uploaded_fb_xl is not None:
+        # Manual override: user uploaded a corrected Excel
+        _xl = factbook_from_excel(uploaded_fb_xl.read())
+        if _xl:
+            factbook_data = _xl
+            _fb_source = f"Excel ({len(_xl)} fondi)"
+            st.success(f"✅ Dati Factbook caricati da Excel — {len(_xl)} fondi")
+        else:
+            st.warning("⚠️ Excel Factbook vuoto — uso dati precedenti")
 
     if "LIBERO" in ptf_choice:
         df = free_portfolio_ui(raw)
