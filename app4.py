@@ -965,22 +965,20 @@ def factbook_from_excel(excel_bytes: bytes) -> dict:
 
 # ── Factbook JSON persistence (auto-load / GitHub API save) ─────────────────
 
-_FB_JSON_PATH = Path(__file__).parent / "data" / "factbook_dati.json"
 _FB_REPO      = "albertobeneventi/azimut_portfolio_analyzer"
 _FB_REPO_PATH = "data/factbook_dati.json"
 _FB_BRANCH    = "master"
 
 
-@st.cache_data(show_spinner=False)
 def load_factbook_auto() -> dict:
     """Load factbook data from data/factbook_dati.json (committed in the repo).
     Returns {} when the file is absent or empty.
-    Cached so the file is read only once per app session.
     """
     import json
     try:
-        if _FB_JSON_PATH.exists() and _FB_JSON_PATH.stat().st_size > 5:
-            with open(_FB_JSON_PATH, encoding="utf-8") as fh:
+        fp = Path(__file__).parent / "data" / "factbook_dati.json"
+        if fp.exists() and fp.stat().st_size > 5:
+            with open(fp, encoding="utf-8") as fh:
                 data = json.load(fh)
                 if isinstance(data, dict) and data:
                     return data
@@ -2406,4 +2404,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import traceback as _tb
+    try:
+        main()
+    except Exception as _e:
+        st.error(f"**Errore imprevisto:** {_e}")
+        with st.expander("🔍 Dettaglio tecnico (per il debug)"):
+            st.code(_tb.format_exc())
