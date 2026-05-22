@@ -19,7 +19,10 @@ import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import matplotlib
-matplotlib.use('Agg')
+try:
+    matplotlib.use('Agg')
+except Exception:
+    pass
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.ticker as mticker
@@ -329,8 +332,7 @@ def lookup_unp(fund_name: str):
 # DATA PARSING
 # ════════════════════════════════════════════════════════════
 
-@st.cache_data(show_spinner=False)
-def parse_excel(file_bytes: bytes) -> dict:
+def _parse_excel_impl(file_bytes: bytes) -> dict:
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=False)
     out = {}
     for sname in ["PTF FULL", "PTF SHORT"]:
@@ -342,8 +344,14 @@ def parse_excel(file_bytes: bytes) -> dict:
     out["fida_urls"] = extract_fida_urls(file_bytes)
     return out
 
+# Apply cache decorator safely at module load time — if it fails (Streamlit
+# version mismatch or hasher bug), fall back to uncached version.
+try:
+    parse_excel = st.cache_data(show_spinner=False)(_parse_excel_impl)
+except Exception:
+    parse_excel = _parse_excel_impl
 
-@st.cache_data(show_spinner=False)
+
 def parse_factbook(pdf_bytes: bytes) -> dict:
     """Parse the AZ Investments factbook PDF performance summary tables.
 
@@ -828,6 +836,11 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
 
     return result
 
+try:
+    parse_factbook = st.cache_data(show_spinner=False)(parse_factbook)
+except Exception:
+    pass  # run uncached if decorator fails
+
 
 # ── Factbook Excel export / import ──────────────────────────────────────────
 
@@ -1204,7 +1217,6 @@ def _extract_isin(url: str) -> str:
     return m.group(1) if m else ""
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_fund_data(index_url: str) -> dict:
     """Fetch overview + analysis for one fund. Cached 1h."""
     result = {"url": index_url}
@@ -1216,6 +1228,11 @@ def fetch_fund_data(index_url: str) -> dict:
     html_ana = _fetch_html(_to_ana_url(index_url))
     if html_ana: result["analysis"] = _parse_analysis(html_ana)
     return result
+
+try:
+    fetch_fund_data = st.cache_data(ttl=3600, show_spinner=False)(fetch_fund_data)
+except Exception:
+    pass  # run uncached if decorator fails
 
 
 def fetch_all_fund_data(df: pd.DataFrame, fida_urls: dict,
