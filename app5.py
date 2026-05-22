@@ -3,7 +3,10 @@
 # app5.py
 # ============================================================
 
+import base64
 import io
+import json
+import os
 import re
 import zipfile
 
@@ -14,7 +17,20 @@ from pypdf import PdfReader, PdfWriter
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas as rl_canvas
 
-# OCR — importazione opzionale (disponibile solo se pytesseract e pdf2image installati)
+# Claude Vision — usa l'API key da secrets o variabile d'ambiente
+try:
+    import anthropic as _anthropic_lib
+    _CLAUDE_AVAILABLE = True
+except ImportError:
+    _CLAUDE_AVAILABLE = False
+
+def _get_api_key() -> str:
+    try:
+        return st.secrets.get("ANTHROPIC_API_KEY", "")
+    except Exception:
+        return os.environ.get("ANTHROPIC_API_KEY", "")
+
+# OCR Tesseract — fallback per quando non c'è l'API key
 try:
     import pytesseract
     from pdf2image import convert_from_bytes
@@ -131,6 +147,87 @@ def ocr_pdf(b: bytes) -> str:
         return "\n".join(pages_text)
     except Exception:
         return ""
+
+
+_CLAUDE_PROMPT = """Sei un esperto di documenti d'identità italiani.
+Estrai i dati da questa immagine (carta d'identità, passaporto o patente).
+Rispondi SOLO con un oggetto JSON valido, nessun testo aggiuntivo:
+{
+  "cognome": "",
+  "nome": "",
+  "data_nascita": "",
+  "luogo_nascita": "",
+  "codice_fiscale": "",
+  "indirizzo": "",
+  "comune": "",
+  "cap": "",
+  "sesso": "",
+  "numero_documento": "",
+  "data_rilascio": "",
+  "data_scadenza": "",
+  "ente_rilascio": ""
+}
+Regole: date in formato GG/MM/AAAA, sesso M o F, lascia "" se il campo non è visibile."""
+
+
+def extract_with_claude_vision(image_bytes: bytes, mime_type: str) -> dict:
+    """Estrae dati da un'immagine di documento usando Claude Vision."""
+    if not _CLAUDE_AVAILABLE:
+        return {}
+    api_key = _get_api_key()
+    if not api_key:
+        return {}
+    try:
+        # Normalizza il mime type
+        if "png" in mime_type:
+            img_type = "image/png"
+        elif "gif" in mime_type:
+            img_type = "image/gif"
+        elif "webp" in mime_type:
+            img_type = "image/webp"
+        else:
+            img_type = "image/jpeg"
+
+        client = _anthropic_lib.Anthropic(api_key=api_key)
+        b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image",
+                     "source": {"type": "base64", "media_type": img_type, "data": b64}},
+                    {"type": "text", "text": _CLAUDE_PROMPT},
+                ],
+            }],
+        )
+        raw = response.content[0].text.strip()
+        # Rimuove eventuali blocchi markdown ```json ... ```
+        raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
+        raw = re.sub(r"\s*```\s*$", "", raw, flags=re.MULTILINE)
+        data = json.loads(raw)
+        return {k: str(v).strip() for k, v in data.items() if v and str(v).strip()}
+    except Exception:
+        return {}
+
+
+def extract_with_claude_vision_pdf(pdf_bytes: bytes) -> dict:
+    """Converte la prima pagina del PDF in immagine e usa Claude Vision."""
+    if not (_CLAUDE_AVAILABLE and _OCR_AVAILABLE):
+        return {}
+    api_key = _get_api_key()
+    if not api_key:
+        return {}
+    try:
+        images = convert_from_bytes(pdf_bytes, dpi=200, first_page=1, last_page=1)
+        if not images:
+            return {}
+        buf = io.BytesIO()
+        images[0].save(buf, format="JPEG", quality=90)
+        return extract_with_claude_vision(buf.getvalue(), "image/jpeg")
+    except Exception:
+        return {}
 
 
 def pdf_fields(b: bytes) -> dict:
@@ -543,6 +640,13 @@ with st.sidebar:
         form_ups.append(fu)
 
     st.divider()
+    if _CLAUDE_AVAILABLE and _get_api_key():
+        st.success("🤖 Claude Vision attivo", icon="✅")
+    elif _OCR_AVAILABLE:
+        st.warning("⚠️ Claude Vision non configurato — uso OCR Tesseract.\nPer risultati migliori aggiungi ANTHROPIC_API_KEY nei secrets di Streamlit.")
+    else:
+        st.error("Nessun metodo OCR disponibile — inserisci i dati manualmente.")
+    st.divider()
     if st.button("🔄 Azzera sessione", use_container_width=True):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
@@ -574,37 +678,54 @@ if id_ups:
         st.session_state.id_files_key   = new_key
         st.session_state.id_bytes       = st.session_state.id_files_bytes[0]
 
-        combined_text = ""
+        api_key_present = bool(_get_api_key())
+        combined_extracted: dict = {}
+
         with st.spinner(f"Lettura {len(files_data)} file documento…"):
             for fname, ftype, fbytes in files_data:
+                page_extracted: dict = {}
+
                 if "pdf" in ftype:
+                    # 1. pdfplumber (PDF testuale)
                     text = pdf_text(fbytes)
-                    if not text.strip() and _OCR_AVAILABLE:
-                        text = ocr_pdf(fbytes)
+                    if text.strip():
+                        page_extracted = _parse_identity_from_text(text)
+                    # 2. Claude Vision sul PDF (converte prima pagina)
+                    if not page_extracted and api_key_present:
+                        page_extracted = extract_with_claude_vision_pdf(fbytes)
+                    # 3. Tesseract OCR come ultimo fallback
+                    if not page_extracted and _OCR_AVAILABLE:
+                        ocr_text = ocr_pdf(fbytes)
+                        if ocr_text.strip():
+                            page_extracted = _parse_identity_from_text(ocr_text)
                 else:
-                    if _OCR_AVAILABLE:
+                    # Immagine JPG/PNG
+                    # 1. Claude Vision (preferito — capisce il layout visivamente)
+                    if api_key_present:
+                        page_extracted = extract_with_claude_vision(fbytes, ftype)
+                    # 2. Tesseract OCR come fallback
+                    if not page_extracted and _OCR_AVAILABLE:
                         try:
                             from PIL import Image as PILImage
                             img = PILImage.open(io.BytesIO(fbytes))
-                            text = pytesseract.image_to_string(img, lang="ita+eng")
+                            ocr_text = pytesseract.image_to_string(img, lang="ita+eng")
+                            page_extracted = _parse_identity_from_text(ocr_text)
                         except Exception:
-                            text = ""
-                    else:
-                        text = ""
-                if text.strip():
-                    combined_text += "\n" + text
+                            pass
 
-        if combined_text.strip():
+                # Merge: i campi non ancora trovati vengono aggiunti
+                for k, v in page_extracted.items():
+                    if v and not combined_extracted.get(k):
+                        combined_extracted[k] = v
+
+        if combined_extracted:
             st.session_state["_id_scanned"] = False
-            extracted = _parse_identity_from_text(combined_text)
-            if extracted:
-                _set_anagrafica(extracted)
-                st.toast(f"✅ Estratti {len(extracted)} campi da {len(files_data)} file", icon="🪪")
-            else:
-                st.toast("⚠️ Testo letto ma dati non riconosciuti — verifica manualmente", icon="⚠️")
+            _set_anagrafica(combined_extracted)
+            method = "Claude Vision" if api_key_present else "OCR Tesseract"
+            st.toast(f"✅ Estratti {len(combined_extracted)} campi ({method})", icon="🪪")
         else:
             st.session_state["_id_scanned"] = True
-            st.toast("⚠️ Impossibile estrarre testo — inserisci i dati manualmente", icon="⚠️")
+            st.toast("⚠️ Nessun dato estratto — inserisci manualmente", icon="⚠️")
 
 # Azimut position
 if az_up:
