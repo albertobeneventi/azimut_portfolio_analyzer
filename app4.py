@@ -695,7 +695,7 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                         if _sec_start is not None:
                             # Bond-component keywords (English, as used in factbook)
                             _BD_KW = re.compile(
-                                r'\b(sovereign|government|corporate|'
+                                r'\b(sovereign|government|corporate|aggregate|'
                                 r'dm\s+corporate|em\s+sovereign|'
                                 r'eu\s+sovereign|us\s+sovereign|'
                                 r'high\s+yield|convertible|'
@@ -711,7 +711,7 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                             # Inline: label + % on same line (handles merged cols)
                             # Decimal separator is optional (e.g. "28%" and "28,5%")
                             _INLINE = re.compile(
-                                r'\b(equity|sovereign|government|corporate|'
+                                r'\b(equity|sovereign|government|corporate|aggregate|'
                                 r'dm\s+corporate|em\s+sovereign|'
                                 r'eu\s+sovereign|us\s+sovereign|'
                                 r'high\s+yield|convertible|fixed\s+income)\b'
