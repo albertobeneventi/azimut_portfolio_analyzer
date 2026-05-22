@@ -332,6 +332,18 @@ _FUND_ALIASES: dict = {
     "az allocation italian long-term opportunities": "az allocation italian long term opp",
 }
 
+# ── Credit rating numeric scale (AAA=1 … D=22) for weighted averages ─────────
+RATING_SCALE: dict = {
+    'AAA': 1,  'AA+': 2,  'AA': 3,  'AA-': 4,
+    'A+':  5,  'A':   6,  'A-': 7,
+    'BBB+':8,  'BBB': 9,  'BBB-':10,
+    'BB+':11,  'BB': 12,  'BB-': 13,
+    'B+': 14,  'B':  15,  'B-':  16,
+    'CCC+':17, 'CCC':18,  'CCC-':19,
+    'CC': 20,  'C':  21,  'D':   22,
+}
+RATING_INVERSE: dict = {v: k for k, v in RATING_SCALE.items()}
+
 
 def lookup_unp(fund_name: str):
     """Return (unp_pct, iunp36_pct) for a fund, or (None, None) if not found."""
@@ -383,6 +395,7 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
         return {}
 
     result: dict = {}
+    _metrics: dict = {}   # {norm_fund: {credit_rating, duration, ytm}}
 
     def _to_pct(s):
         """Convert a factbook value string to a signed '%' string, or None."""
@@ -520,8 +533,90 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                     data_cols = tokens[num_idx + 1:]
                     _store(name_raw, data_cols)
 
+                # ── C: METRICHE FIXED INCOME ─────────────────────────────
+                if 'METRICHE FIXED INCOME' in text.upper():
+                    _lines_p = text.split('\n')
+                    _fn = None
+                    for _i, _ln in enumerate(_lines_p[:25]):
+                        _ls = _ln.strip()
+                        # Two-line: "AZ BOND" then "HIGH YIELD" on next line
+                        if re.match(
+                                r'^AZ\s+(BOND|ALLOCATION|EQUITY|ALTERNATIVE|ISLAMIC)\s*$',
+                                _ls, re.IGNORECASE):
+                            for _j in range(_i + 1, min(_i + 5, len(_lines_p))):
+                                _nl = _lines_p[_j].strip()
+                                if _nl and not re.match(
+                                        r'^([A-Z]{2}\d{10}|ISIN|\d+\s*$)',
+                                        _nl, re.IGNORECASE):
+                                    _nrm = _normalize_for_unp(_ls + ' ' + _nl)
+                                    _fn  = _FUND_ALIASES.get(_nrm, _nrm)
+                                    break
+                            if _fn:
+                                break
+                        # Single-line: "AZ BOND - ENHANCED YIELD"
+                        _m1 = re.match(
+                            r'^(AZ\s+(?:BOND|ALLOCATION|EQUITY|ALTERNATIVE|ISLAMIC))'
+                            r'\s*[-–]?\s+(.+)$', _ls, re.IGNORECASE)
+                        if _m1 and len(_m1.group(2).strip()) > 2:
+                            _sub = _m1.group(2).strip()
+                            if not re.match(r'^(\d+|[A-Z]{2}\d{10})', _sub):
+                                _nrm = _normalize_for_unp(
+                                    _m1.group(1).strip() + ' ' + _sub)
+                                _fn  = _FUND_ALIASES.get(_nrm, _nrm)
+                                break
+                    if _fn:
+                        _in_fi = False; _seen_hdr = False
+                        _cr = _yt = _dur = None
+                        for _lt in _lines_p:
+                            _ls2 = _lt.strip()
+                            if not _ls2:
+                                continue
+                            if 'METRICHE FIXED INCOME' in _ls2.upper():
+                                _in_fi = True; continue
+                            if not _in_fi:
+                                continue
+                            if re.search(
+                                    r'credit\s+rating|yield\s+to\s+maturity|'
+                                    r'portfolio\s+duration', _ls2, re.IGNORECASE):
+                                _seen_hdr = True; continue
+                            if not _seen_hdr:
+                                continue
+                            if _cr is None:
+                                _mc = re.match(
+                                    r'^([A-D][A-Za-z]*[+\-]?)\s+'
+                                    r'([\d]+[,\.]\d+)\s*%?', _ls2)
+                                if _mc and _mc.group(1).upper() in RATING_SCALE:
+                                    _cr = _mc.group(1).upper()
+                                    try:
+                                        _yt = round(
+                                            float(_mc.group(2).replace(',', '.')), 2)
+                                    except Exception:
+                                        pass
+                                continue
+                            if _dur is None:
+                                _md = re.match(r'^([\d]+[,\.]\d+)\s*$', _ls2)
+                                if _md:
+                                    try:
+                                        _dur = round(
+                                            float(_md.group(1).replace(',', '.')), 2)
+                                    except Exception:
+                                        pass
+                                break
+                        if _fn not in _metrics:
+                            _metrics[_fn] = {}
+                        if _cr:             _metrics[_fn]['credit_rating'] = _cr
+                        if _yt is not None: _metrics[_fn]['ytm']           = _yt
+                        if _dur is not None: _metrics[_fn]['duration']     = _dur
+
     except Exception:
         pass
+
+    # Unisci metriche fixed income nelle voci del result
+    for _fn, _md in _metrics.items():
+        if _fn in result:
+            result[_fn].update(_md)
+        else:
+            result[_fn] = dict(_md)
 
     # Aggiungi metadato data di riferimento (chiave speciale)
     if _ref_date:
@@ -1298,6 +1393,112 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             "◆ I valori del Portafoglio sono medie ponderate per peso dei singoli fondi. "
             "La volatilità di portafoglio effettiva dipende anche dalle correlazioni tra i fondi. "
             "Dati forniti a titolo indicativo.", NOTE),
+    ]))
+
+    story.append(Spacer(1, 14))
+
+    # ── ALLOCATION TABLE ─────────────────────────────────────
+    def get_fi_metric(nome: str, key: str):
+        """Return fixed-income metric (duration/credit_rating/ytm) from factbook or None."""
+        if not _fb:
+            return None
+        norm = _normalize_for_unp(nome)
+        norm = _FUND_ALIASES.get(norm, norm)
+        entry = _fb.get(norm)
+        if not entry or not isinstance(entry, dict):
+            best, best_len = None, 0
+            for fb_key, fb_val in _fb.items():
+                if (isinstance(fb_val, dict)
+                        and (fb_key in norm or norm in fb_key)
+                        and len(fb_key) > best_len):
+                    best, best_len = fb_val, len(fb_key)
+            entry = best
+        if not entry or not isinstance(entry, dict):
+            return None
+        return entry.get(key)
+
+    # Portfolio-level weighted averages (duration and rating weighted by obb_pct × w)
+    _ptf_dur_num = _ptf_dur_den = 0.0
+    _ptf_rat_num = _ptf_rat_den = 0.0
+    for _, _row in d_sorted.iterrows():
+        _w   = _row[wcol]
+        _obb = _row["obb_pct"]
+        _dur = get_fi_metric(_row["nome"], "duration")
+        _rat = get_fi_metric(_row["nome"], "credit_rating")
+        if isinstance(_dur, (int, float)) and _obb > 0:
+            _ptf_dur_num += _w * _obb * _dur
+            _ptf_dur_den += _w * _obb
+        if isinstance(_rat, str) and _rat in RATING_SCALE and _obb > 0:
+            _ptf_rat_num += _w * _obb * RATING_SCALE[_rat]
+            _ptf_rat_den += _w * _obb
+
+    _ptf_dur_str = (f"{_ptf_dur_num / _ptf_dur_den:.2f}"
+                    if _ptf_dur_den > 0.001 else "N/D")
+    if _ptf_rat_den > 0.001:
+        _ri = max(1, min(22, round(_ptf_rat_num / _ptf_rat_den)))
+        _ptf_rat_str = RATING_INVERSE.get(_ri, "N/D")
+    else:
+        _ptf_rat_str = "N/D"
+
+    alloc_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
+                 ["Fondo", "Peso", "% Azionario", "% Obbligazionario",
+                  "Duration", "Rating Medio"]]
+    alloc_ptf = [
+        Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
+        Paragraph("<b>100%</b>",              WH),
+        Paragraph(f"<b>{w_az:.1f}%</b>",     WH),
+        Paragraph(f"<b>{w_obb:.1f}%</b>",    WH),
+        Paragraph(f"<b>{_ptf_dur_str}</b>",   WH),
+        Paragraph(f"<b>{_ptf_rat_str}</b>",   WH),
+    ]
+    alloc_fund_rows = []
+    for _, _row in d_sorted.iterrows():
+        _dur2 = get_fi_metric(_row["nome"], "duration")
+        _rat2 = get_fi_metric(_row["nome"], "credit_rating")
+        alloc_fund_rows.append([
+            Paragraph(_row["nome"][:48], SM),
+            Paragraph(f"{_row[wcol]*100:.1f}%",      SM),
+            Paragraph(f"{_row['az_pct']*100:.0f}%",  SM),
+            Paragraph(f"{_row['obb_pct']*100:.0f}%", SM),
+            Paragraph(f"{_dur2:.2f}" if isinstance(_dur2, (int, float)) else "—", SM),
+            Paragraph(_rat2 if isinstance(_rat2, str) else "—", SM),
+        ])
+
+    alloc_tbl = Table(
+        [alloc_hdr, alloc_ptf] + alloc_fund_rows,
+        colWidths=[5.5*cm, 1.4*cm, 2.0*cm, 2.4*cm, 2.2*cm, 3.5*cm],
+        repeatRows=1,
+    )
+    alloc_tbl.setStyle(TableStyle([
+        ("BACKGROUND",     (0,0), (-1,0),  rl_colors.HexColor("#0D1B2A")),
+        ("TEXTCOLOR",      (0,0), (-1,0),  rl_colors.white),
+        ("FONTNAME",       (0,0), (-1,0),  "Helvetica-Bold"),
+        ("BACKGROUND",     (0,1), (-1,1),  rl_colors.HexColor("#1B4FBB")),
+        ("LINEBELOW",      (0,1), (-1,1),  2, rl_colors.HexColor("#C9A84C")),
+        ("FONTSIZE",       (0,0), (-1,-1), 8),
+        ("PADDING",        (0,0), (-1,-1), 5),
+        ("ROWBACKGROUNDS", (0,2), (-1,-1),
+         [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
+        ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+        ("ALIGN",          (1,0), (-1,-1), "CENTER"),
+        ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
+    ]))
+
+    NOTE_A = S("NTA", fontName="Helvetica-Oblique", fontSize=6.5,
+               textColor=rl_colors.HexColor("#94A3B8"), leading=9)
+    story.append(KeepTogether([
+        Paragraph("Scomposizione Azionario / Obbligazionario", SC),
+        alloc_tbl,
+        Spacer(1, 6),
+        Paragraph(
+            "◆ Le quote azionaria e obbligazionaria per fondo derivano dal foglio Excel "
+            "(colonna 'Az%'). Duration e Rating Medio si riferiscono alla sola componente "
+            "obbligazionaria e sono estratti dal Factbook AZ Investments"
+            + (f" al {_fb_ref}" if _fb_ref else "")
+            + ". Il Rating Medio di Portafoglio è la media ponderata degli score numerici "
+              "(AAA=1 … D=22) ponderata per peso × quota obbligazionaria. "
+              "Il simbolo — indica dato non disponibile.",
+            NOTE_A),
     ]))
 
     story.append(Spacer(1, 14))
