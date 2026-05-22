@@ -453,9 +453,11 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                 "perf_3y": p3y, "perf_5y": p5y,
             }
 
+    _ref_date: str = ""   # data di riferimento estratta dal frontespizio
+
     try:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            for page in pdf.pages:
+            for page_idx, page in enumerate(pdf.pages):
 
                 # ── A: structured table extraction (best-case) ────────────
                 for tbl in (page.extract_tables() or []):
@@ -471,6 +473,29 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
 
                 # ── B: text-line fallback ──────────────────────────────────
                 text = page.extract_text() or ""
+
+                # Estrai data di riferimento dal frontespizio (prime 5 pagine)
+                if page_idx < 5 and not _ref_date:
+                    # Cerca GG/MM/AAAA oppure GG.MM.AAAA
+                    _dm = re.search(r'\b(\d{1,2})[/.](\d{2})[/.](\d{4})\b', text)
+                    if _dm:
+                        _ref_date = f"{_dm.group(1).zfill(2)}/{_dm.group(2)}/{_dm.group(3)}"
+                    else:
+                        # Cerca "31 marzo 2026" / "31 March 2026"
+                        _months = {
+                            "gennaio":"01","february":"02","febbraio":"02","march":"03",
+                            "marzo":"03","april":"04","aprile":"04","may":"05","maggio":"05",
+                            "june":"06","giugno":"06","july":"07","luglio":"07",
+                            "august":"08","agosto":"08","september":"09","settembre":"09",
+                            "october":"10","ottobre":"10","november":"11","novembre":"11",
+                            "december":"12","dicembre":"12","january":"01","gennaio":"01",
+                        }
+                        _mp = r'\b(\d{1,2})\s+(' + '|'.join(_months) + r')\s+(20\d{2})\b'
+                        _dm2 = re.search(_mp, text, re.IGNORECASE)
+                        if _dm2:
+                            _mn = _months.get(_dm2.group(2).lower(), "??")
+                            _ref_date = f"{_dm2.group(1).zfill(2)}/{_mn}/{_dm2.group(3)}"
+
                 for line in text.split('\n'):
                     line = line.strip()
                     if not re.match(r'^(AZ\b|AZIMUT\b)', line, re.IGNORECASE):
@@ -497,6 +522,10 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
 
     except Exception:
         pass
+
+    # Aggiungi metadato data di riferimento (chiave speciale)
+    if _ref_date:
+        result["_ref_date"] = _ref_date
 
     return result
 
@@ -880,7 +909,8 @@ def _mpl_annual_bar(annual_perf: dict, fund_name: str) -> io.BytesIO | None:
 def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                  ptf_name: str, fund_data: dict = None,
                  fida_df: pd.DataFrame = None,
-                 factbook_data: dict = None) -> bytes:
+                 factbook_data: dict = None,
+                 cache_date: str = "") -> bytes:
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -1057,11 +1087,16 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Spacer(1,4))
     story.append(Paragraph("Tavola dei Rendimenti", T))
     _fb_loaded = bool(factbook_data)
-    _perf_source = ("Factbook AZ Investments" if _fb_loaded else "FIDA FondiDoc") + \
-                   ("  ·  Metriche di rischio da FondiDoc" if _fb_loaded else "")
+    _fb_ref    = (factbook_data or {}).get("_ref_date", "")      # data dal frontespizio
+    _fd_ref    = cache_date or datetime.date.today().strftime("%d/%m/%Y")  # data FondiDoc
+    if _fb_loaded:
+        _rend_src = (f"Rendimenti: Factbook AZ Investments"
+                     + (f" al {_fb_ref}" if _fb_ref else "")
+                     + f"  ·  Rischio: FondiDoc aggiornata al {_fd_ref}")
+    else:
+        _rend_src = f"Fonte: FIDA FondiDoc aggiornata al {_fd_ref}"
     story.append(Paragraph(
-        f"Performance per fondo  ·  Profilo {profile.title()}  ·  "
-        f"Fonte: {_perf_source}  ·  Dati al {datetime.date.today().strftime('%d %B %Y')}", SU))
+        f"Performance per fondo  ·  Profilo {profile.title()}  ·  {_rend_src}", SU))
     story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=12))
 
     # ── Helper: look up a performance metric from the factbook ────────────────
@@ -1668,7 +1703,8 @@ def main():
     def _gen_pdf(fund_data_used: dict, label: str):
         try:
             pdf_bytes = generate_pdf(df_act, wcol, profile, ptf_label, fund_data_used,
-                                     fida_df=fida_df, factbook_data=factbook_data)
+                                     fida_df=fida_df, factbook_data=factbook_data,
+                                     cache_date=cache_date)
             fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
                      f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
             st.download_button("📥   Scarica Report PDF", data=pdf_bytes,
