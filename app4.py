@@ -2191,49 +2191,36 @@ def main():
             st.error(f"Errore PDF: {e}")
 
     with col_btn:
-        if cached_fd or factbook_data:
-            if st.button("⚡  Genera PDF (cache/factbook)",
-                         use_container_width=True, type="primary"):
-                _gen_pdf(cached_fd, f"dati del {cache_date or 'factbook'}")
-        else:
-            if st.button("🔄  Carica Dati da FondiDoc + Genera PDF",
-                         use_container_width=True, type="primary"):
-                pb = st.progress(0, text="Scarico dati FondiDoc…")
-                def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
-                fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
-                pb.progress(1.0, text="✅ Salvo cache e genero PDF…")
-                save_fund_cache(fund_data)
-                _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
-                cache_json = json.dumps(
-                    {"last_updated": datetime.date.today().isoformat(),
-                     "fund_data": fund_data},
-                    ensure_ascii=False, indent=2)
-                st.download_button(
-                    "💾  Scarica cache aggiornata (da committare su git)",
-                    data=cache_json, file_name="fund_cache.json",
-                    mime="application/json", use_container_width=True)
-                pb.empty()
+        # Il pulsante primario genera sempre il PDF con i dati disponibili
+        # (cache + factbook se caricato).  Non scarica mai FondiDoc in auto.
+        _btn_label = (
+            "⚡  Genera PDF (cache/factbook)" if (cached_fd or factbook_data)
+            else "⚡  Genera PDF"
+        )
+        if st.button(_btn_label, use_container_width=True, type="primary"):
+            _gen_pdf(cached_fd, f"dati del {cache_date}" if cache_date else "")
 
-    # ── Aggiornamento FondiDoc (fuori dalle colonne per evitare problemi di nesting) ──
-    if cached_fd or factbook_data:
-        with st.expander("🔄  Aggiorna dati da FondiDoc"):
-            if st.button("Scarica dati FondiDoc freschi + Rigenera PDF",
-                         use_container_width=True):
-                pb = st.progress(0, text="Scarico dati FondiDoc…")
-                def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
-                fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
-                pb.progress(1.0, text="✅ Salvo cache e genero PDF…")
-                save_fund_cache(fund_data)
-                _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
-                cache_json = json.dumps(
-                    {"last_updated": datetime.date.today().isoformat(),
-                     "fund_data": fund_data},
-                    ensure_ascii=False, indent=2)
-                st.download_button(
-                    "💾  Scarica cache aggiornata (da committare su git)",
-                    data=cache_json, file_name="fund_cache.json",
-                    mime="application/json", use_container_width=True)
-                pb.empty()
+    # ── Aggiornamento FondiDoc (opzionale, solo su richiesta esplicita) ─────
+    with st.expander("🔄  Aggiorna dati da FondiDoc (opzionale)"):
+        st.caption("Scarica metriche di rischio aggiornate (volatilità, Sharpe, Sortino) "
+                   "da FondiDoc e rigenera il PDF.")
+        if st.button("Scarica dati FondiDoc freschi + Rigenera PDF",
+                     use_container_width=True):
+            pb = st.progress(0, text="Scarico dati FondiDoc…")
+            def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+            fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
+            pb.progress(1.0, text="✅ Salvo cache e genero PDF…")
+            save_fund_cache(fund_data)
+            _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
+            cache_json = json.dumps(
+                {"last_updated": datetime.date.today().isoformat(),
+                 "fund_data": fund_data},
+                ensure_ascii=False, indent=2)
+            st.download_button(
+                "💾  Scarica cache aggiornata (da committare su git)",
+                data=cache_json, file_name="fund_cache.json",
+                mime="application/json", use_container_width=True)
+            pb.empty()
 
     st.markdown("<br><br>",unsafe_allow_html=True)
 
