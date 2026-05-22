@@ -573,62 +573,110 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                                 _fn  = _FUND_ALIASES.get(_nrm, _nrm)
                                 break
                     if _fn:
-                        _in_fi      = False
-                        _after_dur  = False   # True once "Portfolio Duration" seen
+                        # ── Robust two-pass extraction ──────────────────────
+                        # Handles BOTH formats:
+                        #  A) Merged columns (pdfplumber groups same-Y chars):
+                        #     "... Credit Rating medio    BB+"  (value on same line)
+                        #     "Portfolio Yield To Maturity (EUR)  4,40%"
+                        #     "1M 3M ... Portfolio Duration"
+                        #     "2,18"                            (value on next line)
+                        #
+                        #  B) Sequential (pdfplumber reads in document order):
+                        #     "Credit Rating medio"
+                        #     "BB+"
+                        #     "Portfolio Yield To Maturity (EUR)"
+                        #     "4,40%"
+                        #     "Portfolio Duration"
+                        #     "2,18"
+                        #
+                        # Strategy: locate section header, collect the ~20 non-
+                        # empty lines that follow, then use regex on the joined
+                        # section text (span newlines via \s+).
+                        _fi_idx = next(
+                            (i for i, l in enumerate(_lines_p)
+                             if 'METRICHE FIXED INCOME' in l.upper()), None)
                         _cr = _yt = _dur = None
-                        for _lt in _lines_p:
-                            _ls2 = _lt.strip()
-                            if not _ls2:
-                                continue
-                            if 'METRICHE FIXED INCOME' in _ls2.upper():
-                                _in_fi = True
-                                continue
-                            if not _in_fi:
-                                continue
-
-                            # "Portfolio Duration" line: value is on the NEXT
-                            # non-empty line (still in right column whitespace)
-                            if _after_dur and _dur is None:
-                                _md = re.match(
-                                    r'^([\d]+[,\.]\d+)\s*$', _ls2)
-                                if _md:
-                                    try:
-                                        _dur = round(
-                                            float(_md.group(1).replace(',', '.')), 2)
-                                    except Exception:
-                                        pass
-                                _after_dur = False
-                                if _cr is not None and _yt is not None:
+                        if _fi_idx is not None:
+                            # Collect non-empty lines in the section
+                            _fi_lines = []
+                            for _flt in _lines_p[_fi_idx + 1:]:
+                                _fls = _flt.strip()
+                                if not _fls:
+                                    continue
+                                if re.search(
+                                        r'SYNTHETIC\s+RISK|SHARE\s+CLASS'
+                                        r'|PRINCIPALI\s+RISCHI',
+                                        _fls, re.IGNORECASE):
                                     break
-                                continue
+                                _fi_lines.append(_fls)
+                                if len(_fi_lines) >= 20:
+                                    break
 
-                            # "Credit Rating medio ... BBB" (value at line end)
-                            if re.search(r'credit\s+rating', _ls2,
-                                         re.IGNORECASE) and _cr is None:
-                                _mcr = re.search(
-                                    r'\b([A-D][A-Za-z]*[+\-]?)\s*$', _ls2)
-                                if _mcr and _mcr.group(1).upper() in RATING_SCALE:
-                                    _cr = _mcr.group(1).upper()
-                                continue
+                            # Join with newlines to enable multi-line search
+                            _fi_txt = '\n'.join(_fi_lines)
 
-                            # "Portfolio Yield To Maturity (EUR) 4,15%" (value at end)
-                            if re.search(r'yield\s+to\s+maturity', _ls2,
-                                         re.IGNORECASE) and _yt is None:
-                                _myt = re.search(
-                                    r'([\d]+[,\.]\d+)\s*%\s*$', _ls2)
-                                if _myt:
-                                    try:
-                                        _yt = round(
-                                            float(_myt.group(1).replace(',', '.')), 2)
-                                    except Exception:
-                                        pass
-                                continue
+                            # ── Credit Rating ──
+                            # Inline:  "Credit Rating medio    BB+"
+                            # Newline: "Credit Rating medio\nBB+"
+                            _mcr = re.search(
+                                r'Credit\s+Rating[^\n]*?'
+                                r'\n?\s*\b(AAA|AA[+\-]?|A[+\-]?'
+                                r'|BBB[+\-]?|BB[+\-]?|B[+\-]?'
+                                r'|CCC[+\-]?|CC[+\-]?|C[+\-]?|D)\b',
+                                _fi_txt, re.IGNORECASE)
+                            if _mcr and _mcr.group(1).upper() in RATING_SCALE:
+                                _cr = _mcr.group(1).upper()
 
-                            # "Portfolio Duration" label — value follows on next line
-                            if re.search(r'portfolio\s+duration', _ls2,
-                                         re.IGNORECASE) and _dur is None:
-                                _after_dur = True
-                                continue
+                            # ── YTM ──
+                            # Inline:  "Portfolio Yield To Maturity (EUR)  4,40%"
+                            # Newline: "Portfolio Yield To Maturity (EUR)\n4,40%"
+                            _myt = re.search(
+                                r'Yield\s+To\s+Maturity[^\n]*?'
+                                r'\n?\s*([\d]+[,\.]\d+)\s*%',
+                                _fi_txt, re.IGNORECASE)
+                            if _myt:
+                                try:
+                                    _yt = round(
+                                        float(_myt.group(1).replace(',', '.')), 2)
+                                except Exception:
+                                    pass
+
+                            # ── Duration ──
+                            # Newline: "Portfolio Duration\n2,18" (most common)
+                            # Inline:  "Portfolio Duration ... 2,18" (no % at end)
+                            # Also handles: "Portfolio Duration\n-1,78% ...\n2,18"
+                            #   by looking at up to 4 lines after the label
+                            _dn = next(
+                                (i for i, l in enumerate(_fi_lines)
+                                 if re.search(r'portfolio\s+duration', l,
+                                              re.IGNORECASE)), None)
+                            if _dn is not None:
+                                for _dl in _fi_lines[_dn:_dn + 5]:
+                                    if re.search(r'portfolio\s+duration',
+                                                 _dl, re.IGNORECASE):
+                                        # try value inline on same label line
+                                        _dm = re.search(
+                                            r'Duration\D+([\d]+[,\.]\d+)\s*$',
+                                            _dl, re.IGNORECASE)
+                                    else:
+                                        # value on following line: decimal, no %
+                                        _dm = re.search(
+                                            r'^([\d]+[,\.]\d+)\s*$', _dl)
+                                        if not _dm:
+                                            # also try decimal at EOL without %
+                                            _dm = re.search(
+                                                r'(?<![%\d,\.])'
+                                                r'([\d]{1,2}[,\.][\d]{2})\s*$',
+                                                _dl)
+                                    if _dm:
+                                        try:
+                                            _v = float(
+                                                _dm.group(1).replace(',', '.'))
+                                            if 0 < _v < 40:
+                                                _dur = round(_v, 2)
+                                                break
+                                        except Exception:
+                                            pass
 
                         if _fn not in _metrics:
                             _metrics[_fn] = {}
