@@ -80,7 +80,8 @@ def load_fund_cache() -> tuple:
     """Load cached FondiDoc data. Returns (fund_data_dict, last_updated_str)."""
     try:
         if CACHE_FILE.exists():
-            payload = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+            # utf-8-sig strips BOM se presente (file creato su Windows)
+            payload = json.loads(CACHE_FILE.read_text(encoding="utf-8-sig"))
             return payload.get("fund_data", {}), payload.get("last_updated", "")
     except Exception:
         pass
@@ -954,7 +955,10 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(kpi)
 
     # ── PIE CHARTS con legende ReportLab ────────────────────
-    story.append(Paragraph("Allocazione del Portafoglio", SC))
+    # Titolo sezione con meno spazio sopra per avvicinare il grafico al KPI
+    SC_PIE = S("SCPIE", fontName="Helvetica-Bold", fontSize=11,
+               textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=6, spaceAfter=5)
+    story.append(Paragraph("Allocazione del Portafoglio", SC_PIE))
 
     PIE_W = 7.5 * cm
     LEG_W = 17 * cm - PIE_W   # 9.5 cm
@@ -969,7 +973,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ]))
         return t
 
-    # — Grafico 1: fondi con hyperlink —
+    # — Grafico 1: fondi con hyperlink (torta + didascalia interattiva affiancate) —
     pie_buf = _mpl_portfolio_pie(d_act, wcol, profile)
     pie_img = RLImage(pie_buf, width=PIE_W, height=PIE_W)
     d_leg   = d_act[d_act[wcol] > 0.005].sort_values(wcol, ascending=False)
@@ -998,28 +1002,51 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     combo1.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
     story.append(combo1)
 
-    # — Grafico 2: asset allocation Azionario/Obbligazionario —
+    # — Grafico 2: asset allocation — torta centrata sotto la prima,
+    #   righe illustrative Azionario/Obbligazionario sotto la torta —
     macro_buf = _mpl_macro_pie(d_act, wcol)
     if macro_buf:
-        story.append(Spacer(1, 14))
+        story.append(Spacer(1, 8))
         macro_img = RLImage(macro_buf, width=PIE_W, height=PIE_W)
         w_az_v  = (d_act[wcol] * d_act["az_pct"]).sum()
         w_obb_v = (d_act[wcol] * d_act["obb_pct"]).sum()
+
+        # Torta centrata orizzontalmente sulla pagina
+        pie2_tbl = Table([[macro_img]], colWidths=[17 * cm])
+        pie2_tbl.setStyle(TableStyle([
+            ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0), (-1,-1), 0),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+            ("LEFTPADDING",   (0,0), (-1,-1), 0),
+            ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+        ]))
+        story.append(pie2_tbl)
+
+        # Righe illustrative sotto la torta, centrate
+        story.append(Spacer(1, 6))
         macro_leg_rows = [
             [_dot("#1B4FBB"), Paragraph(f'Azionario  <b>{w_az_v*100:.1f}%</b>', LG)],
             [_dot("#2D9D78"), Paragraph(f'Obbligazionario  <b>{w_obb_v*100:.1f}%</b>', LG)],
         ]
-        macro_leg_tbl = Table(macro_leg_rows, colWidths=[0.45*cm, LEG_W - 0.45*cm])
-        macro_leg_tbl.setStyle(TableStyle([
+        macro_leg_inner = Table(macro_leg_rows, colWidths=[0.45*cm, 5.5*cm])
+        macro_leg_inner.setStyle(TableStyle([
             ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 8),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+            ("TOPPADDING",    (0,0), (-1,-1), 5),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
             ("LEFTPADDING",   (1,0), (1,-1),  6),
             ("LEFTPADDING",   (0,0), (0,-1),  0),
         ]))
-        combo2 = Table([[macro_img, macro_leg_tbl]], colWidths=[PIE_W, LEG_W])
-        combo2.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-        story.append(combo2)
+        macro_leg_wrapper = Table([[macro_leg_inner]], colWidths=[17 * cm])
+        macro_leg_wrapper.setStyle(TableStyle([
+            ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0), (-1,-1), 0),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+            ("LEFTPADDING",   (0,0), (-1,-1), 0),
+            ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+        ]))
+        story.append(macro_leg_wrapper)
 
     story.append(PageBreak())
 
@@ -1652,35 +1679,34 @@ def main():
             st.error(f"Errore PDF: {e}")
 
     with col_btn:
-        # ── If cache or factbook available: instant PDF (no FondiDoc needed) ──
         if cached_fd or factbook_data:
             if st.button("⚡  Genera PDF (cache/factbook)",
                          use_container_width=True, type="primary"):
                 _gen_pdf(cached_fd, f"dati del {cache_date or 'factbook'}")
-
-            with st.expander("🔄  Aggiorna dati da FondiDoc"):
-                if st.button("Scarica dati FondiDoc freschi + Rigenera PDF",
-                             use_container_width=True):
-                    pb = st.progress(0, text="Scarico dati FondiDoc…")
-                    def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
-                    fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
-                    pb.progress(1.0, text="✅ Salvo cache e genero PDF…")
-                    save_fund_cache(fund_data)
-                    _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
-                    # Download updated cache JSON for git commit
-                    cache_json = json.dumps(
-                        {"last_updated": datetime.date.today().isoformat(),
-                         "fund_data": fund_data},
-                        ensure_ascii=False, indent=2)
-                    st.download_button(
-                        "💾  Scarica cache aggiornata (da committare su git)",
-                        data=cache_json, file_name="fund_cache.json",
-                        mime="application/json", use_container_width=True)
-                    pb.empty()
         else:
-            # ── No cache: must fetch from FondiDoc ──────────────────────────
             if st.button("🔄  Carica Dati da FondiDoc + Genera PDF",
                          use_container_width=True, type="primary"):
+                pb = st.progress(0, text="Scarico dati FondiDoc…")
+                def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+                fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
+                pb.progress(1.0, text="✅ Salvo cache e genero PDF…")
+                save_fund_cache(fund_data)
+                _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
+                cache_json = json.dumps(
+                    {"last_updated": datetime.date.today().isoformat(),
+                     "fund_data": fund_data},
+                    ensure_ascii=False, indent=2)
+                st.download_button(
+                    "💾  Scarica cache aggiornata (da committare su git)",
+                    data=cache_json, file_name="fund_cache.json",
+                    mime="application/json", use_container_width=True)
+                pb.empty()
+
+    # ── Aggiornamento FondiDoc (fuori dalle colonne per evitare problemi di nesting) ──
+    if cached_fd or factbook_data:
+        with st.expander("🔄  Aggiorna dati da FondiDoc"):
+            if st.button("Scarica dati FondiDoc freschi + Rigenera PDF",
+                         use_container_width=True):
                 pb = st.progress(0, text="Scarico dati FondiDoc…")
                 def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
                 fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
