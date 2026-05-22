@@ -38,7 +38,7 @@ from reportlab.lib.units import cm
 
 # ── PAGE CONFIG ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="Azimut | Portfolio Analyzer",
+    page_title="Azimut | Analisi Portafoglio — AAS Emilia Romagna Marche Umbria",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -1441,7 +1441,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Spacer(1,14))
 
     # ── TITLE BLOCK ─────────────────────────────────────────
-    story.append(Paragraph("AZIMUT INVESTMENTS  ·  PORTAFOGLI MODELLO", EY))
+    story.append(Paragraph("AZIMUT INVESTMENTS  ·  AAS EMILIA ROMAGNA MARCHE UMBRIA", EY))
     story.append(Spacer(1,4))
     story.append(Paragraph(f"Portafoglio {ptf_name}", T))
     story.append(Paragraph(
@@ -1569,7 +1569,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # ════════════════════════════════════════════════════════
     # PAGE 2: RENDIMENTI 1-3-5 ANNI
     # ════════════════════════════════════════════════════════
-    story.append(Paragraph("AZIMUT INVESTMENTS  ·  PORTAFOGLI MODELLO", EY))
+    story.append(Paragraph("AZIMUT INVESTMENTS  ·  AAS EMILIA ROMAGNA MARCHE UMBRIA", EY))
     story.append(Spacer(1,4))
     story.append(Paragraph("Tavola dei Rendimenti", T))
     _fb_loaded = bool(factbook_data)
@@ -1987,7 +1987,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # ════════════════════════════════════════════════════════
     # PAGES 3+: SCHEDE SINGOLI FONDI
     # ════════════════════════════════════════════════════════
-    story.append(Paragraph("AZIMUT INVESTMENTS  ·  PORTAFOGLI MODELLO", EY))
+    story.append(Paragraph("AZIMUT INVESTMENTS  ·  AAS EMILIA ROMAGNA MARCHE UMBRIA", EY))
     story.append(Spacer(1,4))
     story.append(Paragraph("Schede Analitiche dei Fondi", T))
     story.append(Paragraph(
@@ -2232,7 +2232,7 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 def main():
     st.markdown(_APP_CSS, unsafe_allow_html=True)
     with st.sidebar:
-        st.markdown("""<div style='padding:1.4rem 0 .8rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Strumento di Analisi</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.6rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.2;'>Portfolio<br>Analyzer</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:10px;'></div></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style='padding:1.4rem 0 .8rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:10px;'></div></div>""", unsafe_allow_html=True)
         st.markdown("---")
         st.caption("v2.2 — factbook Excel cache")
         st.markdown("---")
@@ -2258,7 +2258,7 @@ def main():
             del st.session_state["free_ptf"]
 
     ptf_label = ptf_choice.split("  ",1)[1] if "  " in ptf_choice else ptf_choice
-    st.markdown(f"""<div class="az-header"><div class="az-eyebrow">AZIMUT INVESTMENTS · PORTAFOGLI MODELLO</div><div class="az-rule"></div><div class="az-title">{ptf_label}</div><div class="az-meta">{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()} &nbsp;·&nbsp; {datetime.date.today().strftime('%d %B %Y')}</div></div>""",unsafe_allow_html=True)
+    st.markdown(f"""<div class="az-header"><div class="az-eyebrow">AZIMUT INVESTMENTS · AAS EMILIA ROMAGNA MARCHE UMBRIA</div><div class="az-rule"></div><div class="az-title">{ptf_label}</div><div class="az-meta">{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()} &nbsp;·&nbsp; {datetime.date.today().strftime('%d %B %Y')}</div></div>""",unsafe_allow_html=True)
 
     if uploaded is None:
         st.info("⬅️ **Carica il file Excel** nella barra laterale per iniziare.")
