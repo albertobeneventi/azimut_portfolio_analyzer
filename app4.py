@@ -608,6 +608,107 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                         if _yt is not None: _metrics[_fn]['ytm']           = _yt
                         if _dur is not None: _metrics[_fn]['duration']     = _dur
 
+                # ── D: COMPOSIZIONE AZIONARIA/OBBLIGAZIONARIA ─────────────
+                # Runs on every fund page; extracts equity% and bond% split.
+                # Typical factbook formats:
+                #   "Azionario 52,3%"   (inline)
+                #   "Azionario\n52,3%"  (two-line)
+                _lp_d = text.split('\n')
+                _fn_d = None
+                for _i_d, _ln_d in enumerate(_lp_d[:25]):
+                    _ls_d = _ln_d.strip()
+                    if re.match(
+                            r'^AZ\s+(BOND|ALLOCATION|EQUITY|ALTERNATIVE|ISLAMIC)\s*$',
+                            _ls_d, re.IGNORECASE):
+                        for _j_d in range(_i_d + 1, min(_i_d + 5, len(_lp_d))):
+                            _nl_d = _lp_d[_j_d].strip()
+                            if _nl_d and not re.match(
+                                    r'^([A-Z]{2}\d{10}|ISIN|\d+\s*$)',
+                                    _nl_d, re.IGNORECASE):
+                                _nrm_d = _normalize_for_unp(_ls_d + ' ' + _nl_d)
+                                _fn_d  = _FUND_ALIASES.get(_nrm_d, _nrm_d)
+                                break
+                        if _fn_d:
+                            break
+                    _m1_d = re.match(
+                        r'^(AZ\s+(?:BOND|ALLOCATION|EQUITY|ALTERNATIVE|ISLAMIC))'
+                        r'\s*[-–]?\s+(.+)$', _ls_d, re.IGNORECASE)
+                    if _m1_d and len(_m1_d.group(2).strip()) > 2:
+                        _sub_d = _m1_d.group(2).strip()
+                        if not re.match(r'^(\d+|[A-Z]{2}\d{10})', _sub_d):
+                            _nrm_d = _normalize_for_unp(
+                                _m1_d.group(1).strip() + ' ' + _sub_d)
+                            _fn_d  = _FUND_ALIASES.get(_nrm_d, _nrm_d)
+                            break
+                if _fn_d:
+                    # Strict label patterns (full line = label only)
+                    _AZ_ONLY = re.compile(
+                        r'^(azionari[oa]?|azioni)\s*$', re.IGNORECASE)
+                    _OBB_ONLY = re.compile(
+                        r'^(obbligazionari[oa]?|obbligazioni)\s*$', re.IGNORECASE)
+                    # Inline: "Azionario 52,3%"
+                    _AZ_IL = re.compile(
+                        r'^(azionari[oa]?|azioni)\s+([\d]+[,\.]\d+)\s*%\s*$',
+                        re.IGNORECASE)
+                    _OBB_IL = re.compile(
+                        r'^(obbligazionari[oa]?|obbligazioni)\s+([\d]+[,\.]\d+)\s*%\s*$',
+                        re.IGNORECASE)
+                    # Standalone percentage on its own line
+                    _PCT_OL = re.compile(r'^([\d]+[,\.]\d+)\s*%\s*$')
+                    _comp_az = _comp_obb = None
+                    for _ci_d, _cl_d in enumerate(_lp_d):
+                        _cln_d = _cl_d.strip()
+                        if not _cln_d:
+                            continue
+                        _maz = _AZ_IL.match(_cln_d)
+                        if _maz and _comp_az is None:
+                            try:
+                                _comp_az = float(_maz.group(2).replace(',', '.')) / 100
+                            except Exception:
+                                pass
+                            continue
+                        _mobb = _OBB_IL.match(_cln_d)
+                        if _mobb and _comp_obb is None:
+                            try:
+                                _comp_obb = float(_mobb.group(2).replace(',', '.')) / 100
+                            except Exception:
+                                pass
+                            continue
+                        if _AZ_ONLY.match(_cln_d) and _comp_az is None:
+                            for _nk_d in range(_ci_d + 1, min(_ci_d + 3, len(_lp_d))):
+                                _nl2_d = _lp_d[_nk_d].strip()
+                                if _nl2_d:
+                                    _pm_d = _PCT_OL.match(_nl2_d)
+                                    if _pm_d:
+                                        try:
+                                            _comp_az = float(
+                                                _pm_d.group(1).replace(',', '.')) / 100
+                                        except Exception:
+                                            pass
+                                    break
+                        if _OBB_ONLY.match(_cln_d) and _comp_obb is None:
+                            for _nk_d in range(_ci_d + 1, min(_ci_d + 3, len(_lp_d))):
+                                _nl2_d = _lp_d[_nk_d].strip()
+                                if _nl2_d:
+                                    _pm_d = _PCT_OL.match(_nl2_d)
+                                    if _pm_d:
+                                        try:
+                                            _comp_obb = float(
+                                                _pm_d.group(1).replace(',', '.')) / 100
+                                        except Exception:
+                                            pass
+                                    break
+                    # Sanity check: 0 ≤ value ≤ 1
+                    _ok_az  = _comp_az  is not None and 0.0 <= _comp_az  <= 1.0
+                    _ok_obb = _comp_obb is not None and 0.0 <= _comp_obb <= 1.0
+                    if _ok_az or _ok_obb:
+                        if _fn_d not in _metrics:
+                            _metrics[_fn_d] = {}
+                        if _ok_az and 'fb_az_pct' not in _metrics[_fn_d]:
+                            _metrics[_fn_d]['fb_az_pct']  = round(_comp_az,  4)
+                        if _ok_obb and 'fb_obb_pct' not in _metrics[_fn_d]:
+                            _metrics[_fn_d]['fb_obb_pct'] = round(_comp_obb, 4)
+
     except Exception:
         pass
 
@@ -1417,12 +1518,25 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             return None
         return entry.get(key)
 
-    # Portfolio-level weighted averages (duration and rating weighted by obb_pct × w)
+    # Per-fund helpers: prefer factbook composition over binary Excel values
+    def _az_eff(row):
+        v = get_fi_metric(row["nome"], "fb_az_pct")
+        return v if v is not None else row["az_pct"]
+
+    def _obb_eff(row):
+        v = get_fi_metric(row["nome"], "fb_obb_pct")
+        return v if v is not None else row["obb_pct"]
+
+    # Portfolio-level composition (factbook-aware weighted averages)
+    _ptf_az_wtd  = sum(_row[wcol] * _az_eff(_row)  for _, _row in d_sorted.iterrows())
+    _ptf_obb_wtd = sum(_row[wcol] * _obb_eff(_row) for _, _row in d_sorted.iterrows())
+
+    # Duration and rating weighted by effective obb% × w
     _ptf_dur_num = _ptf_dur_den = 0.0
     _ptf_rat_num = _ptf_rat_den = 0.0
     for _, _row in d_sorted.iterrows():
         _w   = _row[wcol]
-        _obb = _row["obb_pct"]
+        _obb = _obb_eff(_row)            # factbook obb% if available, else Excel
         _dur = get_fi_metric(_row["nome"], "duration")
         _rat = get_fi_metric(_row["nome"], "credit_rating")
         if isinstance(_dur, (int, float)) and _obb > 0:
@@ -1445,23 +1559,25 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                   "Duration", "Rating Medio"]]
     alloc_ptf = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
-        Paragraph("<b>100%</b>",              WH),
-        Paragraph(f"<b>{w_az:.1f}%</b>",     WH),
-        Paragraph(f"<b>{w_obb:.1f}%</b>",    WH),
-        Paragraph(f"<b>{_ptf_dur_str}</b>",   WH),
-        Paragraph(f"<b>{_ptf_rat_str}</b>",   WH),
+        Paragraph("<b>100%</b>",                       WH),
+        Paragraph(f"<b>{_ptf_az_wtd*100:.1f}%</b>",   WH),
+        Paragraph(f"<b>{_ptf_obb_wtd*100:.1f}%</b>",  WH),
+        Paragraph(f"<b>{_ptf_dur_str}</b>",            WH),
+        Paragraph(f"<b>{_ptf_rat_str}</b>",            WH),
     ]
     alloc_fund_rows = []
     for _, _row in d_sorted.iterrows():
-        _dur2 = get_fi_metric(_row["nome"], "duration")
-        _rat2 = get_fi_metric(_row["nome"], "credit_rating")
+        _dur2  = get_fi_metric(_row["nome"], "duration")
+        _rat2  = get_fi_metric(_row["nome"], "credit_rating")
+        _az_s  = _az_eff(_row)  * 100
+        _obb_s = _obb_eff(_row) * 100
         alloc_fund_rows.append([
             Paragraph(_row["nome"][:48], SM),
-            Paragraph(f"{_row[wcol]*100:.1f}%",      SM),
-            Paragraph(f"{_row['az_pct']*100:.0f}%",  SM),
-            Paragraph(f"{_row['obb_pct']*100:.0f}%", SM),
+            Paragraph(f"{_row[wcol]*100:.1f}%",                          SM),
+            Paragraph(f"{_az_s:.1f}%",                                   SM),
+            Paragraph(f"{_obb_s:.1f}%",                                  SM),
             Paragraph(f"{_dur2:.2f}" if isinstance(_dur2, (int, float)) else "—", SM),
-            Paragraph(_rat2 if isinstance(_rat2, str) else "—", SM),
+            Paragraph(_rat2 if isinstance(_rat2, str) else "—",           SM),
         ])
 
     alloc_tbl = Table(
@@ -1491,12 +1607,13 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         alloc_tbl,
         Spacer(1, 6),
         Paragraph(
-            "◆ Le quote azionaria e obbligazionaria per fondo derivano dal foglio Excel "
-            "(colonna 'Az%'). Duration e Rating Medio si riferiscono alla sola componente "
-            "obbligazionaria e sono estratti dal Factbook AZ Investments"
+            "◆ Le quote azionaria e obbligazionaria derivano dal Factbook AZ Investments"
             + (f" al {_fb_ref}" if _fb_ref else "")
-            + ". Il Rating Medio di Portafoglio è la media ponderata degli score numerici "
-              "(AAA=1 … D=22) ponderata per peso × quota obbligazionaria. "
+            + " (pagine singoli fondi); in assenza del dato factbook si usa la "
+              "classificazione binaria del foglio Excel. "
+              "Duration e Rating Medio riguardano la sola componente obbligazionaria. "
+              "Il Rating Medio di Portafoglio è la media ponderata degli score numerici "
+              "(AAA=1 … D=22) × peso × quota obbligazionaria. "
               "Il simbolo — indica dato non disponibile.",
             NOTE_A),
     ]))
