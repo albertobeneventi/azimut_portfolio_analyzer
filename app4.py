@@ -2198,14 +2198,6 @@ def main():
             pb.progress(1.0, text="✅ Genero PDF…")
             save_fund_cache(fund_data)
             _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
-            cache_json = json.dumps(
-                {"last_updated": datetime.date.today().isoformat(),
-                 "fund_data": fund_data},
-                ensure_ascii=False, indent=2)
-            st.download_button(
-                "💾  Scarica cache aggiornata (da committare su git)",
-                data=cache_json, file_name="fund_cache.json",
-                mime="application/json", use_container_width=True)
             pb.empty()
 
     st.markdown("<br><br>",unsafe_allow_html=True)
