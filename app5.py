@@ -242,103 +242,110 @@ def _first(patterns: list, text: str) -> str:
 
 def _parse_identity_from_text(text: str) -> dict:
     """Parsa i dati anagrafici da testo grezzo (pdfplumber o OCR).
-
-    Gestisce sia il formato inline  (COGNOME: ROSSI)
-    sia il formato su riga successiva  (COGNOME\\nROSSI)
-    tipico della CIE (Carta d'Identità Elettronica) italiana.
+    Gestisce sia il formato inline (COGNOME: ROSSI)
+    sia il formato CIE su riga successiva (COGNOME\\nROSSI).
+    Tutti i pattern costruiti con concatenazione per evitare errori f-string.
     """
     t = text.upper()
     d = {}
 
-    # Parole che sono etichette del documento — non devono mai essere catturate come valori
-    _LABELS = (
-        r"DATA\b|LUOGO\b|NOME\b|COGNOME\b|SESSO\b|CODICE\b|COMUNE\b|INDIRIZZO\b|"
-        r"RESIDENZA\b|NAZIONAL|STATURA\b|RILASCI|VALIDA\b|SCADENZA\b|PATENTE\b|"
-        r"PASSPORT|SURNAME|BIRTHDATE|PLACE\b|SEX\b|HEIGHT\b|NATIONALITY|FISCAL|"
-        r"REPUBLIC|ITALIAN|EUROPEA|UNIONE\b|NUMBER\b|NUMERO\b|DOCUMENT"
-    )
+    # Un "nome" è 1-3 parole composte da sole lettere + apostrofo/trattino
+    W    = r"[A-Z][A-Z'\-]+"          # singola parola-nome
+    NM3  = W + r"(?:\s+" + W + r"){0,2}"   # 1-3 parole-nome
 
-    # Valore-nome: max 3 parole di sole lettere (include apostrofo e trattino)
-    # NON deve iniziare con un'etichetta nota
-    _NV = fr"(?!(?:{_LABELS}))([A-Z][A-Z'À-ÜÙÀÈÌ\-]*(?:\s+[A-Z][A-Z'À-ÜÙÀÈÌ\-]*{{0,2}})?)"
+    # Etichette note → negative lookahead per non catturarle come valori
+    NLBL = (r"(?:DATA|LUOGO|NOME|COGNOME|SESSO|CODICE|COMUNE|INDIRIZZO|"
+            r"RESIDENZA|NAZIONAL|STATURA|RILASCI|VALIDA|SCADENZA|PATENTE|"
+            r"PASSPORT|SURNAME|PLACE|SEX|HEIGHT|FISCAL|REPUBLIC|ITALIAN|"
+            r"EUROPEA|UNIONE|NUMERO|DOCUMENT)\b")
 
-    # Terminatore: nuova riga o inizio di un'altra etichetta nota
-    _STOP = fr"(?=\s*\n|\s*(?:{_LABELS})|$)"
+    # Valore-nome sicuro: non inizia con un'etichetta nota
+    NV   = r"(?!" + NLBL + r")(" + NM3 + r")"
 
-    def _name_patterns(label: str, alt_label: str = ""):
-        """Costruisce pattern per cognome/nome che gestisce inline e next-line."""
-        alts = [alt_label] if alt_label else []
-        pats = []
-        for lbl in [label] + alts:
-            # Formato "COGNOME / SURNAME\nROSSI" (CIE)
-            pats.append(fr"{lbl}[\w\s/]*\n\s*{_NV}\s*\n")
-            # Formato "COGNOME: ROSSI" o "COGNOME ROSSI" (inline)
-            pats.append(fr"{lbl}\s*[:/]?\s+{_NV}{_STOP}")
-        return pats
+    # Data con validazione mese (01-12) per evitare date impossibili da OCR
+    DATE = r"\d{2}[/.\-](?:0[1-9]|1[0-2])[/.\-]\d{4}"
 
-    d["cognome"] = _first(_name_patterns("COGNOME", "SURNAME"), t)
-    d["nome"]    = _first(_name_patterns("(?:^|\n)NOME", "GIVEN NAME"), t)
+    # Codice fiscale italiano
+    CF   = r"[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]"
 
-    # Date: formato dd/mm/yyyy oppure dd.mm.yyyy — validazione mese 01-12
-    _DATE = r"(\d{2}[/.\-](?:0[1-9]|1[0-2])[/.\-]\d{4})"
-
-    d["data_nascita"] = _first([
-        fr"DATA\s+DI\s+NASCITA[\s\S]{{0,40}}{_DATE}",
-        fr"LUOGO\s+E\s+DATA\s+DI\s+NASCITA[\s\S]{{0,60}}{_DATE}",
-        fr"NATO[/A]*\s+IL\s*[:\n]\s*{_DATE}",
-        fr"DATE\s+OF\s+BIRTH[\s\S]{{0,20}}{_DATE}",
-        fr"NASCITA[:\s]+{_DATE}",
+    # ── cognome ───────────────────────────────────────────────
+    d["cognome"] = _first([
+        r"COGNOME[\w\s/]*\n\s*" + NV + r"\s*\n",  # CIE: valore sulla riga dopo
+        r"COGNOME\s*[:/]?\s+" + NV,                 # inline
+        r"SURNAME\s*[:/]?\s+" + NV,
     ], t)
 
+    # ── nome ──────────────────────────────────────────────────
+    d["nome"] = _first([
+        r"(?:^|\n)NOME[\w\s/]*\n\s*" + NV + r"\s*\n",
+        r"(?:^|\n)NOME\s*[:/]?\s+" + NV,
+        r"GIVEN\s+NAMES?\s*[:/]?\s+" + NV,
+    ], t)
+
+    # ── data di nascita ───────────────────────────────────────
+    d["data_nascita"] = _first([
+        r"DATA\s+DI\s+NASCITA[\s\S]{0,40}?(" + DATE + r")",
+        r"LUOGO\s+E\s+DATA\s+DI\s+NASCITA[\s\S]{0,60}?(" + DATE + r")",
+        r"NATO[/A]*\s+IL\s*[:\n]\s*(" + DATE + r")",
+        r"DATE\s+OF\s+BIRTH[\s\S]{0,20}?(" + DATE + r")",
+        r"NASCITA[:\s]+(" + DATE + r")",
+    ], t)
+
+    # ── luogo di nascita ──────────────────────────────────────
+    # Formato CIE retro: "LUOGO E DATA DI NASCITA\nCITTA 01/01/1980"
     d["luogo_nascita"] = _first([
-        # "LUOGO E DATA DI NASCITA\nCITTA 01/01/1980" — prende solo la città
         r"LUOGO\s+E\s+DATA\s+DI\s+NASCITA\s*\n\s*([A-Z][A-Z\s\(\)]{2,30}?)\s+\d{2}[/.\-]",
         r"LUOGO\s+DI\s+NASCITA\s*[:\n]\s*([A-Z][A-Z\s\(\)]{2,30}?)(?:\s*\n|\s*\d)",
         r"COMUNE\s+DI\s+NASCITA\s*[:\n]\s*([A-Z][A-Z\s]{2,25}?)(?:\n|PROV)",
         r"PLACE\s+OF\s+BIRTH\s*[:\n]\s*([A-Z][A-Z\s,]{2,30}?)(?:\n|DATE)",
     ], t)
 
-    # Codice fiscale: pattern univoco — 6 lettere, 2 cifre, lettera, 2 cifre, lettera, 3 cifre, lettera
+    # ── codice fiscale ────────────────────────────────────────
     d["codice_fiscale"] = _first([
-        r"CODICE\s+FISCALE\s*[:\n]\s*([A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])",
-        r"\bCF\s*[:\n]\s*([A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])",
-        r"\b([A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z])\b",
+        r"CODICE\s+FISCALE\s*[:\n]\s*(" + CF + r")",
+        r"\bCF\s*[:\n]\s*(" + CF + r")",
+        r"\b(" + CF + r")\b",
     ], t)
 
+    # ── indirizzo ─────────────────────────────────────────────
     d["indirizzo"] = _first([
-        r"INDIRIZZO\s+DI\s+RESIDENZA\s*[:\n]\s*(.+?)(?:\n|CAP|$)",
-        r"(?:INDIRIZZO|RESIDENZA|DOMICILIO)\s*[:\n]\s*(.+?)(?:\n|CAP|COMUNE|$)",
+        r"INDIRIZZO\s+DI\s+RESIDENZA\s*[:\n]\s*(.+?)(?:\n|$)",
+        r"(?:INDIRIZZO|RESIDENZA|DOMICILIO)\s*[:\n]\s*(.+?)(?:\n|$)",
         r"\b(VIA\s+.+?)(?:\n|CAP|$)",
         r"\b(PIAZZA\s+.+?)(?:\n|CAP|$)",
         r"\b(CORSO\s+.+?)(?:\n|CAP|$)",
     ], t)
 
+    # ── sesso ─────────────────────────────────────────────────
     d["sesso"] = _first([
         r"\bSESSO\s*[:\n/]\s*([MF])\b",
         r"\bSEX\s*[:\n/]\s*([MF])\b",
         r"(?:SESSO|SEX)[^\n]{0,20}\n\s*([MF])\b",
     ], t)
 
+    # ── numero documento ──────────────────────────────────────
     d["numero_documento"] = _first([
-        r"N[°\.]?\s*DOCUMENTO\s*[:\n]\s*([A-Z0-9]{6,12})",
+        r"N[°.]\s*DOCUMENTO\s*[:\n]\s*([A-Z0-9]{6,12})",
         r"NUMERO\s+DOCUMENTO\s*[:\n]\s*([A-Z0-9]{6,12})",
         r"DOCUMENT\s+N[O°]?\s*[:\n]\s*([A-Z0-9]{6,12})",
         r"\b([A-Z]{2}\d{5}[A-Z0-9]{0,3})\b",
     ], t)
 
+    # ── date documento ────────────────────────────────────────
     d["data_rilascio"] = _first([
-        fr"DATA\s+(?:DI\s+)?(?:RILASCIO|EMISSIONE)\s*[:\n]\s*{_DATE}",
-        fr"RILASCIATA?\s+IL\s*[:\n]\s*{_DATE}",
-        fr"DATE\s+OF\s+ISSUE\s*[:\n]\s*{_DATE}",
+        r"DATA\s+(?:DI\s+)?(?:RILASCIO|EMISSIONE)\s*[:\n]\s*(" + DATE + r")",
+        r"RILASCIATA?\s+IL\s*[:\n]\s*(" + DATE + r")",
+        r"DATE\s+OF\s+ISSUE\s*[:\n]\s*(" + DATE + r")",
     ], t)
 
     d["data_scadenza"] = _first([
-        fr"(?:DATA\s+DI\s+)?SCADENZA\s*[:\n]\s*{_DATE}",
-        fr"VALIDA?\s+FINO\s+AL\s*[:\n]?\s*{_DATE}",
-        fr"DATE\s+OF\s+EXPIRY\s*[:\n]\s*{_DATE}",
-        fr"EXPIRY\s+DATE\s*[:\n]\s*{_DATE}",
+        r"(?:DATA\s+DI\s+)?SCADENZA\s*[:\n]\s*(" + DATE + r")",
+        r"VALIDA?\s+FINO\s+AL\s*[:\n]?\s*(" + DATE + r")",
+        r"DATE\s+OF\s+EXPIRY\s*[:\n]\s*(" + DATE + r")",
+        r"EXPIRY\s+DATE\s*[:\n]\s*(" + DATE + r")",
     ], t)
 
+    # ── ente rilascio ─────────────────────────────────────────
     d["ente_rilascio"] = _first([
         r"RILASCIATA?\s+DA\s*[:\n]\s*(.+?)(?:\n|IL\s+\d|$)",
         r"ISSUED\s+BY\s*[:\n]\s*(.+?)(?:\n|ON\s+\d|$)",
