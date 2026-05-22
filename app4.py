@@ -1,0 +1,1766 @@
+# ============================================================
+# AZIMUT PORTFOLIO ANALYZER v2.0 — app.py
+# Aggiornamento: Schede fondi + Rendimenti da FondiDoc FIDA
+# ============================================================
+
+import re
+import json
+from pathlib import Path
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from openpyxl import load_workbook
+import zipfile
+from xml.etree import ElementTree as ET
+import io
+import datetime
+import requests
+from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.ticker as mticker
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer,
+    Table, TableStyle, Image as RLImage,
+    HRFlowable, PageBreak, KeepTogether
+)
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors as rl_colors
+from reportlab.lib.units import cm
+
+# ── PAGE CONFIG ─────────────────────────────────────────────
+st.set_page_config(
+    page_title="Azimut | Portfolio Analyzer",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── CONSTANTS ───────────────────────────────────────────────
+GROUP_NAMES = {"ALLOCATION", "AZIONARI (LONG)", "BOND"}
+COL_A, COL_B, COL_C, COL_G, COL_K, COL_O, COL_R = 0, 1, 2, 6, 10, 14, 17
+PROFILES     = ["CONSERVATIVO", "EQUILIBRATO", "ACCRESCITIVO"]
+PROFILE_ICONS = {"CONSERVATIVO":"🛡️","EQUILIBRATO":"⚖️","ACCRESCITIVO":"📈"}
+PROFILE_W_COL = {"CONSERVATIVO":"w_cons","EQUILIBRATO":"w_equil","ACCRESCITIVO":"w_accr"}
+
+MACRO_COLORS = {
+    "Azionari":"#1B4FBB","Bilanciati/Flessibili":"#C9A84C",
+    "Obbligazionari":"#2D9D78","Alternativi":"#8B5CF6","Altro":"#94A3B8",
+}
+SHADES = {
+    "Azionari":             ["#0D3080","#1B4FBB","#2563EB","#3B82F6","#60A5FA","#93C5FD","#BFDBFE"],
+    "Bilanciati/Flessibili":["#92650A","#B8860B","#C9A84C","#D4B572","#DFC298","#E9CEB4","#F3DACD"],
+    "Obbligazionari":       ["#065F46","#14855F","#2D9D78","#34B98A","#6DE5BC","#9AEFD2","#C5F7E7"],
+    "Alternativi":          ["#5B21B6","#7C3AED","#8B5CF6","#A78BFA","#C4B5FD","#DDD6FE"],
+    "Altro":                ["#475569","#64748B","#94A3B8","#CBD5E1"],
+}
+DEFAULT_AZ = {"Azionari":0.92,"Bilanciati/Flessibili":0.50,"Obbligazionari":0.06,"Altro":0.50}
+FONDIDOC_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+    "Accept": "text/html,application/xhtml+xml",
+    "Accept-Language": "en-US,en;q=0.9,it;q=0.8",
+}
+# Override for one fund whose FIDA sheet hyperlink points to class B
+MANUAL_URL_OVERRIDES = {
+    "AZ F.1 All. Balanced FoF A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZPOA/LU0346933400_az-f1-allocation-balanced-fof-a-az-fund-cap-eur",
+}
+
+# ── FUND DATA CACHE ──────────────────────────────────────────────────────────
+# fund_cache.json is bundled in the repo and updated by the user after a fresh
+# FondiDoc fetch (download button → commit to git).
+CACHE_FILE = Path("data/fund_cache.json")
+
+def load_fund_cache() -> tuple:
+    """Load cached FondiDoc data. Returns (fund_data_dict, last_updated_str)."""
+    try:
+        if CACHE_FILE.exists():
+            # utf-8-sig strips BOM se presente (file creato su Windows)
+            payload = json.loads(CACHE_FILE.read_text(encoding="utf-8-sig"))
+            return payload.get("fund_data", {}), payload.get("last_updated", "")
+    except Exception:
+        pass
+    return {}, ""
+
+def save_fund_cache(fund_data: dict):
+    """Persist fund data to data/fund_cache.json (overwrites)."""
+    try:
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "last_updated": datetime.date.today().isoformat(),
+            "fund_data": fund_data,
+        }
+        CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                              encoding="utf-8")
+    except Exception:
+        pass
+
+# ── UNP/IUNP CATALOG (Catalogo Prodotti&Servizi Azimut, settembre 2025) ──────
+# Fonte: DETTAGLIO AZ FUND — valori %UNP e %IUNP36
+# Estratto da pdftotext su tutte le pagine del PDF (93 voci).
+# Nomi fondi esattamente come nel PDF; _normalize_for_unp() gestisce la
+# corrispondenza con i nomi abbreviati dell'Excel (es. "AZ F.1 Bd. ...").
+UNP_CATALOG = {
+    # ── AZ Allocation ─────────────────────────────────────────────────────────
+    "AZ Allocation - Asset Timing 2026":                               (2.29, 1.14),
+    "AZ Allocation - Asset Timing 2028":                               (2.29, 1.14),
+    "AZ Allocation - Balanced Brave":                                  (1.89, 0.94),
+    "AZ Allocation - Balanced FoF":                                    (1.89, 0.94),
+    "AZ Allocation - Balanced Plus":                                   (1.89, 0.94),
+    "AZ Allocation - Escalator 2026":                                  (2.29, 1.14),
+    "AZ Allocation - Escalator 2028":                                  (2.29, 1.14),
+    "AZ Allocation - Escalator 2030":                                  (2.29, 1.14),
+    "AZ Allocation - Flexible Equity":                                 (1.92, 0.96),
+    "AZ Allocation - Global Aggressive":                               (1.89, 0.94),
+    "AZ Allocation - Global Balanced":                                 (1.80, 0.90),
+    "AZ Allocation - Global Conservative":                             (1.61, 0.80),
+    "AZ Allocation - Global Conservative (Classe C)":                  (0.95, 0.47),
+    "AZ Allocation - Italian Trend":                                   (2.01, 1.00),
+    "AZ Allocation - Life Plan 2040":                                  (2.51, 1.25),
+    "AZ Allocation - PIR Italian Excellence 70%":                      (1.89, 0.94),
+    "AZ Allocation - Potential Income Upside 2030":                    (1.67, 0.83),
+    "AZ Allocation - Risk Parity Factors":                             (1.89, 0.94),
+    "AZ Allocation - Trend":                                           (2.01, 1.00),
+    "AZ Allocation - Turkey":                                          (1.89, 0.94),
+    # ── AZ Alternative ────────────────────────────────────────────────────────
+    "AZ Alternative - Capital Enhanced":                               (0.51, 0.25),
+    "AZ Alternative - Commodity":                                      (1.81, 0.90),
+    # ── AZ Bond ───────────────────────────────────────────────────────────────
+    "AZ Bond - Aggregate Bond Euro":                                   (1.10, 0.55),
+    "AZ Bond - Asian Bond":                                            (1.38, 0.69),
+    "AZ Bond - Bond Value":                                            (1.53, 0.76),
+    "AZ Bond - COCO Bonds":                                            (1.53, 0.76),
+    "AZ Bond - Convertible":                                           (1.62, 0.81),
+    "AZ Bond - Enhanced Yield":                                        (0.35, 0.17),
+    "AZ Bond - Euro Corporate":                                        (1.23, 0.61),
+    "AZ Bond - Frontier Markets Debt":                                 (1.62, 0.81),
+    "AZ Bond - Global Macro Bond":                                     (1.29, 0.64),
+    "AZ Bond - High Income FoF":                                       (1.62, 0.81),
+    "AZ Bond - High Yield":                                            (1.47, 0.73),
+    "AZ Bond - High Yield Target 2028 Climate Transition":             (1.53, 0.76),
+    "AZ Bond - High Yield Target 2028 Climate Transition (Classe C)":  (0.52, 0.26),
+    "AZ Bond - Income Dynamic":                                        (0.99, 0.49),
+    "AZ Bond - International FoF":                                     (1.62, 0.81),
+    "AZ Bond - Latin America Bonds":                                   (1.53, 0.76),
+    "AZ Bond - Patriot":                                               (1.36, 0.68),
+    "AZ Bond - Renminbi Opportunities":                                (1.23, 0.61),
+    "AZ Bond - Short Term Investment Grade Climate Transition":        (1.53, 0.76),
+    "AZ Bond - Short Term Investment Grade Climate Transition (Classe C)": (0.43, 0.21),
+    "AZ Bond - Sustainable Hybrid":                                    (1.46, 0.73),
+    "AZ Bond - Target 2025":                                           (1.11, 0.55),
+    "AZ Bond - Target 2026":                                           (1.11, 0.55),
+    "AZ Bond - Target 2028":                                           (1.11, 0.55),
+    "AZ Bond - Target 2029":                                           (1.11, 0.55),
+    "AZ Bond - Target 2029 USD":                                       (1.23, 0.61),
+    "AZ Bond - Target 2031":                                           (1.11, 0.55),
+    "AZ Bond - Total Return Bond":                                     (1.55, 0.77),
+    "AZ Bond - US Dollar Aggregate":                                   (1.24, 0.62),
+    # ── AZ Equity ─────────────────────────────────────────────────────────────
+    "AZ Equity - Al Mal Mena":                                         (2.51, 1.25),
+    "AZ Equity - American Opportunities":                              (2.19, 1.09),
+    "AZ Equity - ASEAN Countries":                                     (2.19, 1.09),
+    "AZ Equity - Best Value":                                          (2.09, 1.04),
+    "AZ Equity - Biotechnology":                                       (2.51, 1.25),
+    "AZ Equity - Borletti Global Lifestyle":                           (2.30, 1.15),
+    "AZ Equity - Brazil Trend":                                        (2.19, 1.09),
+    "AZ Equity - China":                                               (2.19, 1.09),
+    "AZ Equity - Egypt":                                               (2.51, 1.25),
+    "AZ Equity - Emerging Asia FoF":                                   (2.51, 1.25),
+    "AZ Equity - Emerging Markets Technology":                         (2.51, 1.25),
+    "AZ Equity - Escalator":                                           (2.29, 1.14),
+    "AZ Equity - Europe":                                              (2.19, 1.09),
+    "AZ Equity - Food & Agriculture":                                  (2.40, 1.20),
+    "AZ Equity - Global Dividend":                                     (2.51, 1.25),
+    "AZ Equity - Global Emerging FoF":                                 (2.51, 1.25),
+    "AZ Equity - Global ESG":                                          (2.51, 1.25),
+    "AZ Equity - Global FoF":                                          (2.51, 1.25),
+    "AZ Equity - Global Growth":                                       (2.40, 1.20),
+    "AZ Equity - Global Healthcare":                                   (2.40, 1.20),
+    "AZ Equity - Global Infrastructure":                               (2.26, 1.13),
+    "AZ Equity - Global Quality":                                      (2.18, 1.09),
+    "AZ Equity - Global Value FoF":                                    (2.51, 1.25),
+    "AZ Equity - Industrial Revolution 4.0":                           (2.51, 1.25),
+    "AZ Equity - Japan":                                               (2.20, 1.10),
+    "AZ Equity - Mexico":                                              (2.51, 1.25),
+    "AZ Equity - Momentum":                                            (2.19, 1.09),
+    "AZ Equity - Small Cap Europe FoF":                                (2.51, 1.25),
+    "AZ Equity - Special Needs & Inclusion":                           (2.51, 1.25),
+    "AZ Equity - Water & Renewable Resources":                         (2.40, 1.20),
+    "AZ Equity - World Minimum Volatility":                            (2.19, 1.09),
+    # ── AZ Islamic ────────────────────────────────────────────────────────────
+    "AZ Islamic - Global Sukuk":                                       (1.36, 0.68),
+    # ── Azimut Thematic Fund ──────────────────────────────────────────────────
+    "Azimut Thematic Fund - AZ Allocation - Global Goals":             (2.50, 1.25),
+    "Azimut Thematic Fund - AZ Equity - New Generation":               (2.79, 1.39),
+    "Azimut Thematic Fund - AZ Equity - Space":                        (2.79, 1.39),
+    # ── Fondi Economia Reale (sezione separata nel catalogo) ──────────────────
+    "AZ Allocation - Italian Long-Term Opp.":                          (2.73, 1.36),
+    "AZ Allocation - Long Term Credit Opp.":                           (1.94, 0.97),
+    "AZ Allocation - Long-Term Equity Opp.":                           (2.73, 1.36),
+    "AZ Bond - ABS":                                                   (1.23, 0.61),
+    "AZ Equity - Future Opportunities":                                (2.51, 1.25),
+}
+
+# ── CSS ──────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+html,body,[class*="css"]{font-family:'DM Sans',sans-serif;}
+h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
+[data-testid="stSidebar"]{background:linear-gradient(170deg,#06101e 0%,#0d1f3c 55%,#0a1628 100%);border-right:1px solid #1a3050;}
+[data-testid="stSidebar"] .stFileUploader label,[data-testid="stSidebar"] .stRadio > label,[data-testid="stSidebar"] .stSelectbox > label{color:#4a6582 !important;font-size:.68rem !important;letter-spacing:.12em !important;text-transform:uppercase !important;font-weight:600 !important;}
+[data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p{color:#c0cfe0 !important;font-size:.9rem !important;}
+[data-testid="stSidebar"] .stSelectbox>div>div{background:#132035 !important;border:1px solid #243d5a !important;color:#dde6f0 !important;border-radius:6px !important;}
+[data-testid="stSidebar"] .stFileUploader>div{background:#132035 !important;border:1px dashed #2a4a6a !important;border-radius:8px !important;}
+[data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.8rem !important;}
+.main{background:#f6f8fb !important;}.block-container{padding-top:1.8rem !important;max-width:1300px;}
+.az-header{background:linear-gradient(130deg,#081420 0%,#0f2644 50%,#162e52 100%);border-radius:16px;padding:2rem 2.5rem;margin-bottom:1.8rem;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.15);}
+.az-header::after{content:'';position:absolute;bottom:-60px;right:-40px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,76,.18) 0%,transparent 70%);}
+.az-eyebrow{font-size:.65rem;letter-spacing:.2em;color:#4a7098;text-transform:uppercase;font-weight:600;}
+.az-title{font-family:'Cormorant Garamond',serif;font-size:2.1rem;font-weight:700;color:#f0f6ff;margin:.2rem 0 .4rem;line-height:1.1;}
+.az-rule{width:38px;height:3px;background:#C9A84C;border-radius:2px;margin:.6rem 0;}
+.az-meta{font-size:.88rem;color:#6b8fb0;}
+.kpi{background:#fff;border:1px solid #e4eaf3;border-radius:12px;padding:1.2rem 1.4rem;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.kpi-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8;font-weight:500;margin-bottom:.3rem;}
+.kpi-value{font-size:1.9rem;font-weight:700;color:#0d1b2a;font-family:'Cormorant Garamond',serif;line-height:1;}
+.kpi-sub{font-size:.75rem;color:#64748b;margin-top:.3rem;}
+.sec-title{font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:#0d1b2a;border-bottom:2px solid #c9a84c;display:inline-block;padding-bottom:.4rem;margin-bottom:.9rem;}
+.fund-group-hdr{background:#f0f4f9;padding:.45rem 1rem;font-size:.65rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;}
+.fund-row{display:flex;align-items:center;gap:10px;padding:.65rem 1rem;border-bottom:1px solid #f1f5f9;}
+.fund-row:last-child{border-bottom:none;}
+.fund-dot{width:8px;height:34px;border-radius:3px;flex-shrink:0;}
+.fund-name{font-size:.83rem;color:#1e293b;font-weight:500;flex:1;min-width:0;}
+.fund-cat{font-size:.68rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fund-pct{font-size:1rem;font-weight:700;color:#0d1b2a;min-width:2.8rem;text-align:right;}
+[data-testid="stDownloadButton"]>button{background:linear-gradient(135deg,#0f2d6b 0%,#1b4fbb 100%) !important;color:#fff !important;font-size:1.05rem !important;font-weight:600 !important;padding:.9rem 2rem !important;border-radius:10px !important;border:none !important;width:100% !important;letter-spacing:.02em !important;box-shadow:0 4px 18px rgba(27,79,187,.35) !important;}
+[data-testid="stDownloadButton"]>button:hover{box-shadow:0 6px 24px rgba(27,79,187,.55) !important;transform:translateY(-2px) !important;}
+.w-ok{background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#065f46;}
+.w-warn{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#92400e;}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS
+# ════════════════════════════════════════════════════════════
+
+def get_macro(cat: str) -> str:
+    if not cat or cat == "-": return "Altro"
+    c = cat.lower()
+    if "azionari" in c or "equity" in c: return "Azionari"
+    if any(x in c for x in ["obbligazionari","bond","credit","debt","sukuk","reddito"]): return "Obbligazionari"
+    if any(x in c for x in ["bilanciati","allocation","flessibili","balanced","flexible","prudenti","moderati"]): return "Bilanciati/Flessibili"
+    if any(x in c for x in ["alternativi","alternative","commodity"]): return "Alternativi"
+    return "Altro"
+
+
+def assign_colors(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    counter = {k: 0 for k in SHADES}
+    colors = []
+    for _, row in df.iterrows():
+        mc = row.get("macro_cat", "Altro")
+        shades = SHADES.get(mc, SHADES["Altro"])
+        colors.append(shades[counter.get(mc, 0) % len(shades)])
+        counter[mc] = counter.get(mc, 0) + 1
+    df["color"] = colors
+    return df
+
+
+def pct_color(val_str: str) -> str:
+    """Returns 'pos', 'neg', or 'neu' based on value sign"""
+    try:
+        v = float(val_str.replace("%","").replace(",",".").strip())
+        return "pos" if v > 0 else ("neg" if v < 0 else "neu")
+    except:
+        return "neu"
+
+
+# ── UNP/IUNP lookup helpers ──────────────────────────────────
+
+def _normalize_for_unp(name: str) -> str:
+    """Normalise a fund name for UNP/factbook catalog lookup.
+
+    Works across all three name formats:
+    - Excel  : "AZ F.1 Bd. Global Macro Bond A Cap EUR"  (abbreviation + share class)
+    - Excel  : "AZ F.1 Bd Global Macro Bond A Cap EUR"   (abbreviation without period)
+    - PDF    : "AZ Bond - Global Macro Bond"              (full name with dash)
+    - Web    : "AZ BOND - GLOBAL MACRO BOND"              (full name, ALL CAPS)
+
+    All four normalise to → "az bond global macro bond"
+    """
+    n = name.strip()
+    # ── 1. Expand AZ F.1 abbreviations (period OPTIONAL after family code) ────
+    n = re.sub(r'AZ\s+F\.1\s+All\.?\s*',  'AZ Allocation ',  n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Eq\.?\s*',   'AZ Equity ',      n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Bd\.?\s*',   'AZ Bond ',        n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Alt\.?\s*',  'AZ Alternative ', n, flags=re.IGNORECASE)
+    n = re.sub(r'AZ\s+F\.1\s+Isl\.?\s*',  'AZ Islamic ',     n, flags=re.IGNORECASE)
+    # ── 2. Strip "(Classe C)" / "(classe c)" variants ─────────────────────────
+    n = re.sub(r'\s*\(clas[se]+\s+c\)\s*$', '', n, flags=re.IGNORECASE)
+    # ── 3. Strip share-class suffix: " A Cap EUR", " B Acc USD", "A-HU Cap EUR Hdg" etc.
+    n = re.sub(r'\s+[A-Z][-\w]*\s+(Cap|Acc|Dis|Inc)\s+\w{3}(\s+Hdg)?\s*$', '', n, flags=re.IGNORECASE)
+    n = re.sub(r'\s+[A-Z]\s+(Cap|Acc|Dis|Inc)\s*$',                          '', n, flags=re.IGNORECASE)
+    n = re.sub(r'\s+Cap\s+\w{3}\s*$',                                         '', n, flags=re.IGNORECASE)
+    # ── 4. Normalise dashes, ampersands, dots and remaining punctuation ────────
+    n = re.sub(r'[-–—]', ' ', n)
+    n = re.sub(r'[&]',   ' ', n)
+    n = re.sub(r'[^\w\s]', ' ', n)
+    n = re.sub(r'\s+', ' ', n).strip().lower()
+    return n
+
+
+_UNP_CATALOG_NORMALIZED: dict = {
+    _normalize_for_unp(k): v for k, v in UNP_CATALOG.items()
+}
+
+# Alias table: normalised Excel name → normalised catalog name
+# Needed when the Excel name differs semantically from the catalog (e.g. "Hybrids" vs
+# "Sustainable Hybrid") or when slight wording changes prevent automatic substring match.
+_FUND_ALIASES: dict = {
+    "az bond hybrids":              "az bond sustainable hybrid",
+    "az bond sustainable hybrids":  "az bond sustainable hybrid",
+    # Long-Term Opp variants (catalog uses abbreviated "Opp.")
+    "az allocation long term credit opportunities":  "az allocation long term credit opp",
+    "az allocation long term equity opportunities":  "az allocation long term equity opp",
+    "az allocation italian long term opportunities": "az allocation italian long term opp",
+    "az allocation italian long-term opportunities": "az allocation italian long term opp",
+}
+
+
+def lookup_unp(fund_name: str):
+    """Return (unp_pct, iunp36_pct) for a fund, or (None, None) if not found."""
+    norm = _normalize_for_unp(fund_name)
+    norm = _FUND_ALIASES.get(norm, norm)          # apply alias if any
+    # 1. exact match
+    if norm in _UNP_CATALOG_NORMALIZED:
+        return _UNP_CATALOG_NORMALIZED[norm]
+    # 2. longest substring match (catalog key inside fund name or vice versa)
+    best, best_len = None, 0
+    for cat_key, val in _UNP_CATALOG_NORMALIZED.items():
+        if cat_key in norm or norm in cat_key:
+            if len(cat_key) > best_len:
+                best, best_len = val, len(cat_key)
+    return best if best is not None else (None, None)
+
+
+# ════════════════════════════════════════════════════════════
+# DATA PARSING
+# ════════════════════════════════════════════════════════════
+
+@st.cache_data(show_spinner=False)
+def parse_excel(file_bytes: bytes) -> dict:
+    wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=False)
+    out = {}
+    for sname in ["PTF FULL", "PTF SHORT"]:
+        if sname in wb.sheetnames:
+            out[sname] = _parse_ptf(wb, sname)
+    if "FIDA" in wb.sheetnames:
+        out["FIDA"] = _parse_fida(wb)
+    wb.close()
+    out["fida_urls"] = extract_fida_urls(file_bytes)
+    return out
+
+
+@st.cache_data(show_spinner=False)
+def parse_factbook(pdf_bytes: bytes) -> dict:
+    """Parse the AZ Investments factbook PDF performance summary tables.
+
+    Returns {normalized_fund_name: {ytd, perf_1y, perf_3y, perf_5y}}
+
+    Summary table columns: Fund | AUM | 1M | 3M | 6M | 12M | 24M | 36M | 60M | YTD
+    Risk metrics (vol, Sharpe, Sortino) are NOT in the factbook — those still
+    come from FondiDoc.
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        return {}
+
+    result: dict = {}
+
+    def _to_pct(s):
+        """Convert a factbook value string to a signed '%' string, or None."""
+        if not s:
+            return None
+        s = str(s).strip()
+        if s in ('-', 'n.d.', 'N/D', '', 'None', 'n/d', 'nd'):
+            return None
+        s = s.replace('−', '-').replace('–', '-').replace('—', '-')
+        s = s.replace(',', '.').replace('%', '').strip()
+        try:
+            return f"{float(s):+.2f}%"
+        except Exception:
+            return None
+
+    def _annualize(pct_str, years: float):
+        """Convert a cumulative return string to annualized (CAGR)."""
+        if not pct_str:
+            return None
+        try:
+            v = float(pct_str.replace('%','').replace('+','').strip()) / 100
+            ann = ((1 + v) ** (1 / years) - 1) * 100
+            return f"{ann:+.2f}%"
+        except Exception:
+            return None
+
+    def _plausible(pct_str, max_abs: float = 80.0):
+        """Return True if pct_str is None OR in [-max_abs, +max_abs]."""
+        if pct_str is None:
+            return True
+        try:
+            return abs(float(pct_str.replace('%','').replace('+',''))) <= max_abs
+        except Exception:
+            return True  # keep on parse error
+
+    def _store(name_raw: str, cols_vals: list):
+        """Normalise name and store performance data if not already seen.
+
+        cols_vals: [1M, 3M, 6M, 12M, 24M, 36M, 60M, YTD]
+        3Y (36M) and 5Y (60M) are stored as ANNUALIZED CAGR to match FondiDoc.
+        """
+        if not name_raw:
+            return
+        norm = _normalize_for_unp(name_raw.strip())
+        norm = _FUND_ALIASES.get(norm, norm)
+        if not norm or norm in result:
+            return
+        # ── extract raw cumulative values ─────────────────────────────
+        n = len(cols_vals)
+        ytd_raw = _to_pct(cols_vals[7]) if n > 7 else _to_pct(cols_vals[-1] if cols_vals else None)
+        p1y_raw = _to_pct(cols_vals[3]) if n > 3 else None
+        p3y_cum = _to_pct(cols_vals[5]) if n > 5 else None   # 36M cumulative
+        p5y_cum = _to_pct(cols_vals[6]) if n > 6 else None   # 60M cumulative
+
+        # ── sanity check: YTD and 1Y must be in ±80 % range ──────────
+        # Values outside this range indicate NAV prices, year numbers, or
+        # misaligned columns from individual fund pages (not summary table).
+        if not _plausible(ytd_raw, 80) or not _plausible(p1y_raw, 80):
+            return
+
+        # ── annualize 3Y and 5Y (factbook stores cumulative) ─────────
+        p3y = _annualize(p3y_cum, 3)
+        p5y = _annualize(p5y_cum, 5)
+
+        if any(v is not None for v in (ytd_raw, p1y_raw, p3y, p5y)):
+            result[norm] = {
+                "ytd": ytd_raw, "perf_1y": p1y_raw,
+                "perf_3y": p3y, "perf_5y": p5y,
+            }
+
+    _ref_date: str = ""   # data di riferimento estratta dal frontespizio
+
+    try:
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            for page_idx, page in enumerate(pdf.pages):
+
+                # ── A: structured table extraction (best-case) ────────────
+                for tbl in (page.extract_tables() or []):
+                    for row in tbl:
+                        if not row or len(row) < 6:
+                            continue
+                        cell0 = str(row[0] or '').replace('\n', ' ').strip()
+                        if not re.match(r'^(AZ\b|AZIMUT\b)', cell0, re.IGNORECASE):
+                            continue
+                        # row layout: [name, AUM, 1M, 3M, 6M, 12M, 24M, 36M, 60M, YTD]
+                        data_cols = [str(c or '').strip() for c in row[2:]]
+                        _store(cell0, data_cols)
+
+                # ── B: text-line fallback ──────────────────────────────────
+                text = page.extract_text() or ""
+
+                # Estrai data di riferimento dal frontespizio (prime 5 pagine)
+                if page_idx < 5 and not _ref_date:
+                    # Cerca GG/MM/AAAA oppure GG.MM.AAAA
+                    _dm = re.search(r'\b(\d{1,2})[/.](\d{2})[/.](\d{4})\b', text)
+                    if _dm:
+                        _ref_date = f"{_dm.group(1).zfill(2)}/{_dm.group(2)}/{_dm.group(3)}"
+                    else:
+                        # Cerca "31 marzo 2026" / "31 March 2026"
+                        _months = {
+                            "gennaio":"01","february":"02","febbraio":"02","march":"03",
+                            "marzo":"03","april":"04","aprile":"04","may":"05","maggio":"05",
+                            "june":"06","giugno":"06","july":"07","luglio":"07",
+                            "august":"08","agosto":"08","september":"09","settembre":"09",
+                            "october":"10","ottobre":"10","november":"11","novembre":"11",
+                            "december":"12","dicembre":"12","january":"01","gennaio":"01",
+                        }
+                        _mp = r'\b(\d{1,2})\s+(' + '|'.join(_months) + r')\s+(20\d{2})\b'
+                        _dm2 = re.search(_mp, text, re.IGNORECASE)
+                        if _dm2:
+                            _mn = _months.get(_dm2.group(2).lower(), "??")
+                            _ref_date = f"{_dm2.group(1).zfill(2)}/{_mn}/{_dm2.group(3)}"
+
+                for line in text.split('\n'):
+                    line = line.strip()
+                    if not re.match(r'^(AZ\b|AZIMUT\b)', line, re.IGNORECASE):
+                        continue
+                    tokens = line.split()
+                    if len(tokens) < 6:
+                        continue
+                    # Find first all-digit token (= AUM in M€, e.g. "81", "1050")
+                    # Skip year-like tokens (2010-2030) which appear in annual-return
+                    # tables on individual fund pages and would misalign columns.
+                    num_idx = next(
+                        (i for i, t in enumerate(tokens)
+                         if re.match(r'^\d{1,6}$', t)
+                         and i > 0
+                         and not re.match(r'^20[12]\d$', t)),  # skip 2010-2029
+                        None
+                    )
+                    if num_idx is None:
+                        continue
+                    name_raw = ' '.join(tokens[:num_idx])
+                    # tokens after AUM: [1M, 3M, 6M, 12M, 24M, 36M, 60M, YTD]
+                    data_cols = tokens[num_idx + 1:]
+                    _store(name_raw, data_cols)
+
+    except Exception:
+        pass
+
+    # Aggiungi metadato data di riferimento (chiave speciale)
+    if _ref_date:
+        result["_ref_date"] = _ref_date
+
+    return result
+
+
+def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
+    ws = wb[sheet_name]
+    rows = list(ws.iter_rows(values_only=True))
+    funds, cur_group = [], {"name":None,"mc":1.0,"me":1.0,"ma":1.0}
+    for row in rows:
+        name = row[COL_A]
+        if not name or not isinstance(name, str): continue
+        name = name.strip()
+        if name in GROUP_NAMES:
+            cur_group = {
+                "name": name,
+                "mc": float(row[COL_C]) if isinstance(row[COL_C],(int,float)) else 1.0,
+                "me": float(row[COL_G]) if isinstance(row[COL_G],(int,float)) else 1.0,
+                "ma": float(row[COL_K]) if isinstance(row[COL_K],(int,float)) else 1.0,
+            }
+            continue
+        if name.startswith("AZ") and cur_group["name"]:
+            rw = row[COL_R]
+            if not isinstance(rw,(int,float)) or rw <= 0: continue
+            funds.append({
+                "nome":     name,
+                "categoria": row[COL_B] if isinstance(row[COL_B],str) else "",
+                "gruppo":   cur_group["name"],
+                "az_pct":   min(1.0,max(0.0,float(row[COL_O]) if isinstance(row[COL_O],(int,float)) else 0.5)),
+                "obb_pct":  min(1.0,max(0.0,1.0-(float(row[COL_O]) if isinstance(row[COL_O],(int,float)) else 0.5))),
+                "r_weight": float(rw),
+                "mc":cur_group["mc"],"me":cur_group["me"],"ma":cur_group["ma"],
+            })
+    if not funds: return pd.DataFrame()
+    df = pd.DataFrame(funds)
+    for wcol, mcol in [("w_cons","mc"),("w_equil","me"),("w_accr","ma")]:
+        raw = df["r_weight"]*df[mcol]
+        df[wcol] = raw/raw.sum() if raw.sum()>0 else raw
+    df["macro_cat"] = df["categoria"].apply(get_macro)
+    df = assign_colors(df)
+    return df
+
+
+def _parse_fida(wb) -> pd.DataFrame:
+    ws = wb["FIDA"]
+    rows = list(ws.iter_rows(values_only=True))
+    funds = []
+    for row in rows[1:]:
+        nome = row[0]
+        if not nome or not isinstance(nome,str): continue
+        nome = nome.strip().replace("\xa0","")
+        cat  = (row[2] or "").strip()
+        funds.append({"nome":nome,"isin":row[1] or "","categoria":cat,"macro_cat":get_macro(cat)})
+    return pd.DataFrame(funds).drop_duplicates(subset=["nome"])
+
+
+def extract_fida_urls(file_bytes: bytes) -> dict:
+    """Extract fondidoc.it URLs from FIDA sheet hyperlinks in the Excel XML."""
+    fund_urls = dict(MANUAL_URL_OVERRIDES)
+    try:
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+            ss_root  = ET.fromstring(z.read("xl/sharedStrings.xml"))
+            ns_ss    = {"s":"http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            strings  = ["".join(t.text or "" for t in si.findall(".//s:t",ns_ss))
+                        for si in ss_root.findall("s:si",ns_ss)]
+            fida_root= ET.fromstring(z.read("xl/worksheets/sheet5.xml"))
+            ws_ns    = {"ws":"http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            rels_root= ET.fromstring(z.read("xl/worksheets/_rels/sheet5.xml.rels"))
+            rels_ns  = {"rel":"http://schemas.openxmlformats.org/package/2006/relationships"}
+        rid_to_url = {r.get("Id"):r.get("Target") for r in rels_root.findall("rel:Relationship",rels_ns)}
+        hyp_map    = {}
+        r_attr = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+        for hl in fida_root.findall(".//ws:hyperlink",ws_ns):
+            rid = hl.get(r_attr)
+            if rid: hyp_map[hl.get("ref")] = rid
+        for row in fida_root.findall(".//ws:row",ws_ns):
+            for cell in row.findall("ws:c",ws_ns):
+                ref = cell.get("r")
+                if ref and ref.startswith("A") and ref in hyp_map:
+                    v = cell.find("ws:v",ws_ns)
+                    if v is not None and cell.get("t") == "s":
+                        name = strings[int(v.text)].strip().replace("\xa0","")
+                        url  = rid_to_url.get(hyp_map[ref],"")
+                        if "fondidoc.it" in url:
+                            fund_urls[name] = url
+    except Exception:
+        pass
+    return fund_urls
+
+
+# ════════════════════════════════════════════════════════════
+# FONDIDOC SCRAPING
+# ════════════════════════════════════════════════════════════
+
+def _to_en_url(url: str) -> str:
+    """Ensure URL uses /en/ locale."""
+    if "/en/" in url: return url
+    return url.replace("fondidoc.it/d/","fondidoc.it/en/d/")
+
+
+def _to_ana_url(index_url: str) -> str:
+    return index_url.replace("/d/Index/","/d/Ana/").replace("/en/d/Index/","/en/d/Ana/")
+
+
+def _fetch_html(url: str, timeout: int = 8) -> str | None:
+    try:
+        r = requests.get(_to_en_url(url), headers=FONDIDOC_HEADERS, timeout=timeout)
+        return r.text if r.status_code == 200 else None
+    except Exception:
+        return None
+
+
+def _parse_overview(html: str) -> dict:
+    soup = BeautifulSoup(html, "lxml")
+    lines = [l.strip() for l in soup.get_text(separator="\n").split("\n") if l.strip()]
+    d = {}
+    for i, line in enumerate(lines):
+        nxt = lines[i+1] if i+1<len(lines) else ""
+        if line == "SRRI (risk value)":           d["srri"]         = nxt
+        elif line == "Start date":                d["start_date"]   = nxt
+        elif line == "Assogestioni category":     d["cat_assog"]    = nxt
+        elif line == "Income distribution":       d["income"]       = nxt
+        elif line == "Management Fee":            d["mgmt_fee"]     = nxt
+        elif line == "Performance Fee":           d["perf_fee"]     = nxt
+        elif line == "Subscription fee":          d["sub_fee"]      = nxt
+        elif line == "Rating" and "fida_rating" not in d: d["fida_rating"] = nxt
+        elif line == "Score":                     d["fida_score"]   = nxt
+        elif line == "Category" and "fida_cat" not in d: d["fida_cat"] = nxt
+    return d
+
+
+def _parse_analysis(html: str) -> dict:
+    soup = BeautifulSoup(html, "lxml")
+    d = {}
+
+    # NAV section
+    lines = [l.strip() for l in soup.get_text(separator="\n").split("\n") if l.strip()]
+    for i, line in enumerate(lines):
+        nxt = lines[i+1] if i+1<len(lines) else ""
+        if line == "Last update": d["last_update"] = nxt
+        elif line == "NAV":       d["nav"]          = nxt
+        elif line == "Daily change (%)": d["daily_change"] = nxt
+
+    # Tables
+    for table in soup.find_all("table"):
+        rows = table.find_all("tr")
+        if not rows: continue
+        header = [td.get_text(strip=True) for td in rows[0].find_all(["th","td"])]
+
+        # Performance table (has YTD column)
+        if "YTD" in header and "1 year" in header:
+            def sg(cells, key, hdr):
+                try: return cells[hdr.index(key)] if hdr.index(key)<len(cells) else "—"
+                except ValueError: return "—"
+            for row in rows[1:]:
+                cells = [td.get_text(strip=True) for td in row.find_all("td")]
+                if not cells: continue
+                lbl = cells[0].lower()
+                if "performance" in lbl:
+                    d["ytd"]     = sg(cells,"YTD",header)
+                    d["perf_1y"] = sg(cells,"1 year",header)
+                    d["perf_3y"] = sg(cells,"3 years",header)
+                    d["perf_5y"] = sg(cells,"5 years",header)
+
+        # Risk table (1 year / 3 years / 5 years, NO YTD)
+        elif "1 year" in header and "YTD" not in header and len(header) >= 4:
+            for row in rows[1:]:
+                cells = [td.get_text(strip=True) for td in row.find_all("td")]
+                if not cells: continue
+                lbl = cells[0].lower()
+                def gv(idx): return cells[idx] if idx<len(cells) else "—"
+                if "volatility" in lbl and "negative" not in lbl:
+                    d["vol_1y"],d["vol_3y"],d["vol_5y"] = gv(1),gv(2),gv(3)
+                elif "negative" in lbl:
+                    d["neg_vol_1y"] = gv(1)
+                    if len(header) > 2: d["neg_vol_3y"] = gv(2)
+                    if len(header) > 3: d["neg_vol_5y"] = gv(3)
+                elif "sharpe" in lbl:
+                    d["sharpe_1y"],d["sharpe_3y"],d["sharpe_5y"] = gv(1),gv(2),gv(3)
+                elif "sortino" in lbl:
+                    d["sortino_1y"] = gv(1)
+                elif "var" in lbl or "value at risk" in lbl:
+                    d["var_1y"] = gv(1)
+                    if len(header) > 2: d["var_3y"] = gv(2)
+
+        # Annual performance (header contains year digits)
+        elif any(h.isdigit() and len(h)==4 for h in header):
+            years = [h for h in header if h.isdigit() and len(h)==4]
+            for row in rows[1:]:
+                cells = [td.get_text(strip=True) for td in row.find_all("td")]
+                if len(cells)<2: continue
+                # Take first data row that has % values (fund row, not benchmark)
+                if any("%" in c for c in cells) and "annual_perf" not in d:
+                    annual = {}
+                    for yr in years:
+                        try:
+                            idx = header.index(yr)
+                            annual[yr] = cells[idx] if idx<len(cells) else "—"
+                        except ValueError: pass
+                    if annual: d["annual_perf"] = annual
+                    break
+    return d
+
+
+def _extract_isin(url: str) -> str:
+    """Estrae ISIN da URL FondiDoc (formato: /CATCODE/ISIN_slug-nome-fondo)."""
+    m = re.search(r'/([A-Z]{2}[A-Z0-9]{10})[_/]', url)
+    return m.group(1) if m else ""
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_fund_data(index_url: str) -> dict:
+    """Fetch overview + analysis for one fund. Cached 1h."""
+    result = {"url": index_url}
+    isin = _extract_isin(index_url)
+    if isin:
+        result["isin"] = isin
+    html_idx = _fetch_html(index_url)
+    if html_idx: result["overview"] = _parse_overview(html_idx)
+    html_ana = _fetch_html(_to_ana_url(index_url))
+    if html_ana: result["analysis"] = _parse_analysis(html_ana)
+    return result
+
+
+def fetch_all_fund_data(df: pd.DataFrame, fida_urls: dict,
+                         progress_cb=None) -> dict:
+    """Parallel fetch for all portfolio funds."""
+    tasks = {}
+    for nome in df["nome"].unique():
+        url = fida_urls.get(nome)
+        if url: tasks[nome] = url
+
+    results = {}
+    total = len(tasks)
+    done  = 0
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {pool.submit(fetch_fund_data, url): nome for nome, url in tasks.items()}
+        for future in as_completed(futures):
+            nome = futures[future]
+            try: results[nome] = future.result()
+            except Exception: results[nome] = {}
+            done += 1
+            if progress_cb: progress_cb(done/total)
+
+    return results
+
+
+# ════════════════════════════════════════════════════════════
+# PLOTLY CHARTS (unchanged)
+# ════════════════════════════════════════════════════════════
+
+def make_fund_pie(df, wcol, profile):
+    d = df[df[wcol]>0.005].copy()
+    d["pct"] = d[wcol]*100
+    labels = d["nome"].apply(lambda x: (x[:38]+"…") if len(x)>38 else x)
+    fig = go.Figure(go.Pie(
+        labels=labels, values=d["pct"],
+        marker=dict(colors=d["color"].tolist(), line=dict(color="#fff",width=2.5)),
+        hovertemplate="<b>%{label}</b><br>Peso: <b>%{value:.1f}%</b><extra></extra>",
+        textinfo="percent", textfont=dict(size=10,family="DM Sans"),
+        hole=0.40, pull=[0.04 if v==d["pct"].max() else 0 for v in d["pct"]],
+        sort=False, direction="clockwise",
+    ))
+    fig.update_layout(
+        margin=dict(t=10,b=10,l=10,r=180), showlegend=True,
+        legend=dict(x=1.01,y=0.5,orientation="v",font=dict(size=9.5,family="DM Sans"),bgcolor="rgba(0,0,0,0)"),
+        paper_bgcolor="rgba(0,0,0,0)", height=430,
+        annotations=[dict(text=f"<b>{profile[:4]}</b>",x=0.5,y=0.5,showarrow=False,
+                          font=dict(size=17,color="#0d1b2a",family="Cormorant Garamond"))],
+    )
+    return fig
+
+
+def make_macro_bar(df, wcol):
+    agg = df[df[wcol]>0.001].groupby("macro_cat")[wcol].sum().reset_index().sort_values(wcol)
+    agg["pct"] = agg[wcol]*100
+    agg["color"] = agg["macro_cat"].map(MACRO_COLORS)
+    fig = go.Figure(go.Bar(
+        x=agg["pct"], y=agg["macro_cat"], orientation="h",
+        marker=dict(color=agg["color"].tolist(), line=dict(color="#fff",width=1)),
+        hovertemplate="<b>%{y}</b>: %{x:.1f}%<extra></extra>",
+        text=agg["pct"].apply(lambda v:f"{v:.1f}%"),
+        textposition="inside", insidetextanchor="middle",
+        textfont=dict(color="#fff",size=11,family="DM Sans"),
+    ))
+    fig.update_layout(
+        margin=dict(t=10,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False,showticklabels=False,range=[0,105]),
+        yaxis=dict(showgrid=False,tickfont=dict(size=11,family="DM Sans")),
+        height=max(160,len(agg)*48), bargap=0.28,
+    )
+    return fig
+
+
+# ════════════════════════════════════════════════════════════
+# PDF — MATPLOTLIB HELPERS
+# ════════════════════════════════════════════════════════════
+
+def _mpl_portfolio_pie(df, wcol, profile) -> io.BytesIO:
+    """Donut only — la leggenda viene resa in ReportLab per permettere hyperlink."""
+    d = df[df[wcol] > 0.005].sort_values(wcol, ascending=False)
+    fig, ax = plt.subplots(figsize=(5.5, 5.5))
+    _, _, autotexts = ax.pie(
+        d[wcol], colors=d["color"].tolist(),
+        autopct=lambda p: f"{p:.1f}%" if p > 3.5 else "",
+        pctdistance=0.72,
+        wedgeprops=dict(width=0.58, edgecolor="white", linewidth=2),
+        startangle=90,
+    )
+    for at in autotexts:
+        at.set_fontsize(9); at.set_color("white"); at.set_fontweight("bold")
+    ax.text(0, 0, profile[:4], ha="center", va="center",
+            fontsize=16, fontweight="bold", color="#0D1B2A")
+    fig.patch.set_facecolor("#FFFFFF")
+    plt.tight_layout(pad=0.3)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig); buf.seek(0)
+    return buf
+
+
+def _mpl_macro_pie(df, wcol) -> io.BytesIO | None:
+    """Asset allocation donut Azionario/Obbligazionario — leggenda in ReportLab."""
+    w_az  = (df[wcol] * df["az_pct"]).sum()
+    w_obb = (df[wcol] * df["obb_pct"]).sum()
+    if w_az + w_obb < 0.001:
+        return None
+    fig, ax = plt.subplots(figsize=(5.5, 5.5))
+    _, _, autotexts = ax.pie(
+        [w_az, w_obb], colors=["#1B4FBB", "#2D9D78"],
+        autopct=lambda p: f"{p:.1f}%" if p >= 5 else "",
+        pctdistance=0.70,
+        wedgeprops=dict(width=0.58, edgecolor="white", linewidth=2.5),
+        startangle=90,
+    )
+    for at in autotexts:
+        at.set_fontsize(10); at.set_color("white"); at.set_fontweight("bold")
+    ax.text(0, 0, "Asset\nAlloc.", ha="center", va="center",
+            fontsize=11, fontweight="bold", color="#0D1B2A")
+    fig.patch.set_facecolor("#FFFFFF")
+    plt.tight_layout(pad=0.3)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig); buf.seek(0)
+    return buf
+
+
+def _mpl_annual_bar(annual_perf: dict, fund_name: str) -> io.BytesIO | None:
+    if not annual_perf: return None
+    years, vals = [], []
+    for y,v in sorted(annual_perf.items()):
+        try:
+            num = float(v.replace("%","").replace(",",".").strip())
+            years.append(y); vals.append(num)
+        except: pass
+    if not years: return None
+    fig, ax = plt.subplots(figsize=(6,2.2))
+    colors = ["#2D9D78" if v>=0 else "#E05252" for v in vals]
+    bars = ax.bar(years, vals, color=colors, edgecolor="white", linewidth=0.8, width=0.6)
+    ax.axhline(0, color="#94A3B8", linewidth=0.8, linestyle="-")
+    for bar,val in zip(bars,vals):
+        ax.text(bar.get_x()+bar.get_width()/2,
+                bar.get_height()+(0.3 if val>=0 else -0.9),
+                f"{val:+.1f}%", ha="center", va="bottom", fontsize=7, fontweight="bold",
+                color="#2D9D78" if val>=0 else "#E05252")
+    ax.set_ylabel("%", fontsize=8, color="#64748B")
+    ax.tick_params(axis="both",labelsize=8,colors="#475569")
+    ax.spines[["top","right","left"]].set_visible(False)
+    ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
+    ax.grid(axis="y",alpha=0.3,linestyle="--")
+    fig.patch.set_facecolor("#FFFFFF"); plt.tight_layout(pad=0.5)
+    buf=io.BytesIO(); fig.savefig(buf,format="png",dpi=130,bbox_inches="tight",facecolor="white")
+    plt.close(fig); buf.seek(0); return buf
+
+
+# ════════════════════════════════════════════════════════════
+# PDF GENERATION
+# ════════════════════════════════════════════════════════════
+
+def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
+                 ptf_name: str, fund_data: dict = None,
+                 fida_df: pd.DataFrame = None,
+                 factbook_data: dict = None,
+                 cache_date: str = "") -> bytes:
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=2*cm, rightMargin=2*cm,
+                            topMargin=2.2*cm, bottomMargin=2.2*cm)
+
+    ss = getSampleStyleSheet()
+    def S(name,**kw): return ParagraphStyle(name,parent=ss["Normal"],**kw)
+
+    T  = S("T",  fontName="Helvetica-Bold",  fontSize=22, textColor=rl_colors.HexColor("#0D1B2A"), spaceAfter=4,leading=28)
+    EY = S("EY", fontName="Helvetica",       fontSize=8,  textColor=rl_colors.HexColor("#94A3B8"), spaceAfter=4,letterSpacing=1.5)
+    SU = S("SU", fontName="Helvetica",       fontSize=10, textColor=rl_colors.HexColor("#64748B"), spaceAfter=4)
+    SC = S("SC", fontName="Helvetica-Bold",  fontSize=11, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=14,spaceAfter=8)
+    BD = S("BD", fontName="Helvetica",       fontSize=8.5,textColor=rl_colors.HexColor("#1E293B"), leading=13)
+    SM = S("SM", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11)
+    FT = S("FT", fontName="Helvetica-Oblique",fontSize=7, textColor=rl_colors.HexColor("#94A3B8"), leading=10)
+    FS = S("FS", fontName="Helvetica-Bold",  fontSize=13, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=4,spaceAfter=2)
+    FK = S("FK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#64748B"), spaceAfter=2)
+    LK = S("LK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1B4FBB"), spaceAfter=2)
+    # HDR: sempre bianco+grassetto — per celle intestazione su sfondo scuro
+    # (TEXTCOLOR di TableStyle NON sovrascrive il colore dei Paragraph — serve lo stile dedicato)
+    HDR= S("HDR",fontName="Helvetica-Bold",  fontSize=7.5,textColor=rl_colors.white, leading=11)
+
+    story = []
+    d_act = df[df[wcol]>0.001].copy()
+    n_fondi = len(d_act)
+
+    # ISIN da foglio FIDA (fallback per fondi senza URL FondiDoc)
+    isin_map = {}
+    if fida_df is not None and not fida_df.empty and "isin" in fida_df.columns:
+        isin_map = {r["nome"]: str(r["isin"]).strip() for _, r in fida_df.iterrows()
+                    if r.get("isin") and str(r.get("isin","")).strip()}
+    w_az  = (d_act[wcol]*d_act["az_pct"]).sum()*100
+    w_obb = (d_act[wcol]*d_act["obb_pct"]).sum()*100
+
+    # ── ACCENT BAR ──────────────────────────────────────────
+    story.append(Table([[""]], colWidths=[17*cm], rowHeights=[10],
+        style=TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#0D1B2A")),
+            ("LINEBELOW",(0,0),(-1,-1),3,rl_colors.HexColor("#C9A84C")),
+        ])))
+    story.append(Spacer(1,14))
+
+    # ── TITLE BLOCK ─────────────────────────────────────────
+    story.append(Paragraph("AZIMUT INVESTMENTS  ·  PORTAFOGLI MODELLO", EY))
+    story.append(Spacer(1,4))
+    story.append(Paragraph(f"Portafoglio {ptf_name}", T))
+    story.append(Paragraph(
+        f"{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()}  ·  "
+        f"Dati al {datetime.date.today().strftime('%d %B %Y')}", SU))
+    story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=14))
+
+    # ── KPI ─────────────────────────────────────────────────
+    KC = S("KC", fontName="Helvetica", fontSize=8.5,
+           textColor=rl_colors.HexColor("#1E293B"), leading=13, alignment=1)
+    def kpi_cell(v,l):
+        return Paragraph(f'<font size="18"><b>{v}</b></font><br/>'
+                         f'<font size="8" color="#64748B">{l}</font>', KC)
+    kpi = Table(
+        [[kpi_cell(str(n_fondi),"Fondi"),kpi_cell(f"{w_az:.1f}%","Quota Azionaria"),
+          kpi_cell(f"{w_obb:.1f}%","Quota Obbligazionaria"),
+          kpi_cell(datetime.date.today().strftime("%m/%Y"),"Data Report")]],
+        colWidths=[4.25*cm]*4,
+        rowHeights=[2.2*cm],
+    )
+    kpi.setStyle(TableStyle([
+        ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
+        ("INNERGRID",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
+        ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F8FAFC")),
+        ("PADDING",(0,0),(-1,-1),12),("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+    ]))
+    story.append(kpi)
+
+    # ── PIE CHARTS con legende ReportLab ────────────────────
+    # Titolo sezione con meno spazio sopra per avvicinare il grafico al KPI
+    SC_PIE = S("SCPIE", fontName="Helvetica-Bold", fontSize=11,
+               textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=6, spaceAfter=5)
+    story.append(Paragraph("Allocazione del Portafoglio", SC_PIE))
+
+    PIE_W = 7.5 * cm
+    LEG_W = 17 * cm - PIE_W   # 9.5 cm
+
+    LG = S("LG", fontName="Helvetica", fontSize=10,
+           textColor=rl_colors.HexColor("#1E293B"), leading=15)
+
+    def _dot(hex_color):
+        t = Table([[""]], colWidths=[0.28*cm], rowHeights=[0.28*cm])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), rl_colors.HexColor(hex_color)),
+        ]))
+        return t
+
+    # — Grafico 1: fondi con hyperlink (torta + didascalia interattiva affiancate) —
+    pie_buf = _mpl_portfolio_pie(d_act, wcol, profile)
+    pie_img = RLImage(pie_buf, width=PIE_W, height=PIE_W)
+    d_leg   = d_act[d_act[wcol] > 0.005].sort_values(wcol, ascending=False)
+    leg_rows = []
+    for _, r in d_leg.iterrows():
+        url    = (fund_data or {}).get(r["nome"], {}).get("url", "")
+        name_s = (r["nome"][:38] + "…") if len(r["nome"]) > 38 else r["nome"]
+        pct_s  = f"{r[wcol]*100:.1f}%"
+        if url:
+            lbl = Paragraph(
+                f'<link href="{url}"><font color="#1B4FBB"><u>{name_s}</u></font></link>'
+                f'  <b>{pct_s}</b>', LG)
+        else:
+            lbl = Paragraph(f'{name_s}  <b>{pct_s}</b>', LG)
+        leg_rows.append([_dot(r["color"]), lbl])
+    leg_tbl = Table(leg_rows, colWidths=[0.45*cm, LEG_W - 0.45*cm])
+    leg_tbl.setStyle(TableStyle([
+        ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",     (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING",  (0,0), (-1,-1), 3),
+        ("LEFTPADDING",    (1,0), (1,-1),  6),
+        ("LEFTPADDING",    (0,0), (0,-1),  0),
+        ("RIGHTPADDING",   (0,0), (-1,-1), 4),
+    ]))
+    combo1 = Table([[pie_img, leg_tbl]], colWidths=[PIE_W, LEG_W])
+    combo1.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
+    story.append(combo1)
+
+    # — Grafico 2: asset allocation — torta centrata sotto la prima,
+    #   righe illustrative Azionario/Obbligazionario sotto la torta —
+    macro_buf = _mpl_macro_pie(d_act, wcol)
+    if macro_buf:
+        story.append(Spacer(1, 8))
+        macro_img = RLImage(macro_buf, width=PIE_W, height=PIE_W)
+        w_az_v  = (d_act[wcol] * d_act["az_pct"]).sum()
+        w_obb_v = (d_act[wcol] * d_act["obb_pct"]).sum()
+
+        # Torta centrata orizzontalmente sulla pagina
+        pie2_tbl = Table([[macro_img]], colWidths=[17 * cm])
+        pie2_tbl.setStyle(TableStyle([
+            ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0), (-1,-1), 0),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+            ("LEFTPADDING",   (0,0), (-1,-1), 0),
+            ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+        ]))
+        story.append(pie2_tbl)
+
+        # Righe illustrative sotto la torta, centrate
+        story.append(Spacer(1, 6))
+        macro_leg_rows = [
+            [_dot("#1B4FBB"), Paragraph(f'Azionario  <b>{w_az_v*100:.1f}%</b>', LG)],
+            [_dot("#2D9D78"), Paragraph(f'Obbligazionario  <b>{w_obb_v*100:.1f}%</b>', LG)],
+        ]
+        macro_leg_inner = Table(macro_leg_rows, colWidths=[0.45*cm, 5.5*cm])
+        macro_leg_inner.setStyle(TableStyle([
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0), (-1,-1), 5),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+            ("LEFTPADDING",   (1,0), (1,-1),  6),
+            ("LEFTPADDING",   (0,0), (0,-1),  0),
+        ]))
+        macro_leg_wrapper = Table([[macro_leg_inner]], colWidths=[17 * cm])
+        macro_leg_wrapper.setStyle(TableStyle([
+            ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",    (0,0), (-1,-1), 0),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+            ("LEFTPADDING",   (0,0), (-1,-1), 0),
+            ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+        ]))
+        story.append(macro_leg_wrapper)
+
+    story.append(PageBreak())
+
+    # ════════════════════════════════════════════════════════
+    # PAGE 2: RENDIMENTI 1-3-5 ANNI
+    # ════════════════════════════════════════════════════════
+    story.append(Paragraph("AZIMUT INVESTMENTS  ·  PORTAFOGLI MODELLO", EY))
+    story.append(Spacer(1,4))
+    story.append(Paragraph("Tavola dei Rendimenti", T))
+    _fb_loaded = bool(factbook_data)
+    _fb_ref    = (factbook_data or {}).get("_ref_date", "")      # data dal frontespizio
+    _fd_ref    = cache_date or datetime.date.today().strftime("%d/%m/%Y")  # data FondiDoc
+    if _fb_loaded:
+        _rend_src = (f"Rendimenti: Factbook AZ Investments"
+                     + (f" al {_fb_ref}" if _fb_ref else "")
+                     + f"  ·  Rischio: FondiDoc aggiornata al {_fd_ref}")
+    else:
+        _rend_src = f"Fonte: FIDA FondiDoc aggiornata al {_fd_ref}"
+    story.append(Paragraph(
+        f"Performance per fondo  ·  Profilo {profile.title()}  ·  {_rend_src}", SU))
+    story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=12))
+
+    # ── Helper: look up a performance metric from the factbook ────────────────
+    _fb = factbook_data or {}
+    _PERF_KEYS = {"ytd", "perf_1y", "perf_3y", "perf_5y"}
+
+    def get_fb(nome: str, key: str) -> str:
+        """Return factbook value for fund `nome` and metric `key`, or ''."""
+        if key not in _PERF_KEYS or not _fb:
+            return ""
+        norm = _normalize_for_unp(nome)
+        norm = _FUND_ALIASES.get(norm, norm)
+        entry = _fb.get(norm)
+        if not entry:
+            # Substring fallback (same logic as lookup_unp)
+            best, best_len = None, 0
+            for fb_key, fb_val in _fb.items():
+                if (fb_key in norm or norm in fb_key) and len(fb_key) > best_len:
+                    best, best_len = fb_val, len(fb_key)
+            entry = best
+        if not entry:
+            return ""
+        return entry.get(key) or ""
+
+    # ── Helper: weighted average of a metric across all funds ─────────────────
+    def ptf_wavg(keys_list):
+        """Weighted average per metric. Prefers factbook for return keys."""
+        totals = {k: 0.0 for k in keys_list}
+        cov_w  = {k: 0.0 for k in keys_list}
+        for _, row in d_sorted.iterrows():
+            fd  = (fund_data or {}).get(row["nome"], {})
+            ana = fd.get("analysis", {})
+            w   = row[wcol]
+            for k in keys_list:
+                raw = get_fb(row["nome"], k) or ana.get(k, "")
+                try:
+                    num = float(raw.replace("%","").replace(",",".").strip())
+                    totals[k] += num * w
+                    cov_w[k]  += w
+                except Exception:
+                    pass
+        out = {}
+        for k in keys_list:
+            out[k] = f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "N/D"
+        return out
+
+    # Paragraph style for portfolio summary row
+    WH = S("WH", fontName="Helvetica-Bold", fontSize=8,
+           textColor=rl_colors.white, leading=11)
+
+    def pstyle_w(val):
+        """White bold text coloured green/red for portfolio row."""
+        try:
+            v = float(val.replace("%","").replace(",",".").strip())
+            c = "#7EFFC0" if v > 0 else ("#FFB3B3" if v < 0 else "#E2E8F0")
+        except Exception:
+            c = "#E2E8F0"
+        return Paragraph(f'<font color="{c}"><b>{val}</b></font>', WH)
+
+    def pstyle(val):
+        try:
+            v = float(val.replace("%","").replace(",","."))
+            color = "#1A7A4A" if v>0 else ("#C0392B" if v<0 else "#475569")
+            return f'<font color="{color}"><b>{val}</b></font>'
+        except: return val
+
+    # ── d_sorted deve essere definito PRIMA di chiamare ptf_wavg ──
+    d_sorted = d_act.sort_values(wcol, ascending=False)
+
+    # ── PERFORMANCE TABLE ────────────────────────────────────
+    perf_keys = ["ytd","perf_1y","perf_3y","perf_5y","vol_1y","sharpe_1y"]
+    ptf_p = ptf_wavg(perf_keys)
+
+    perf_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
+                ["Fondo","Peso","YTD","1 Anno","3 Anni","5 Anni","Vol. 1A","Sharpe 1A"]]
+
+    # Portfolio summary row (row index 1 — gold background)
+    ptf_perf_row = [
+        Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
+        Paragraph(f"<b>100%</b>", WH),
+        pstyle_w(ptf_p.get("ytd","N/D")),
+        pstyle_w(ptf_p.get("perf_1y","N/D")),
+        pstyle_w(ptf_p.get("perf_3y","N/D")),
+        pstyle_w(ptf_p.get("perf_5y","N/D")),
+        Paragraph(ptf_p.get("vol_1y","N/D"), WH),
+        Paragraph(ptf_p.get("sharpe_1y","N/D"), WH),
+    ]
+
+    perf_rows = [perf_hdr, ptf_perf_row]
+
+    for _, row in d_sorted.iterrows():
+        fd  = (fund_data or {}).get(row["nome"], {})
+        ana = fd.get("analysis", {})
+        def gv(key, nome=row["nome"]):
+            # Return factbook value (for return metrics) or FondiDoc value
+            return get_fb(nome, key) or ana.get(key, "N/D")
+        perf_rows.append([
+            Paragraph(row["nome"][:48], SM),
+            Paragraph(f"<b>{row[wcol]*100:.1f}%</b>", SM),
+            Paragraph(pstyle(gv("ytd")),     SM),
+            Paragraph(pstyle(gv("perf_1y")), SM),
+            Paragraph(pstyle(gv("perf_3y")), SM),
+            Paragraph(pstyle(gv("perf_5y")), SM),
+            Paragraph(gv("vol_1y"),           SM),
+            Paragraph(gv("sharpe_1y"),        SM),
+        ])
+
+    perf_tbl = Table(perf_rows,
+        colWidths=[5.2*cm,1.4*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
+        repeatRows=1)
+    ts_perf = [
+        ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),  # header
+        ("TEXTCOLOR",(0,0),(-1,0),  rl_colors.white),
+        ("FONTNAME",(0,0),(-1,0),   "Helvetica-Bold"),
+        # Portfolio summary row — gold/navy
+        ("BACKGROUND",(0,1),(-1,1), rl_colors.HexColor("#1B4FBB")),
+        ("LINEBELOW",(0,1),(-1,1),  2, rl_colors.HexColor("#C9A84C")),
+        # Funds
+        ("FONTSIZE",(0,0),(-1,-1),  8),
+        ("PADDING",(0,0),(-1,-1),   5),
+        ("ROWBACKGROUNDS",(0,2),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
+        ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+        ("ALIGN",(1,0),(-1,-1),     "CENTER"),
+        ("VALIGN",(0,0),(-1,-1),    "MIDDLE"),
+    ]
+    perf_tbl.setStyle(TableStyle(ts_perf))
+    # KeepTogether: la tabella rendimenti non viene spezzata su due pagine
+    NOTE_P = S("NTP", fontName="Helvetica-Oblique", fontSize=6.5,
+               textColor=rl_colors.HexColor("#94A3B8"), leading=9)
+    story.append(KeepTogether([
+        perf_tbl,
+        Spacer(1, 5),
+        Paragraph(
+            "◆ La riga <b>Portafoglio</b> riporta la media ponderata dei rendimenti dei singoli fondi, "
+            "usando i pesi del profilo selezionato. Il calcolo include solo i fondi per cui il dato è "
+            "disponibile su FondiDoc, rinormalizzando i pesi su di essi. "
+            "I rendimenti a 3 e 5 anni sono tassi annualizzati: la media ponderata è un'approssimazione "
+            "(il rendimento composito effettivo dipende dalla sequenza temporale e dalla correlazione tra fondi). "
+            "Dati a titolo indicativo — non costituiscono consulenza di investimento.", NOTE_P),
+    ]))
+    story.append(Spacer(1,12))
+
+    # ── RISK TABLE ───────────────────────────────────────────
+    risk_keys = ["vol_1y","vol_3y","vol_5y","neg_vol_1y","sharpe_3y","sortino_1y"]
+    ptf_r = ptf_wavg(risk_keys)
+
+    risk_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
+                ["Fondo","Peso","Vol. 1A","Vol. 3A","Vol. 5A","Vol. Neg. 1A","Sharpe 3A","Sortino 1A"]]
+
+    ptf_risk_row = [
+        Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
+        Paragraph("<b>100%</b>", WH),
+        Paragraph(ptf_r.get("vol_1y","N/D"),     WH),
+        Paragraph(ptf_r.get("vol_3y","N/D"),     WH),
+        Paragraph(ptf_r.get("vol_5y","N/D"),     WH),
+        Paragraph(ptf_r.get("neg_vol_1y","N/D"), WH),
+        Paragraph(ptf_r.get("sharpe_3y","N/D"),  WH),
+        Paragraph(ptf_r.get("sortino_1y","N/D"), WH),
+    ]
+
+    risk_rows = [risk_hdr, ptf_risk_row]
+    for _, row in d_sorted.iterrows():
+        fd  = (fund_data or {}).get(row["nome"], {})
+        ana = fd.get("analysis", {})
+        def gv_r(k): return ana.get(k,"N/D")
+        risk_rows.append([
+            Paragraph(row["nome"][:48], SM),
+            Paragraph(f"{row[wcol]*100:.1f}%", SM),
+            Paragraph(gv_r("vol_1y"),     SM), Paragraph(gv_r("vol_3y"),     SM), Paragraph(gv_r("vol_5y"),    SM),
+            Paragraph(gv_r("neg_vol_1y"), SM), Paragraph(gv_r("sharpe_3y"),  SM), Paragraph(gv_r("sortino_1y"),SM),
+        ])
+
+    risk_tbl = Table(risk_rows,
+        colWidths=[5.2*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
+        repeatRows=1)
+    ts_risk = [
+        ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),
+        ("TEXTCOLOR",(0,0),(-1,0),  rl_colors.white),
+        ("FONTNAME",(0,0),(-1,0),   "Helvetica-Bold"),
+        ("BACKGROUND",(0,1),(-1,1), rl_colors.HexColor("#1B4FBB")),
+        ("LINEBELOW",(0,1),(-1,1),  2, rl_colors.HexColor("#C9A84C")),
+        ("FONTSIZE",(0,0),(-1,-1),  8),
+        ("PADDING",(0,0),(-1,-1),   5),
+        ("ROWBACKGROUNDS",(0,2),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
+        ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+        ("ALIGN",(1,0),(-1,-1),     "CENTER"),
+        ("VALIGN",(0,0),(-1,-1),    "MIDDLE"),
+    ]
+    risk_tbl.setStyle(TableStyle(ts_risk))
+
+    NOTE = S("NT", fontName="Helvetica-Oblique", fontSize=6.5,
+             textColor=rl_colors.HexColor("#94A3B8"), leading=9)
+    # KeepTogether: titolo + tabella rischio + nota nella stessa pagina
+    story.append(KeepTogether([
+        Paragraph("Metriche di Rischio", SC),
+        risk_tbl,
+        Spacer(1,6),
+        Paragraph(
+            "◆ I valori del Portafoglio sono medie ponderate per peso dei singoli fondi. "
+            "La volatilità di portafoglio effettiva dipende anche dalle correlazioni tra i fondi. "
+            "Dati forniti a titolo indicativo.", NOTE),
+    ]))
+
+    story.append(Spacer(1, 14))
+
+    # ── UNP / IUNP TABLE ─────────────────────────────────────
+    # Pre-compute per-fund UNP/IUNP and portfolio weighted average
+    _fund_unp: dict = {}
+    _wtd_unp = _wtd_iunp = _cov_w = 0.0
+    for _, _row in d_sorted.iterrows():
+        _u, _iu = lookup_unp(_row["nome"])
+        _fund_unp[_row["nome"]] = (_u, _iu)
+        if _u is not None:
+            _w = _row[wcol]
+            _wtd_unp  += _u  * _w
+            _wtd_iunp += _iu * _w
+            _cov_w    += _w
+
+    if _cov_w > 0.01:
+        _ptf_unp_str  = f"{_wtd_unp  / _cov_w:.2f}%"
+        _ptf_iunp_str = f"{_wtd_iunp / _cov_w:.2f}%"
+    else:
+        _ptf_unp_str = _ptf_iunp_str = "N/D"
+
+    unp_hdr_row = [Paragraph(f"<b>{t}</b>", HDR) for t in
+                   ["Fondo", "Peso", "%UNP", "%IUNP36"]]
+    unp_ptf_row = [
+        Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
+        Paragraph("<b>100%</b>", WH),
+        Paragraph(f"<b>{_ptf_unp_str}</b>",  WH),
+        Paragraph(f"<b>{_ptf_iunp_str}</b>", WH),
+    ]
+    unp_fund_rows = []
+    for _, _row in d_sorted.iterrows():
+        _u, _iu = _fund_unp[_row["nome"]]
+        unp_fund_rows.append([
+            Paragraph(_row["nome"][:55], SM),
+            Paragraph(f"{_row[wcol]*100:.1f}%", SM),
+            Paragraph(f"{_u:.2f}%"  if _u  is not None else "—", SM),
+            Paragraph(f"{_iu:.2f}%" if _iu is not None else "—", SM),
+        ])
+
+    unp_tbl = Table(
+        [unp_hdr_row, unp_ptf_row] + unp_fund_rows,
+        colWidths=[8.5*cm, 2.0*cm, 3.25*cm, 3.25*cm],
+        repeatRows=1,
+    )
+    unp_tbl.setStyle(TableStyle([
+        ("BACKGROUND",  (0,0), (-1,0),  rl_colors.HexColor("#0D1B2A")),
+        ("TEXTCOLOR",   (0,0), (-1,0),  rl_colors.white),
+        ("FONTNAME",    (0,0), (-1,0),  "Helvetica-Bold"),
+        ("BACKGROUND",  (0,1), (-1,1),  rl_colors.HexColor("#1B4FBB")),
+        ("LINEBELOW",   (0,1), (-1,1),  2, rl_colors.HexColor("#C9A84C")),
+        ("FONTSIZE",    (0,0), (-1,-1), 8),
+        ("PADDING",     (0,0), (-1,-1), 5),
+        ("ROWBACKGROUNDS", (0,2), (-1,-1),
+         [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
+        ("LINEBELOW",   (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+        ("ALIGN",       (1,0), (-1,-1), "CENTER"),
+        ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
+    ]))
+
+    NOTE_U = S("NTU", fontName="Helvetica-Oblique", fontSize=6.5,
+               textColor=rl_colors.HexColor("#94A3B8"), leading=9)
+    story.append(KeepTogether([
+        Paragraph("UNP e IUNP dei Fondi in Portafoglio", SC),
+        unp_tbl,
+        Spacer(1, 6),
+        Paragraph(
+            "◆ UNP (Utile Netto di Portafoglio): commissione annua netta percepita dal consulente. "
+            "IUNP36: indice UNP calcolato su orizzonte triennale. "
+            "Fonte: Catalogo Prodotti & Servizi Azimut, settembre 2025. "
+            "La riga Portafoglio è la media ponderata per peso dei fondi per cui il dato è disponibile. "
+            "Il simbolo — indica che il fondo non è presente nel catalogo.",
+            NOTE_U),
+    ]))
+
+    story.append(PageBreak())
+
+    # ════════════════════════════════════════════════════════
+    # PAGES 3+: SCHEDE SINGOLI FONDI
+    # ════════════════════════════════════════════════════════
+    story.append(Paragraph("AZIMUT INVESTMENTS  ·  PORTAFOGLI MODELLO", EY))
+    story.append(Spacer(1,4))
+    story.append(Paragraph("Schede Analitiche dei Fondi", T))
+    story.append(Paragraph(
+        f"Profilo {profile.title()}  ·  Fonte: FIDA FondiDoc  ·  {datetime.date.today().strftime('%d %B %Y')}", SU))
+    story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=6))
+    story.append(Paragraph(
+        '🔍 <link href="https://www.morningstar.it/it/funds/SecuritySearchResults.aspx">'
+        '<u>Motore di ricerca Morningstar</u></link>', LK))
+    story.append(Spacer(1, 10))
+
+    for idx, (_, row) in enumerate(d_sorted.iterrows()):
+        fd  = (fund_data or {}).get(row["nome"], {})
+        ov  = fd.get("overview",  {})
+        ana = fd.get("analysis",  {})
+
+        def gv(k,src=ana,fallback="N/D"): return src.get(k,fallback)
+
+        # Fund header block
+        srri_str = f"SRRI {gv('srri',ov,'—')}/7" if gv('srri',ov) != "N/D" else ""
+        nav_str  = f"NAV {gv('nav')} € ({gv('last_update')})" if gv('nav') != "N/D" else ""
+        rating_s = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("N/D","—") else ""
+
+        # ── Intestazione fondo (3 righe × 1 colonna) ─────────
+        meta_extra = "  ·  ".join(x for x in [srri_str, rating_s, nav_str] if x)
+
+        # ISIN: estratto dall'URL FondiDoc oppure dal foglio FIDA
+        isin = fd.get("isin", "") or isin_map.get(row["nome"], "")
+        isin_str = f"  ·  ISIN: <b>{isin}</b>" if isin else ""
+
+        hdr_rows = [
+            [Paragraph(f"<b>{row['nome']}</b>", FS)],
+            [Paragraph(f"Peso: <b>{row[wcol]*100:.1f}%</b>  ·  {row['categoria']}{isin_str}", FK)],
+            [Paragraph(meta_extra or "—", FK)],
+        ]
+
+        hdr_tbl = Table(hdr_rows, colWidths=[17*cm])
+        hdr_tbl.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1), rl_colors.HexColor("#F0F4F9")),
+            ("LEFTPADDING",(0,0),(-1,-1), 10),
+            ("RIGHTPADDING",(0,0),(-1,-1), 10),
+            ("TOPPADDING",(0,0),(-1,0), 10),
+            ("BOTTOMPADDING",(0,-1),(-1,-1), 10),
+            ("TOPPADDING",(0,1),(-1,-1), 2),
+            ("BOTTOMPADDING",(0,0),(-1,-2), 2),
+            ("LINEBELOW",(0,-1),(-1,-1), 2, rl_colors.HexColor("#C9A84C")),
+        ]))
+
+        # ── Tabella rendimenti fondo ──────────────────────────
+        def pval(v):
+            try:
+                num = float(v.replace("%","").replace(",","."))
+                c = "#1A7A4A" if num>0 else ("#C0392B" if num<0 else "#475569")
+                return Paragraph(f'<font color="{c}"><b>{v}</b></font>', BD)
+            except: return Paragraph(v, BD)
+
+        perf_data = [
+            [Paragraph("<b>Metrica</b>",HDR), Paragraph("<b>YTD</b>",HDR),
+             Paragraph("<b>1 Anno</b>",HDR), Paragraph("<b>3 Anni</b>",HDR), Paragraph("<b>5 Anni</b>",HDR)],
+            [Paragraph("Performance",SM),
+             pval(gv("ytd")), pval(gv("perf_1y")), pval(gv("perf_3y")), pval(gv("perf_5y"))],
+            [Paragraph("Volatilità",SM),
+             Paragraph("—",SM), Paragraph(gv("vol_1y"),SM), Paragraph(gv("vol_3y"),SM), Paragraph(gv("vol_5y"),SM)],
+            [Paragraph("Vol. Neg.",SM),
+             Paragraph("—",SM), Paragraph(gv("neg_vol_1y"),SM), Paragraph(gv("neg_vol_3y"),SM), Paragraph(gv("neg_vol_5y"),SM)],
+            [Paragraph("Sharpe",SM),
+             Paragraph("—",SM), Paragraph("—",SM), Paragraph(gv("sharpe_3y"),SM), Paragraph(gv("sharpe_5y"),SM)],
+            [Paragraph("Sortino",SM),
+             Paragraph("—",SM), Paragraph(gv("sortino_1y"),SM), Paragraph("—",SM), Paragraph("—",SM)],
+        ]
+        perf_tbl2 = Table(perf_data, colWidths=[2.4*cm,1.5*cm,1.8*cm,1.8*cm,1.8*cm])
+        perf_tbl2.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),
+            ("TEXTCOLOR",(0,0),(-1,0),  rl_colors.white),
+            ("FONTNAME",(0,0),(-1,0),   "Helvetica-Bold"),
+            ("FONTSIZE",(0,0),(-1,-1),  7.5),
+            ("PADDING",(0,0),(-1,-1),   4),
+            ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
+            ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+            ("ALIGN",(1,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ]))
+
+        # ── Dettagli fondo ───────────────────────────────────
+        det_data = [
+            [Paragraph("<b>Dettagli Fondo</b>", BD)],
+            [Paragraph(f"Data avvio: {gv('start_date',ov,'—')}", SM)],
+            [Paragraph(f"Distribuzione: {gv('income',ov,'—')}", SM)],
+            [Paragraph(f"Categoria: {gv('cat_assog',ov,'—')}", SM)],
+            [Paragraph(f"Gestione: {gv('mgmt_fee',ov,'—')}  |  Perf.: {gv('perf_fee',ov,'—')}", SM)],
+            [Paragraph(f"Sottoscrizione: {gv('sub_fee',ov,'—')}", SM)],
+            [Paragraph(f"<b>FIDArating:</b> {gv('fida_rating',ov,'—')}  |  Score: {gv('fida_score',ov,'—')}", SM)],
+        ]
+        det_tbl = Table([[d[0]] for d in det_data], colWidths=[7.3*cm])
+        det_tbl.setStyle(TableStyle([
+            ("PADDING",(0,0),(-1,-1), 3),
+            ("TOPPADDING",(0,0),(-1,0), 6),
+            ("LINEBELOW",(0,0),(0,0), 0.8, rl_colors.HexColor("#C9A84C")),
+            ("BACKGROUND",(0,0),(0,-1), rl_colors.HexColor("#F8FAFC")),
+        ]))
+
+        mid_row = Table([[perf_tbl2, det_tbl]], colWidths=[9.7*cm, 7.3*cm])
+        mid_row.setStyle(TableStyle([
+            ("VALIGN",(0,0),(-1,-1), "TOP"),
+            ("PADDING",(0,0),(-1,-1), 0),
+            ("LEFTPADDING",(1,0),(1,-1), 10),
+        ]))
+
+        # ── Grafico rendimenti annuali ───────────────────────
+        annual  = ana.get("annual_perf")
+        bar_buf = _mpl_annual_bar(annual, row["nome"]) if annual else None
+
+        # ── KeepTogether: tutta la scheda su stessa pagina ───
+        card = [Spacer(1,6), hdr_tbl, Spacer(1,6), mid_row]
+        if bar_buf:
+            card += [Spacer(1,4),
+                     Paragraph("<b>Performance Annuale (%)</b>", SM),
+                     RLImage(bar_buf, width=14*cm, height=3.2*cm)]
+        story.append(KeepTogether(card))
+
+        # Separatore tra fondi
+        if idx < len(d_sorted)-1:
+            story.append(HRFlowable(width="100%", thickness=0.5,
+                                    color=rl_colors.HexColor("#CBD5E1"),
+                                    spaceBefore=8, spaceAfter=8))
+
+    # ── FOOTER ─────────────────────────────────────────────
+    story.append(PageBreak())
+    story.append(HRFlowable(width="100%",thickness=0.5,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=8))
+    story.append(Paragraph(
+        "Documento generato automaticamente a scopo illustrativo. I dati di performance provengono da FIDA FondiDoc "
+        "(fondidoc.it). I pesi indicati sono riferiti al portafoglio modello e non costituiscono offerta o consulenza "
+        "di investimento. Rendimenti passati non garantiscono risultati futuri. © Azimut Group — uso interno.", FT))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
+# ════════════════════════════════════════════════════════════
+# FREE PORTFOLIO BUILDER
+# ════════════════════════════════════════════════════════════
+
+def free_portfolio_ui(data):
+    fida = data.get("FIDA", pd.DataFrame())
+    if fida.empty:
+        st.error("❌ Foglio FIDA non trovato."); return None
+
+    az_lookup = {}
+    for sname in ["PTF FULL","PTF SHORT"]:
+        if sname in data and not data[sname].empty:
+            for _,r in data[sname].iterrows(): az_lookup[r["nome"]] = r["az_pct"]
+
+    if "free_ptf" not in st.session_state: st.session_state.free_ptf = []
+    st.markdown('<p class="sec-title">Costruttore Portafoglio Libero</p>',unsafe_allow_html=True)
+    options = fida.apply(lambda r: f"{r['nome']}  [{r['macro_cat']}]" if r['macro_cat']!='Altro' else r['nome'],axis=1).tolist()
+
+    c1,c2,c3 = st.columns([3.5,1,0.8])
+    with c1: sel = st.selectbox("Seleziona fondo:",options,key="sel_fund")
+    with c2: w   = st.number_input("Peso %",0.1,100.0,10.0,0.5,key="sel_w")
+    with c3:
+        st.markdown("<br>",unsafe_allow_html=True)
+        if st.button("➕ Aggiungi",use_container_width=True):
+            fname = sel.split("  [")[0].strip()
+            if any(f["nome"]==fname for f in st.session_state.free_ptf):
+                st.toast("⚠️ Fondo già presente!",icon="⚠️")
+            else:
+                fd = fida[fida["nome"]==fname].iloc[0] if not fida[fida["nome"]==fname].empty else None
+                mc = fd["macro_cat"] if fd is not None else "Altro"
+                az = az_lookup.get(fname,DEFAULT_AZ.get(mc,0.5))
+                st.session_state.free_ptf.append({"nome":fname,"categoria":fd["categoria"] if fd is not None else "","macro_cat":mc,"az_pct":az,"w_input":w})
+                st.rerun()
+
+    if not st.session_state.free_ptf: st.info("☝️ Aggiungi fondi."); return None
+    st.markdown("**Fondi nel portafoglio:**")
+    total_w = 0.0
+    for i, fund in enumerate(st.session_state.free_ptf):
+        r1,r2,r3 = st.columns([4,1.5,0.6])
+        with r1: st.markdown(f"**{fund['nome']}** <span style='color:#64748b;font-size:.8rem;'>— {fund['macro_cat']}</span>",unsafe_allow_html=True)
+        with r2:
+            nw = st.number_input("Peso",0.0,100.0,float(fund["w_input"]),0.5,key=f"fw_{i}",label_visibility="collapsed")
+            st.session_state.free_ptf[i]["w_input"] = nw
+        with r3:
+            if st.button("🗑️",key=f"del_{i}",use_container_width=True):
+                st.session_state.free_ptf.pop(i); st.rerun()
+        total_w += st.session_state.free_ptf[i]["w_input"]
+
+    diff = abs(total_w-100.0)
+    if diff<0.05: st.markdown(f'<div class="w-ok">✅ Somma pesi: <b>{total_w:.1f}%</b> — OK!</div>',unsafe_allow_html=True)
+    else:         st.markdown(f'<div class="w-warn">⚠️ Somma pesi: <b>{total_w:.1f}%</b> (mancano {100-total_w:+.1f}%)</div>',unsafe_allow_html=True)
+    if diff>0.5: return None
+
+    records = [{"nome":f["nome"],"categoria":f["categoria"],"gruppo":f["macro_cat"],"macro_cat":f["macro_cat"],"az_pct":f["az_pct"],"obb_pct":1-f["az_pct"],"r_weight":f["w_input"]/100,"w_cons":f["w_input"]/100,"w_equil":f["w_input"]/100,"w_accr":f["w_input"]/100} for f in st.session_state.free_ptf]
+    df = pd.DataFrame(records)
+    df["macro_cat"] = df["categoria"].apply(get_macro)
+    df = assign_colors(df)
+    for wc in ["w_cons","w_equil","w_accr"]:
+        t = df[wc].sum(); df[wc] = df[wc]/t if t>0 else df[wc]
+    return df
+
+
+# ════════════════════════════════════════════════════════════
+# MAIN APP
+# ════════════════════════════════════════════════════════════
+
+def main():
+    with st.sidebar:
+        st.markdown("""<div style='padding:1.4rem 0 .8rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Strumento di Analisi</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.6rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.2;'>Portfolio<br>Analyzer</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:10px;'></div></div>""", unsafe_allow_html=True)
+        st.markdown("---")
+        uploaded   = st.file_uploader("FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
+        uploaded_fb = st.file_uploader(
+            "FACTBOOK RENDIMENTI (PDF, opzionale)",
+            type=["pdf"],
+            help="Carica il Factbook AZ Investments per avere YTD/1A/3A/5A "
+                 "senza dipendere da FondiDoc. Le metriche di rischio vengono "
+                 "sempre scaricate da FondiDoc.",
+        )
+        st.markdown("---")
+        ptf_choice = st.radio("TIPO PORTAFOGLIO", ["📋  PTF FULL","⚡  PTF SHORT","🎨  LIBERO"])
+        st.markdown("---")
+        profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0)
+        if "LIBERO" not in ptf_choice and "free_ptf" in st.session_state:
+            del st.session_state["free_ptf"]
+
+    ptf_label = ptf_choice.split("  ",1)[1] if "  " in ptf_choice else ptf_choice
+    st.markdown(f"""<div class="az-header"><div class="az-eyebrow">AZIMUT INVESTMENTS · PORTAFOGLI MODELLO</div><div class="az-rule"></div><div class="az-title">{ptf_label}</div><div class="az-meta">{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()} &nbsp;·&nbsp; {datetime.date.today().strftime('%d %B %Y')}</div></div>""",unsafe_allow_html=True)
+
+    if uploaded is None:
+        st.info("⬅️ **Carica il file Excel** nella barra laterale per iniziare.")
+        return
+
+    with st.spinner("⏳ Caricamento dati…"):
+        file_bytes = uploaded.read()
+        raw = parse_excel(file_bytes)
+
+    # Parse factbook PDF if uploaded
+    factbook_data: dict = {}
+    if uploaded_fb is not None:
+        with st.spinner("📖 Leggo Factbook rendimenti…"):
+            factbook_data = parse_factbook(uploaded_fb.read())
+        n_fb = len(factbook_data)
+        if n_fb:
+            st.success(f"✅ Factbook caricato — {n_fb} fondi trovati")
+        else:
+            st.warning("⚠️ Factbook caricato ma nessun dato estratto — verrà usato FondiDoc")
+
+    if "LIBERO" in ptf_choice:
+        df = free_portfolio_ui(raw)
+    else:
+        key = "PTF FULL" if "FULL" in ptf_choice else "PTF SHORT"
+        if key not in raw or raw[key].empty:
+            st.error(f"❌ Foglio '{key}' non trovato o vuoto."); return
+        df = raw[key]
+
+    if df is None or df.empty: return
+
+    wcol   = PROFILE_W_COL[profile]
+    df_act = df[df[wcol]>0.001].copy()
+
+    # KPI row
+    n_fondi = len(df_act)
+    w_az    = (df_act[wcol]*df_act["az_pct"]).sum()*100
+    w_obb   = (df_act[wcol]*df_act["obb_pct"]).sum()*100
+    srri    = max(1,min(7,round(w_az/100*6+1)))
+
+    c1,c2,c3,c4 = st.columns(4)
+    for col,val,lbl,sub in [
+        (c1,str(n_fondi),"Fondi in Portafoglio",f"{df_act['gruppo'].nunique()} gruppi"),
+        (c2,f"{w_az:.1f}%","Quota Azionaria","ponderata per peso"),
+        (c3,f"{w_obb:.1f}%","Quota Obbligazionaria","ponderata per peso"),
+        (c4,f"{srri} / 7","Risk Score (SRRI proxy)","basato su quota azionaria"),
+    ]:
+        col.markdown(f'<div class="kpi"><div class="kpi-label">{lbl}</div><div class="kpi-value">{val}</div><div class="kpi-sub">{sub}</div></div>',unsafe_allow_html=True)
+
+    st.markdown("<br>",unsafe_allow_html=True)
+
+    # Charts + fund list
+    col_l,col_r = st.columns([1.15,0.85],gap="large")
+    with col_l:
+        st.markdown('<p class="sec-title">Allocazione per Fondo</p>',unsafe_allow_html=True)
+        st.plotly_chart(make_fund_pie(df_act,wcol,profile),use_container_width=True,config={"displayModeBar":False})
+        st.markdown('<p class="sec-title">Allocazione per Macro-Categoria</p>',unsafe_allow_html=True)
+        st.plotly_chart(make_macro_bar(df_act,wcol),use_container_width=True,config={"displayModeBar":False})
+    with col_r:
+        st.markdown('<p class="sec-title">Composizione del Portafoglio</p>',unsafe_allow_html=True)
+        for gruppo in df_act["gruppo"].unique():
+            sub = df_act[df_act["gruppo"]==gruppo].sort_values(wcol,ascending=False)
+            rows_html = "".join([f"""<div class="fund-row"><div class="fund-dot" style="background:{r['color']};"></div><div style="flex:1;min-width:0;"><div class="fund-name">{r['nome']}</div><div class="fund-cat">{r['categoria'][:48]+'…' if r['categoria'] and len(r['categoria'])>48 else (r['categoria'] or '—')}</div></div><div class="fund-pct">{r[wcol]*100:.1f}%</div></div>""" for _,r in sub.iterrows()])
+            st.markdown(f'<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden;"><div class="fund-group-hdr">{gruppo}</div>{rows_html}</div>',unsafe_allow_html=True)
+
+    # ── DOWNLOAD SECTION ─────────────────────────────────────
+    st.markdown("<br>",unsafe_allow_html=True)
+    st.markdown('<p class="sec-title">Esporta Report PDF Completo</p>',unsafe_allow_html=True)
+
+    fida_urls = raw.get("fida_urls", {})
+    n_urls = sum(1 for nome in df_act["nome"].unique() if nome in fida_urls)
+
+    # ── Load cached FondiDoc data (bundled in repo) ──────────────────────────
+    cached_fd, cache_date = load_fund_cache()
+
+    col_btn,col_inf = st.columns([1,2])
+    with col_inf:
+        if factbook_data:
+            _src_note = f"📖 Factbook: rendimenti per <b>{len(factbook_data)}</b> fondi"
+        elif cached_fd:
+            _src_note = f"💾 Cache FondiDoc aggiornata al: <b>{cache_date}</b>"
+        else:
+            _src_note = f"🌐 Dati live da FondiDoc per {n_urls}/{n_fondi} fondi"
+        st.markdown(
+            f"<div style='background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;"
+            f"padding:1rem 1.25rem;'>"
+            f"<div style='font-size:.8rem;color:#1d4ed8;font-weight:600;margin-bottom:.4rem;'>"
+            f"Il report PDF (3 sezioni) contiene:</div>"
+            f"<div style='font-size:.82rem;color:#1e40af;line-height:1.9;'>"
+            f"✓ <b>Pag. 1</b> — Grafico a torta + KPI di portafoglio<br>"
+            f"✓ <b>Pag. 2</b> — Tavola rendimenti YTD / 1A / 3A / 5A + Rischio<br>"
+            f"✓ <b>Pag. 3+</b> — Schede analitiche per {n_fondi} fondi<br>"
+            f"<span style='color:#3b82f6;'>{_src_note}</span></div></div>",
+            unsafe_allow_html=True)
+
+    fida_df = raw.get("FIDA", pd.DataFrame())
+
+    def _gen_pdf(fund_data_used: dict, label: str):
+        try:
+            pdf_bytes = generate_pdf(df_act, wcol, profile, ptf_label, fund_data_used,
+                                     fida_df=fida_df, factbook_data=factbook_data,
+                                     cache_date=cache_date)
+            fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
+                     f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
+            st.download_button("📥   Scarica Report PDF", data=pdf_bytes,
+                               file_name=fname, mime="application/pdf",
+                               use_container_width=True)
+            st.success(f"✅ PDF pronto — {label}")
+        except Exception as e:
+            st.error(f"Errore PDF: {e}")
+
+    with col_btn:
+        if cached_fd or factbook_data:
+            if st.button("⚡  Genera PDF (cache/factbook)",
+                         use_container_width=True, type="primary"):
+                _gen_pdf(cached_fd, f"dati del {cache_date or 'factbook'}")
+        else:
+            if st.button("🔄  Carica Dati da FondiDoc + Genera PDF",
+                         use_container_width=True, type="primary"):
+                pb = st.progress(0, text="Scarico dati FondiDoc…")
+                def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+                fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
+                pb.progress(1.0, text="✅ Salvo cache e genero PDF…")
+                save_fund_cache(fund_data)
+                _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
+                cache_json = json.dumps(
+                    {"last_updated": datetime.date.today().isoformat(),
+                     "fund_data": fund_data},
+                    ensure_ascii=False, indent=2)
+                st.download_button(
+                    "💾  Scarica cache aggiornata (da committare su git)",
+                    data=cache_json, file_name="fund_cache.json",
+                    mime="application/json", use_container_width=True)
+                pb.empty()
+
+    # ── Aggiornamento FondiDoc (fuori dalle colonne per evitare problemi di nesting) ──
+    if cached_fd or factbook_data:
+        with st.expander("🔄  Aggiorna dati da FondiDoc"):
+            if st.button("Scarica dati FondiDoc freschi + Rigenera PDF",
+                         use_container_width=True):
+                pb = st.progress(0, text="Scarico dati FondiDoc…")
+                def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+                fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
+                pb.progress(1.0, text="✅ Salvo cache e genero PDF…")
+                save_fund_cache(fund_data)
+                _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
+                cache_json = json.dumps(
+                    {"last_updated": datetime.date.today().isoformat(),
+                     "fund_data": fund_data},
+                    ensure_ascii=False, indent=2)
+                st.download_button(
+                    "💾  Scarica cache aggiornata (da committare su git)",
+                    data=cache_json, file_name="fund_cache.json",
+                    mime="application/json", use_container_width=True)
+                pb.empty()
+
+    st.markdown("<br><br>",unsafe_allow_html=True)
+
+
+if __name__ == "__main__":
+    main()
