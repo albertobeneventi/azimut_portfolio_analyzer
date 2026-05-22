@@ -543,6 +543,18 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
                 #  "...strategia.            Portfolio Duration"
                 #  "                                                     9,80"   ← next line
                 if 'METRICHE FIXED INCOME' in text.upper():
+                    # DEBUG: save raw page text for first 5 METRICHE pages
+                    try:
+                        import json as _jj, pathlib as _pp
+                        _raw_dir = _pp.Path(__file__).parent / "data"
+                        _raw_dir.mkdir(exist_ok=True)
+                        _fi_dbg_files = list(_raw_dir.glob("fi_page_*.txt"))
+                        if len(_fi_dbg_files) < 5:
+                            _fi_dbg_path = _raw_dir / f"fi_page_{page_idx:04d}.txt"
+                            _fi_dbg_path.write_text(
+                                text, encoding="utf-8", errors="replace")
+                    except Exception:
+                        pass
                     _lines_p = text.split('\n')
                     _fn = None
                     for _i, _ln in enumerate(_lines_p[:25]):
@@ -882,6 +894,32 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
     # Aggiungi metadato data di riferimento (chiave speciale)
     if _ref_date:
         result["_ref_date"] = _ref_date
+
+    # ── DEBUG: write extraction summary to data/factbook_debug.json ──────────
+    try:
+        import json as _json, pathlib as _pl
+        _dbg = {
+            "n_result_keys":  len(result),
+            "n_metrics_keys": len(_metrics),
+            "metrics_keys":   sorted(_metrics.keys()),
+            "metrics_sample": {
+                k: v for k, v in list(_metrics.items())[:10]
+            },
+            "result_with_duration": [
+                k for k, v in result.items()
+                if isinstance(v, dict) and "duration" in v
+            ][:20],
+            "result_with_rating": [
+                k for k, v in result.items()
+                if isinstance(v, dict) and "credit_rating" in v
+            ][:20],
+        }
+        _dbg_path = _pl.Path(__file__).parent / "data" / "factbook_debug.json"
+        _dbg_path.parent.mkdir(exist_ok=True)
+        _dbg_path.write_text(
+            _json.dumps(_dbg, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
     return result
 
