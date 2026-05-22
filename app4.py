@@ -2429,11 +2429,17 @@ def main():
 import traceback as _tb
 try:
     main()
-except (SystemExit, KeyboardInterrupt):
-    raise
 except BaseException as _e:
+    # Re-raise Streamlit-internal control-flow exceptions so the framework
+    # can handle them (RerunException → st.rerun(), StopException → st.stop(),
+    # SystemExit, KeyboardInterrupt, etc.).
+    _ename = type(_e).__name__
+    if _ename in ("RerunException", "StopException") or \
+       isinstance(_e, (SystemExit, KeyboardInterrupt)):
+        raise
+    # For everything else, show a readable error in the UI.
     try:
-        st.error(f"**Errore imprevisto:** {type(_e).__name__}: {_e}")
+        st.error(f"**Errore imprevisto:** {_ename}: {_e}")
         with st.expander("🔍 Dettaglio tecnico (per il debug)"):
             st.code(_tb.format_exc())
     except Exception:
