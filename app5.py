@@ -14,6 +14,14 @@ from pypdf import PdfReader, PdfWriter
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas as rl_canvas
 
+# OCR — importazione opzionale (disponibile solo se pytesseract e pdf2image installati)
+try:
+    import pytesseract
+    from pdf2image import convert_from_bytes
+    _OCR_AVAILABLE = True
+except ImportError:
+    _OCR_AVAILABLE = False
+
 # ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────
@@ -106,6 +114,21 @@ def pdf_tables(b: bytes):
     except Exception:
         pass
     return out
+
+
+def ocr_pdf(b: bytes) -> str:
+    """OCR su PDF scansionato: converte le pagine in immagini e legge il testo con Tesseract."""
+    if not _OCR_AVAILABLE:
+        return ""
+    try:
+        images = convert_from_bytes(b, dpi=300)
+        pages_text = []
+        for img in images:
+            text = pytesseract.image_to_string(img, lang="ita+eng")
+            pages_text.append(text)
+        return "\n".join(pages_text)
+    except Exception:
+        return ""
 
 
 def pdf_fields(b: bytes) -> dict:
@@ -215,8 +238,8 @@ def _first(patterns: list, text: str) -> str:
     return ""
 
 
-def parse_identity(b: bytes) -> dict:
-    text = pdf_text(b)
+def _parse_identity_from_text(text: str) -> dict:
+    """Parsa i dati anagrafici da testo grezzo (pdfplumber o OCR)."""
     t = text.upper()
     d = {}
 
@@ -235,6 +258,7 @@ def parse_identity(b: bytes) -> dict:
         r"NATO[/A]*\s+IL[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
         r"DATE\s+OF\s+BIRTH[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
         r"NASCITA[:\s]+(\d{2}[/.\-]\d{2}[/.\-]\d{4})",
+        r"\b(\d{2}[/.\-]\d{2}[/.\-]\d{4})\b",   # fallback: prima data trovata
     ], t)
 
     d["luogo_nascita"] = _first([
@@ -265,7 +289,7 @@ def parse_identity(b: bytes) -> dict:
         r"NUMERO\s+DOCUMENTO[:\s]+([A-Z0-9]{6,12})",
         r"DOCUMENT\s+N[O°]?[:\s]+([A-Z0-9]{6,12})",
         r"\bNR[.\s]+([A-Z]{2}\d{5,7})\b",
-        r"([A-Z]{2}\d{5}[A-Z0-9]{0,3})\b",
+        r"\b([A-Z]{2}\d{5}[A-Z0-9]{0,3})\b",
     ], t)
 
     d["data_rilascio"] = _first([
@@ -287,6 +311,10 @@ def parse_identity(b: bytes) -> dict:
     ], t)
 
     return {k: v for k, v in d.items() if v}
+
+
+def parse_identity(b: bytes) -> dict:
+    return _parse_identity_from_text(pdf_text(b))
 
 
 def _clean_num(s: str):
@@ -502,20 +530,55 @@ if id_up:
         if id_up.type == "application/pdf":
             with st.spinner("Estrazione dati anagrafici…"):
                 raw_text = pdf_text(st.session_state.id_bytes)
+
+                # Se il PDF non ha testo (scansione), prova OCR
                 if not raw_text.strip():
-                    st.session_state["_id_scanned"] = True
-                    st.toast("⚠️ PDF scansionato (nessun testo) — inserisci i dati manualmente", icon="⚠️")
+                    if _OCR_AVAILABLE:
+                        with st.spinner("PDF scansionato — avvio OCR con Tesseract…"):
+                            raw_text = ocr_pdf(st.session_state.id_bytes)
+                        if raw_text.strip():
+                            st.session_state["_id_scanned"] = False
+                        else:
+                            st.session_state["_id_scanned"] = True
+                    else:
+                        st.session_state["_id_scanned"] = True
+
+                if not raw_text.strip():
+                    st.toast("⚠️ Impossibile estrarre testo — inserisci i dati manualmente", icon="⚠️")
                 else:
                     st.session_state["_id_scanned"] = False
                     extracted = parse_identity(st.session_state.id_bytes)
+                    # parse_identity usa pdfplumber internamente; se era OCR, passa il testo diretto
+                    if not extracted and raw_text.strip():
+                        from io import StringIO
+                        extracted = _parse_identity_from_text(raw_text)
                     if extracted:
                         _set_anagrafica(extracted)
                         st.toast(f"✅ Estratti {len(extracted)} campi anagrafici", icon="🪪")
                     else:
-                        st.toast("⚠️ Testo trovato ma nessun campo riconosciuto — inserisci manualmente", icon="⚠️")
+                        st.toast("⚠️ Dati non riconosciuti — verifica e correggi manualmente", icon="⚠️")
         else:
-            st.session_state["_id_scanned"] = True
-            st.toast("Immagine caricata — inserisci i dati anagrafici manualmente", icon="ℹ️")
+            # Immagine JPG/PNG: OCR diretto
+            if _OCR_AVAILABLE:
+                with st.spinner("Lettura immagine con OCR…"):
+                    try:
+                        from PIL import Image
+                        img = Image.open(io.BytesIO(st.session_state.id_bytes))
+                        raw_text = pytesseract.image_to_string(img, lang="ita+eng")
+                        extracted = _parse_identity_from_text(raw_text)
+                        if extracted:
+                            _set_anagrafica(extracted)
+                            st.session_state["_id_scanned"] = False
+                            st.toast(f"✅ Estratti {len(extracted)} campi dall'immagine", icon="🪪")
+                        else:
+                            st.session_state["_id_scanned"] = True
+                            st.toast("⚠️ OCR completato ma dati non riconosciuti — inserisci manualmente", icon="⚠️")
+                    except Exception:
+                        st.session_state["_id_scanned"] = True
+                        st.toast("⚠️ Errore OCR — inserisci i dati manualmente", icon="⚠️")
+            else:
+                st.session_state["_id_scanned"] = True
+                st.toast("Immagine caricata — inserisci i dati anagrafici manualmente", icon="ℹ️")
 
 # Azimut position
 if az_up:
