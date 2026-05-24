@@ -2358,6 +2358,16 @@ def main():
                 f"✅ <b>Dati FondiDoc</b> — {len(_fd_now)} fondi caricati</div>",
                 unsafe_allow_html=True)
         if uploaded:
+            if not _fd_now:
+                st.markdown(
+                    "<div style='background:#431407;border:1px solid #C9A84C;"
+                    "border-radius:8px;padding:.6rem .9rem;font-size:.74rem;"
+                    "color:#fde68a;margin-bottom:.55rem;line-height:1.6;'>"
+                    "⚠️ <b>Azione consigliata</b><br>"
+                    "Clicca <b>Scarica Dati FondiDoc</b> per popolare le tabelle "
+                    "a schermo con Cat.&nbsp;FIDA, FIDArating, rendimenti e "
+                    "metriche di rischio.</div>",
+                    unsafe_allow_html=True)
             if st.button("📥  Scarica Dati FondiDoc",
                          use_container_width=True,
                          help="Scarica Cat. FIDA, FIDArating e rendimenti "
