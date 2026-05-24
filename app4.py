@@ -2520,30 +2520,47 @@ def main():
 
     fida_df = raw.get("FIDA", pd.DataFrame())
 
-    def _gen_pdf(fund_data_used: dict, label: str):
-        try:
-            pdf_bytes = generate_pdf(df_act, wcol, profile, ptf_label, fund_data_used,
-                                     fida_df=fida_df, factbook_data=factbook_data,
-                                     cache_date=cache_date)
-            fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
-                     f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
-            st.download_button("📥   Scarica Report PDF", data=pdf_bytes,
-                               file_name=fname, mime="application/pdf",
-                               use_container_width=True)
-            st.success(f"✅ PDF pronto — {label}")
-        except Exception as e:
-            st.error(f"Errore PDF: {e}")
-
     with col_btn:
+        # ── Show download button if PDF was already generated this session ──
+        if st.session_state.get("_pdf_bytes_ready"):
+            st.download_button(
+                "📥   Scarica Report PDF",
+                data=st.session_state["_pdf_bytes_ready"],
+                file_name=st.session_state.get("_pdf_fname_ready", "report.pdf"),
+                mime="application/pdf",
+                use_container_width=True,
+            )
+            st.success(f"✅ PDF pronto — {st.session_state.get('_pdf_lbl','')}")
+
         if st.button("⚡  Genera PDF", use_container_width=True, type="primary"):
+            # Clear any stale PDF from a previous run
+            for _k in ("_pdf_bytes_ready", "_pdf_fname_ready", "_pdf_lbl"):
+                st.session_state.pop(_k, None)
+
             pb = st.progress(0, text="Scarico dati FondiDoc…")
             def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
             fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
             pb.progress(1.0, text="✅ Genero PDF…")
             save_fund_cache(fund_data)
-            st.session_state["_scomp_fd"] = fund_data   # tabella Scomposizione
-            _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
+            # Store fund data so the Scomposizione table gets populated
+            # on the immediate rerun triggered below
+            st.session_state["_scomp_fd"] = fund_data
+            try:
+                pdf_bytes = generate_pdf(
+                    df_act, wcol, profile, ptf_label, fund_data,
+                    fida_df=fida_df, factbook_data=factbook_data,
+                    cache_date=cache_date)
+                fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
+                         f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
+                st.session_state["_pdf_bytes_ready"] = pdf_bytes
+                st.session_state["_pdf_fname_ready"] = fname
+                st.session_state["_pdf_lbl"] = f"{len(fund_data)} schede da FondiDoc"
+            except Exception as _pe:
+                st.error(f"Errore PDF: {_pe}")
             pb.empty()
+            # Force immediate rerun so the Scomposizione table and download
+            # button both reflect the freshly fetched FondiDoc data
+            st.rerun()
 
     st.markdown("<br><br>",unsafe_allow_html=True)
 
