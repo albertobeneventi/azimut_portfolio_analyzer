@@ -2364,15 +2364,96 @@ def main():
             rows_html = "".join([f"""<div class="fund-row"><div class="fund-dot" style="background:{r['color']};"></div><div style="flex:1;min-width:0;"><div class="fund-name">{r['nome']}</div><div class="fund-cat">{r['categoria'][:48]+'…' if r['categoria'] and len(r['categoria'])>48 else (r['categoria'] or '—')}</div></div><div class="fund-pct">{r[wcol]*100:.1f}%</div></div>""" for _,r in sub.iterrows()])
             st.markdown(f'<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden;"><div class="fund-group-hdr">{gruppo}</div>{rows_html}</div>',unsafe_allow_html=True)
 
+    # ── Load cached FondiDoc data (bundled in repo) ──────────────────────────
+    cached_fd, cache_date = load_fund_cache()
+
+    # ── SCOMPOSIZIONE TABLE ───────────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown('<p class="sec-title">Scomposizione Azionario / Obbligazionario</p>',
+                unsafe_allow_html=True)
+
+    def _fb_metric(nome: str, key: str):
+        """Return metric from factbook_data (duration / credit_rating / az_pct …)."""
+        if not factbook_data:
+            return None
+        norm = _normalize_for_unp(nome)
+        norm = _FUND_ALIASES.get(norm, norm)
+        entry = factbook_data.get(norm)
+        if not entry or not isinstance(entry, dict):
+            best, best_len = None, 0
+            for _fk, _fv in factbook_data.items():
+                if (isinstance(_fv, dict)
+                        and (_fk in norm or norm in _fk)
+                        and len(_fk) > best_len):
+                    best, best_len = _fv, len(_fk)
+            entry = best
+        if not entry or not isinstance(entry, dict):
+            return None
+        return entry.get(key)
+
+    _TH = ("background:#0D1B2A;color:#fff;font-size:.74rem;"
+           "padding:8px 10px;white-space:nowrap;")
+    _TC = "font-size:.77rem;padding:6px 10px;border-bottom:1px solid #f1f5f9;"
+    _tbl_hdr = (
+        f"<tr>"
+        f"<th style='{_TH}text-align:left;'>Fondo</th>"
+        f"<th style='{_TH}text-align:center;'>Peso</th>"
+        f"<th style='{_TH}text-align:center;'>% Az.</th>"
+        f"<th style='{_TH}text-align:center;'>% Obb.</th>"
+        f"<th style='{_TH}text-align:center;'>Duration</th>"
+        f"<th style='{_TH}text-align:center;'>Rating Medio</th>"
+        f"<th style='{_TH}text-align:left;'>Cat. FIDA</th>"
+        f"</tr>"
+    )
+    _tbl_body = ""
+    for _, _tr in df_act.sort_values(wcol, ascending=False).iterrows():
+        _dur   = _fb_metric(_tr["nome"], "duration")
+        _rat   = _fb_metric(_tr["nome"], "credit_rating")
+        _azfb  = _fb_metric(_tr["nome"], "fb_az_pct")
+        _obfb  = _fb_metric(_tr["nome"], "fb_obb_pct")
+        _az_d  = (_azfb if _azfb is not None else _tr["az_pct"]) * 100
+        _ob_d  = (_obfb if _obfb is not None else _tr["obb_pct"]) * 100
+        _cat   = (cached_fd.get(_tr["nome"], {})
+                  .get("overview", {}).get("cat_assog") or "—")
+        _dur_s = f"{_dur:.2f} y" if isinstance(_dur, (int, float)) else "—"
+        _rat_s = _rat if isinstance(_rat, str) else "—"
+        _rat_w = "600" if _rat_s != "—" else "400"
+        _tbl_body += (
+            f"<tr>"
+            f"<td style='{_TC}color:#0D1B2A;font-weight:500;'>{_tr['nome']}</td>"
+            f"<td style='{_TC}text-align:center;color:#1B4FBB;font-weight:600;'>"
+            f"{_tr[wcol]*100:.1f}%</td>"
+            f"<td style='{_TC}text-align:center;'>{_az_d:.1f}%</td>"
+            f"<td style='{_TC}text-align:center;'>{_ob_d:.1f}%</td>"
+            f"<td style='{_TC}text-align:center;'>{_dur_s}</td>"
+            f"<td style='{_TC}text-align:center;font-weight:{_rat_w};'>{_rat_s}</td>"
+            f"<td style='{_TC}color:#64748B;'>{_cat}</td>"
+            f"</tr>"
+        )
+    if _tbl_body:
+        st.markdown(
+            f"<div style='overflow-x:auto;border-radius:10px;"
+            f"border:1px solid #e2e8f0;background:#fff;'>"
+            f"<table style='width:100%;border-collapse:collapse;'>"
+            f"<thead>{_tbl_hdr}</thead><tbody>{_tbl_body}</tbody>"
+            f"</table></div>",
+            unsafe_allow_html=True)
+        _note_dur = ("Factbook AZ Investments" if factbook_data
+                     else "n.d. — carica il Factbook PDF nella barra laterale")
+        _note_cat = (f"FondiDoc (cache {cache_date})" if cached_fd
+                     else "n.d. — clicca «Genera PDF» per popolare la cache")
+        st.markdown(
+            f"<p style='font-size:.71rem;color:#94A3B8;margin-top:5px;'>"
+            f"Duration &amp; Rating Medio: {_note_dur}"
+            f" &nbsp;·&nbsp; Cat. FIDA: {_note_cat}</p>",
+            unsafe_allow_html=True)
+
     # ── DOWNLOAD SECTION ─────────────────────────────────────
     st.markdown("<br>",unsafe_allow_html=True)
     st.markdown('<p class="sec-title">Esporta Report PDF Completo</p>',unsafe_allow_html=True)
 
     fida_urls = raw.get("fida_urls", {})
     n_urls = sum(1 for nome in df_act["nome"].unique() if nome in fida_urls)
-
-    # ── Load cached FondiDoc data (bundled in repo) ──────────────────────────
-    cached_fd, cache_date = load_fund_cache()
 
     col_btn,col_inf = st.columns([1,2])
     with col_inf:
