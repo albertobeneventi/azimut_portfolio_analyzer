@@ -2521,6 +2521,17 @@ def main():
     fida_df = raw.get("FIDA", pd.DataFrame())
 
     with col_btn:
+        # ── Hint: shown only until first fetch ──────────────────────────────
+        if not st.session_state.get("_scomp_fd") and not cached_fd:
+            st.markdown(
+                "<div style='background:#fefce8;border:1px solid #fde047;"
+                "border-radius:8px;padding:.6rem .85rem;margin-bottom:.6rem;"
+                "font-size:.78rem;color:#713f12;line-height:1.5;'>"
+                "⚡ Clicca <b>Genera PDF</b> per scaricare i dati FondiDoc "
+                "(Cat. FIDA, FIDArating, rendimenti) e popolare "
+                "la tabella Scomposizione qui sopra.</div>",
+                unsafe_allow_html=True)
+
         # ── Show download button if PDF was already generated this session ──
         if st.session_state.get("_pdf_bytes_ready"):
             st.download_button(
