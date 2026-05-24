@@ -1857,27 +1857,31 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         Paragraph("",                                  WH),
         Paragraph("",                                  WH),
     ]
-    # FIDArating: use coloured ParagraphStyles directly (TEXTCOLOR in TableStyle
-    # is overridden by the Paragraph's own textColor — styled Paragraphs are the
-    # correct approach in ReportLab for coloured text inside table cells).
-    # 5=best (dark green) … 3=light green; 1-2 bold black (no red for print).
-    def _fida_style(val: str):
-        _COL = {
-            "5": "#166534",   # dark green
-            "4": "#15803d",   # medium green
-            "3": "#16a34a",   # light green
-        }
-        _hex = _COL.get(val)
-        if _hex:
-            return S(f"SMF{val}", fontName="Helvetica-Bold", fontSize=7.5,
-                     textColor=rl_colors.HexColor(_hex), leading=11)
-        if val in ("1", "2"):
-            # Bold black — no colour for print
-            return S(f"SMF{val}", fontName="Helvetica-Bold", fontSize=7.5,
-                     textColor=rl_colors.HexColor("#1E293B"), leading=11)
-        return SM   # "—" or unknown: normal style
+    # FIDArating visual badges in PDF:
+    # BACKGROUND per-cell works in ReportLab TableStyle and overrides
+    # ROWBACKGROUNDS when placed after it.  Paragraph textColor must be
+    # set via ParagraphStyle (not TEXTCOLOR in TableStyle — that is ignored
+    # when the cell contains a Paragraph object).
+    # 5=dark green bg / 4=medium green / 3=light green — all white text.
+    # 1-2: no background, bold black (no red for print).
+    _FIDA_BG_HEX = {"5": "#166534", "4": "#15803d", "3": "#16a34a"}
+
+    def _fida_para(val: str):
+        _v = str(val).strip()
+        if _v in _FIDA_BG_HEX:
+            return Paragraph(
+                _v,
+                S(f"SMF{_v}", fontName="Helvetica-Bold", fontSize=7.5,
+                  textColor=rl_colors.white, leading=11))
+        if _v in ("1", "2"):
+            return Paragraph(
+                _v,
+                S(f"SMF{_v}", fontName="Helvetica-Bold", fontSize=7.5,
+                  textColor=rl_colors.HexColor("#1E293B"), leading=11))
+        return Paragraph(val, SM)   # "—" or unknown
 
     alloc_fund_rows = []
+    _fida_vals = []   # keep to build BACKGROUND commands after the loop
     for _, _row in d_sorted.iterrows():
         _dur2  = get_fi_metric(_row["nome"], "duration")
         _rat2  = get_fi_metric(_row["nome"], "credit_rating")
@@ -1886,6 +1890,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _fd_ov2 = (fund_data or {}).get(_row["nome"], {}).get("overview", {})
         _cat2   = _fd_ov2.get("cat_assog") or "—"
         _fida2  = _fd_ov2.get("fida_rating") or "—"
+        _fida_vals.append(str(_fida2).strip())
         alloc_fund_rows.append([
             Paragraph(_row["nome"][:48], SM),
             Paragraph(f"{_row[wcol]*100:.1f}%",                          SM),
@@ -1894,8 +1899,20 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             Paragraph(f"{_dur2:.2f}" if isinstance(_dur2, (int, float)) else "—", SM),
             Paragraph(_rat2 if isinstance(_rat2, str) else "—",           SM),
             Paragraph(_cat2,                                               SM),
-            Paragraph(_fida2, _fida_style(str(_fida2).strip())),
+            _fida_para(_fida2),
         ])
+
+    # Build per-row BACKGROUND commands for the FIDArating column (col 7).
+    # These are added AFTER ROWBACKGROUNDS so they override the alternating
+    # white/grey for that specific cell.
+    _fida_bg_cmds = []
+    for _fi, _fv in enumerate(_fida_vals):
+        _bg_hex = _FIDA_BG_HEX.get(_fv)
+        if _bg_hex:
+            _tr = _fi + 2   # row 0=hdr, 1=ptf summary, 2+=fund rows
+            _fida_bg_cmds.append(
+                ("BACKGROUND", (7, _tr), (7, _tr),
+                 rl_colors.HexColor(_bg_hex)))
 
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
@@ -1915,6 +1932,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
         ("ALIGN",          (1,0), (-1,-1), "CENTER"),
         ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
+        *_fida_bg_cmds,   # coloured cell backgrounds — placed last to override
     ]))
 
     NOTE_A = S("NTA", fontName="Helvetica-Oblique", fontSize=6.5,
