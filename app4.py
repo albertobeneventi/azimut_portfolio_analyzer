@@ -1846,7 +1846,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     alloc_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
                  ["Fondo", "Peso", "% Azionario", "% Obbligazionario",
-                  "Duration", "Rating Medio", "Cat. FIDA"]]
+                  "Duration", "Rating Medio", "Cat. FIDA", "FIDArating"]]
     alloc_ptf = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph("<b>100%</b>",                       WH),
@@ -1855,6 +1855,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         Paragraph(f"<b>{_ptf_dur_str}</b>",            WH),
         Paragraph(f"<b>{_ptf_rat_str}</b>",            WH),
         Paragraph("",                                  WH),
+        Paragraph("",                                  WH),
     ]
     alloc_fund_rows = []
     for _, _row in d_sorted.iterrows():
@@ -1862,8 +1863,9 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _rat2  = get_fi_metric(_row["nome"], "credit_rating")
         _az_s  = _az_eff(_row)  * 100
         _obb_s = _obb_eff(_row) * 100
-        _cat2  = ((fund_data or {}).get(_row["nome"], {})
-                  .get("overview", {}).get("cat_assog") or "—")
+        _fd_ov2 = (fund_data or {}).get(_row["nome"], {}).get("overview", {})
+        _cat2   = _fd_ov2.get("cat_assog") or "—"
+        _fida2  = _fd_ov2.get("fida_rating") or "—"
         alloc_fund_rows.append([
             Paragraph(_row["nome"][:48], SM),
             Paragraph(f"{_row[wcol]*100:.1f}%",                          SM),
@@ -1872,11 +1874,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             Paragraph(f"{_dur2:.2f}" if isinstance(_dur2, (int, float)) else "—", SM),
             Paragraph(_rat2 if isinstance(_rat2, str) else "—",           SM),
             Paragraph(_cat2,                                               SM),
+            Paragraph(_fida2,                                              SM),
         ])
 
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
-        colWidths=[4.6*cm, 1.2*cm, 1.7*cm, 2.0*cm, 1.8*cm, 2.0*cm, 3.7*cm],
+        colWidths=[4.1*cm, 1.1*cm, 1.5*cm, 1.8*cm, 1.6*cm, 1.9*cm, 3.1*cm, 1.9*cm],
         repeatRows=1,
     )
     alloc_tbl.setStyle(TableStyle([
@@ -2410,6 +2413,13 @@ def main():
         f"<th style='{_TH}text-align:center;'>FIDArating</th>"
         f"</tr>"
     )
+    # Prefer live FondiDoc data fetched in this session over on-disk cache
+    _fd_live = st.session_state.get("_scomp_fd") or cached_fd
+
+    # FIDArating color scale: 5=best (dark green) … 1=worst (dark red)
+    _FIDA_COL = {5: "#166534", 4: "#15803d", 3: "#22c55e",
+                 2: "#f87171", 1: "#b91c1c"}
+
     _tbl_body = ""
     for _, _tr in df_act.sort_values(wcol, ascending=False).iterrows():
         _dur   = _fb_metric(_tr["nome"], "duration")
@@ -2418,18 +2428,14 @@ def main():
         _obfb  = _fb_metric(_tr["nome"], "fb_obb_pct")
         _az_d  = (_azfb if _azfb is not None else _tr["az_pct"]) * 100
         _ob_d  = (_obfb if _obfb is not None else _tr["obb_pct"]) * 100
-        _fd_ov = cached_fd.get(_tr["nome"], {}).get("overview", {})
+        _fd_ov = _fd_live.get(_tr["nome"], {}).get("overview", {})
         _cat   = _fd_ov.get("cat_assog") or "—"
         _fida  = _fd_ov.get("fida_rating") or "—"
         _dur_s = f"{_dur:.2f} y" if isinstance(_dur, (int, float)) else "—"
         _rat_s = _rat if isinstance(_rat, str) else "—"
         _rat_w = "600" if _rat_s != "—" else "400"
-        # FIDArating colour: 1-2 green, 3-4 amber, 5-7 red
         try:
-            _fr_v = int(_fida)
-            _fr_col = ("#16a34a" if _fr_v <= 2
-                       else "#d97706" if _fr_v <= 4
-                       else "#dc2626")
+            _fr_col = _FIDA_COL.get(int(_fida), "#64748B")
         except (ValueError, TypeError):
             _fr_col = "#64748B"
         _tbl_body += (
@@ -2456,8 +2462,12 @@ def main():
             unsafe_allow_html=True)
         _note_dur = ("Factbook AZ Investments" if factbook_data
                      else "n.d. — carica il Factbook PDF nella barra laterale")
-        _note_cat = (f"FondiDoc (cache {cache_date})" if cached_fd
-                     else "n.d. — clicca «Genera PDF» per popolare la cache")
+        if st.session_state.get("_scomp_fd"):
+            _note_cat = "FondiDoc live (questa sessione)"
+        elif cached_fd:
+            _note_cat = f"FondiDoc (cache {cache_date})"
+        else:
+            _note_cat = "n.d. — clicca «Genera PDF» per popolare la cache"
         st.markdown(
             f"<p style='font-size:.71rem;color:#94A3B8;margin-top:5px;'>"
             f"Duration &amp; Rating Medio: {_note_dur}"
@@ -2514,6 +2524,7 @@ def main():
             fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
             pb.progress(1.0, text="✅ Genero PDF…")
             save_fund_cache(fund_data)
+            st.session_state["_scomp_fd"] = fund_data   # tabella Scomposizione
             _gen_pdf(fund_data, f"{len(fund_data)} schede da FondiDoc")
             pb.empty()
 
