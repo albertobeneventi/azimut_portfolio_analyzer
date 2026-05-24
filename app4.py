@@ -2656,8 +2656,8 @@ def main():
     fida_df = raw.get("FIDA", pd.DataFrame())
 
     with col_btn:
-        # ── Show download button if PDF was already generated this session ──
         if st.session_state.get("_pdf_bytes_ready"):
+            # PDF già generato per questo portafoglio/profilo: mostra solo download
             st.download_button(
                 "📥   Scarica Report PDF",
                 data=st.session_state["_pdf_bytes_ready"],
@@ -2666,8 +2666,9 @@ def main():
                 use_container_width=True,
             )
             st.success(f"✅ PDF pronto — {st.session_state.get('_pdf_lbl','')}")
-
-        if st.button("⚡  Genera PDF", use_container_width=True, type="primary"):
+            st.caption("Cambia portafoglio, profilo o fondi per rigenerare.")
+        if not st.session_state.get("_pdf_bytes_ready") and \
+                st.button("⚡  Genera PDF", use_container_width=True, type="primary"):
             # Clear any stale PDF from a previous run
             for _k in ("_pdf_bytes_ready", "_pdf_fname_ready", "_pdf_lbl"):
                 st.session_state.pop(_k, None)
