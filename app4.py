@@ -2200,11 +2200,11 @@ def free_portfolio_ui(data):
 
     _RATING_OPTS  = ["5", "4", "3", "2", "1", "—"]
     _RATING_LABEL = {
-        "5": "⭐⭐⭐⭐⭐  FIDArating 5 — Ottimo",
-        "4": "⭐⭐⭐⭐  FIDArating 4 — Buono",
-        "3": "⭐⭐⭐  FIDArating 3 — Sufficiente",
-        "2": "⭐⭐  FIDArating 2 — Scarso",
-        "1": "⭐  FIDArating 1 — Pessimo",
+        "5": "⭐⭐⭐⭐⭐  FIDArating 5",
+        "4": "⭐⭐⭐⭐  FIDArating 4",
+        "3": "⭐⭐⭐  FIDArating 3",
+        "2": "⭐⭐  FIDArating 2",
+        "1": "⭐  FIDArating 1",
         "—": "Nessun rating",
     }
 
