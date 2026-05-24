@@ -2252,10 +2252,11 @@ def free_portfolio_ui(data):
             ) or "").strip()
         else:
             _search_q = st.text_input(
-                "🔍  Cerca per nome:",
+                "🔍  Cerca per nome (premi Invio per filtrare):",
                 key="free_fund_search",
                 placeholder="Es. «comm» → Commodities, «glob» → Global…",
             ).strip()
+            st.caption("⚙️ Modalità live non disponibile — pacchetto in installazione")
 
     if len(_search_q) >= 4:
         _q_lower     = _search_q.lower()
