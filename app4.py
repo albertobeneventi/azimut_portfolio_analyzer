@@ -1857,17 +1857,27 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         Paragraph("",                                  WH),
         Paragraph("",                                  WH),
     ]
-    # FIDArating colour scale for PDF (same as Streamlit: 5=best, 1=worst)
-    _FIDA_PDF_COL = {
-        "5": rl_colors.HexColor("#166534"),   # dark green
-        "4": rl_colors.HexColor("#15803d"),   # medium green
-        "3": rl_colors.HexColor("#16a34a"),   # light green (print-safe)
-        "2": rl_colors.HexColor("#ef4444"),   # light red
-        "1": rl_colors.HexColor("#991b1b"),   # dark red
-    }
+    # FIDArating: use coloured ParagraphStyles directly (TEXTCOLOR in TableStyle
+    # is overridden by the Paragraph's own textColor — styled Paragraphs are the
+    # correct approach in ReportLab for coloured text inside table cells).
+    # 5=best (dark green) … 3=light green; 1-2 bold black (no red for print).
+    def _fida_style(val: str):
+        _COL = {
+            "5": "#166534",   # dark green
+            "4": "#15803d",   # medium green
+            "3": "#16a34a",   # light green
+        }
+        _hex = _COL.get(val)
+        if _hex:
+            return S(f"SMF{val}", fontName="Helvetica-Bold", fontSize=7.5,
+                     textColor=rl_colors.HexColor(_hex), leading=11)
+        if val in ("1", "2"):
+            # Bold black — no colour for print
+            return S(f"SMF{val}", fontName="Helvetica-Bold", fontSize=7.5,
+                     textColor=rl_colors.HexColor("#1E293B"), leading=11)
+        return SM   # "—" or unknown: normal style
 
     alloc_fund_rows = []
-    _fida_vals = []   # collect to build per-row colour commands
     for _, _row in d_sorted.iterrows():
         _dur2  = get_fi_metric(_row["nome"], "duration")
         _rat2  = get_fi_metric(_row["nome"], "credit_rating")
@@ -1876,7 +1886,6 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _fd_ov2 = (fund_data or {}).get(_row["nome"], {}).get("overview", {})
         _cat2   = _fd_ov2.get("cat_assog") or "—"
         _fida2  = _fd_ov2.get("fida_rating") or "—"
-        _fida_vals.append(str(_fida2).strip())
         alloc_fund_rows.append([
             Paragraph(_row["nome"][:48], SM),
             Paragraph(f"{_row[wcol]*100:.1f}%",                          SM),
@@ -1885,20 +1894,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             Paragraph(f"{_dur2:.2f}" if isinstance(_dur2, (int, float)) else "—", SM),
             Paragraph(_rat2 if isinstance(_rat2, str) else "—",           SM),
             Paragraph(_cat2,                                               SM),
-            Paragraph(_fida2,                                              SM),
+            Paragraph(_fida2, _fida_style(str(_fida2).strip())),
         ])
-
-    # Per-row TEXTCOLOR + bold for FIDArating column (index 7)
-    # Table rows: 0=header, 1=portfolio summary, 2+ = fund rows
-    _fida_style_cmds = []
-    for _fi, _fv in enumerate(_fida_vals):
-        _tr = _fi + 2
-        _fc = _FIDA_PDF_COL.get(_fv)
-        if _fc:
-            _fida_style_cmds += [
-                ("TEXTCOLOR", (7, _tr), (7, _tr), _fc),
-                ("FONTNAME",  (7, _tr), (7, _tr), "Helvetica-Bold"),
-            ]
 
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
@@ -1918,7 +1915,6 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
         ("ALIGN",          (1,0), (-1,-1), "CENTER"),
         ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
-        *_fida_style_cmds,   # per-row FIDArating colour + bold
     ]))
 
     NOTE_A = S("NTA", fontName="Helvetica-Oblique", fontSize=6.5,
