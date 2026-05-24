@@ -1846,7 +1846,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     alloc_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
                  ["Fondo", "Peso", "% Azionario", "% Obbligazionario",
-                  "Duration", "Rating Medio"]]
+                  "Duration", "Rating Medio", "Cat. FIDA"]]
     alloc_ptf = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph("<b>100%</b>",                       WH),
@@ -1854,6 +1854,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         Paragraph(f"<b>{_ptf_obb_wtd*100:.1f}%</b>",  WH),
         Paragraph(f"<b>{_ptf_dur_str}</b>",            WH),
         Paragraph(f"<b>{_ptf_rat_str}</b>",            WH),
+        Paragraph("",                                  WH),
     ]
     alloc_fund_rows = []
     for _, _row in d_sorted.iterrows():
@@ -1861,6 +1862,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _rat2  = get_fi_metric(_row["nome"], "credit_rating")
         _az_s  = _az_eff(_row)  * 100
         _obb_s = _obb_eff(_row) * 100
+        _cat2  = ((fund_data or {}).get(_row["nome"], {})
+                  .get("overview", {}).get("cat_assog") or "—")
         alloc_fund_rows.append([
             Paragraph(_row["nome"][:48], SM),
             Paragraph(f"{_row[wcol]*100:.1f}%",                          SM),
@@ -1868,11 +1871,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             Paragraph(f"{_obb_s:.1f}%",                                  SM),
             Paragraph(f"{_dur2:.2f}" if isinstance(_dur2, (int, float)) else "—", SM),
             Paragraph(_rat2 if isinstance(_rat2, str) else "—",           SM),
+            Paragraph(_cat2,                                               SM),
         ])
 
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
-        colWidths=[5.5*cm, 1.4*cm, 2.0*cm, 2.4*cm, 2.2*cm, 3.5*cm],
+        colWidths=[4.6*cm, 1.2*cm, 1.7*cm, 2.0*cm, 1.8*cm, 2.0*cm, 3.7*cm],
         repeatRows=1,
     )
     alloc_tbl.setStyle(TableStyle([
@@ -2403,6 +2407,7 @@ def main():
         f"<th style='{_TH}text-align:center;'>Duration</th>"
         f"<th style='{_TH}text-align:center;'>Rating Medio</th>"
         f"<th style='{_TH}text-align:left;'>Cat. FIDA</th>"
+        f"<th style='{_TH}text-align:center;'>FIDArating</th>"
         f"</tr>"
     )
     _tbl_body = ""
@@ -2413,11 +2418,20 @@ def main():
         _obfb  = _fb_metric(_tr["nome"], "fb_obb_pct")
         _az_d  = (_azfb if _azfb is not None else _tr["az_pct"]) * 100
         _ob_d  = (_obfb if _obfb is not None else _tr["obb_pct"]) * 100
-        _cat   = (cached_fd.get(_tr["nome"], {})
-                  .get("overview", {}).get("cat_assog") or "—")
+        _fd_ov = cached_fd.get(_tr["nome"], {}).get("overview", {})
+        _cat   = _fd_ov.get("cat_assog") or "—"
+        _fida  = _fd_ov.get("fida_rating") or "—"
         _dur_s = f"{_dur:.2f} y" if isinstance(_dur, (int, float)) else "—"
         _rat_s = _rat if isinstance(_rat, str) else "—"
         _rat_w = "600" if _rat_s != "—" else "400"
+        # FIDArating colour: 1-2 green, 3-4 amber, 5-7 red
+        try:
+            _fr_v = int(_fida)
+            _fr_col = ("#16a34a" if _fr_v <= 2
+                       else "#d97706" if _fr_v <= 4
+                       else "#dc2626")
+        except (ValueError, TypeError):
+            _fr_col = "#64748B"
         _tbl_body += (
             f"<tr>"
             f"<td style='{_TC}color:#0D1B2A;font-weight:500;'>{_tr['nome']}</td>"
@@ -2428,6 +2442,8 @@ def main():
             f"<td style='{_TC}text-align:center;'>{_dur_s}</td>"
             f"<td style='{_TC}text-align:center;font-weight:{_rat_w};'>{_rat_s}</td>"
             f"<td style='{_TC}color:#64748B;'>{_cat}</td>"
+            f"<td style='{_TC}text-align:center;font-weight:700;color:{_fr_col};'>"
+            f"{_fida}</td>"
             f"</tr>"
         )
     if _tbl_body:
@@ -2445,7 +2461,7 @@ def main():
         st.markdown(
             f"<p style='font-size:.71rem;color:#94A3B8;margin-top:5px;'>"
             f"Duration &amp; Rating Medio: {_note_dur}"
-            f" &nbsp;·&nbsp; Cat. FIDA: {_note_cat}</p>",
+            f" &nbsp;·&nbsp; Cat. FIDA &amp; FIDArating: {_note_cat}</p>",
             unsafe_allow_html=True)
 
     # ── DOWNLOAD SECTION ─────────────────────────────────────
