@@ -2236,74 +2236,21 @@ def free_portfolio_ui(data):
             return f"{r['nome']}{tag}  [{r['macro_cat']}]"
         return f"{r['nome']}{tag}"
 
-    # ── Text search filter — live, no Enter needed ────────────────────────────
-    # JS watches the parent document for the input with our placeholder and
-    # fires a synthetic Enter keydown after 250 ms of inactivity, triggering
-    # Streamlit's rerun without requiring the user to press Enter.
-    st.components.v1.html(
-        """<script>
-        (function(){
-          var t;
-          function attach(){
-            try{
-              window.parent.document.querySelectorAll('input[type="text"]')
-                .forEach(function(el){
-                  if(el._ls) return;
-                  if(!el.placeholder||el.placeholder.indexOf('comm')<0) return;
-                  el._ls=true;
-                  el.addEventListener('input',function(){
-                    clearTimeout(t);
-                    t=setTimeout(function(){
-                      el.dispatchEvent(new KeyboardEvent('keydown',
-                        {key:'Enter',keyCode:13,bubbles:true}));
-                    },250);
-                  });
-                });
-            }catch(e){}
-          }
-          attach();
-          new MutationObserver(attach).observe(
-            window.parent.document.body,{childList:true,subtree:true});
-        })();
-        </script>""",
-        height=0,
-        scrolling=False,
-    )
+    options = fida_filtered.apply(_fund_option, axis=1).tolist()
 
-    _search_row_l, _search_row_r = st.columns([3, 2])
-    with _search_row_l:
-        _search_q = st.text_input(
-            "🔍  Cerca per nome (live):",
-            key="free_fund_search",
-            placeholder="Es. «comm» → Commodities, «glob» → Global…",
-        ).strip()
-
-    if len(_search_q) >= 4:
-        _q_lower     = _search_q.lower()
-        _fida_search = fida_filtered[
-            fida_filtered["nome"].str.lower().str.contains(_q_lower, na=False)
-        ]
-        if _fida_search.empty:
-            with _search_row_l:
-                st.caption(f"⚠️ Nessun fondo per «{_search_q}» — mostro tutti")
-            _fida_search = fida_filtered
-        else:
-            with _search_row_r:
-                st.markdown(
-                    f"<p style='font-size:.73rem;color:#C9A84C;margin-top:2.1rem;'>"
-                    f"🎯 {len(_fida_search)} fondo/i trovati</p>",
-                    unsafe_allow_html=True)
-    else:
-        _fida_search = fida_filtered
-
-    options = _fida_search.apply(_fund_option, axis=1).tolist()
-
-    # Force selectbox to reset (index 0) whenever the search filter changes
-    _sel_key = f"sel_fund_{hash(_search_q)}"
-
+    # st.multiselect has native live search built into Streamlit (no Enter needed).
+    # max_selections=1 limits it to a single fund, giving us a searchable picker.
     c1,c2,c3 = st.columns([3.5,1,0.8])
-    with c1: sel = st.selectbox("Seleziona fondo:", options, key=_sel_key)
-    with c2: w   = st.number_input("Peso %",0.1,100.0,10.0,0.5,key="sel_w")
+    with c1:
+        _sel_list = st.multiselect(
+            "🔍  Seleziona / cerca fondo:",
+            options=options,
+            max_selections=1,
+            placeholder="Digita per cercare, es. «comm», «glob», «targ»…",
+            key="sel_fund_ms",
+        )
+        sel = _sel_list[0] if _sel_list else (options[0] if options else "")
+    with c2: w = st.number_input("Peso %",0.1,100.0,10.0,0.5,key="sel_w")
     with c3:
         st.markdown("<br>",unsafe_allow_html=True)
         if st.button("➕ Aggiungi",use_container_width=True):
