@@ -2346,12 +2346,29 @@ def main():
     w_obb   = (df_act[wcol]*df_act["obb_pct"]).sum()*100
     srri    = max(1,min(7,round(w_az/100*6+1)))
 
+    _SRRI_LABELS = {
+        1: "Rischio Molto Basso",
+        2: "Rischio Basso",
+        3: "Rischio Medio-Basso",
+        4: "Rischio Medio",
+        5: "Rischio Medio-Alto",
+        6: "Rischio Alto",
+        7: "Rischio Molto Alto",
+    }
+    _srri_sub = (
+        f"<span style='font-weight:600;color:#0d1b2a;'>"
+        f"{_SRRI_LABELS.get(srri,'—')}</span><br>"
+        f"<span style='font-size:.68rem;line-height:1.5;'>"
+        f"Indicatore sintetico europeo di rischio/rendimento<br>"
+        f"Scala 1 (min) → 7 (max) · stima da quota azionaria</span>"
+    )
+
     c1,c2,c3,c4 = st.columns(4)
     for col,val,lbl,sub in [
         (c1,str(n_fondi),"Fondi in Portafoglio",f"{df_act['gruppo'].nunique()} gruppi"),
         (c2,f"{w_az:.1f}%","Quota Azionaria","ponderata per peso"),
         (c3,f"{w_obb:.1f}%","Quota Obbligazionaria","ponderata per peso"),
-        (c4,f"{srri} / 7","Risk Score (SRRI proxy)","basato su quota azionaria"),
+        (c4,f"{srri} / 7","Risk Score (SRRI proxy)", _srri_sub),
     ]:
         col.markdown(f'<div class="kpi"><div class="kpi-label">{lbl}</div><div class="kpi-value">{val}</div><div class="kpi-sub">{sub}</div></div>',unsafe_allow_html=True)
 
