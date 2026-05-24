@@ -2528,10 +2528,35 @@ def main():
         st.plotly_chart(make_macro_bar(df_act,wcol),use_container_width=True,config={"displayModeBar":False})
     with col_r:
         st.markdown('<p class="sec-title">Composizione del Portafoglio</p>',unsafe_allow_html=True)
-        for gruppo in df_act["gruppo"].unique():
-            sub = df_act[df_act["gruppo"]==gruppo].sort_values(wcol,ascending=False)
-            rows_html = "".join([f"""<div class="fund-row"><div class="fund-dot" style="background:{r['color']};"></div><div style="flex:1;min-width:0;"><div class="fund-name">{r['nome']}</div><div class="fund-cat">{r['categoria'][:48]+'…' if r['categoria'] and len(r['categoria'])>48 else (r['categoria'] or '—')}</div></div><div class="fund-pct">{r[wcol]*100:.1f}%</div></div>""" for _,r in sub.iterrows()])
-            st.markdown(f'<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;overflow:hidden;"><div class="fund-group-hdr">{gruppo}</div>{rows_html}</div>',unsafe_allow_html=True)
+        _gruppi = list(df_act["gruppo"].unique())
+        # Icon map for known group names
+        _GRP_ICON = {
+            "ALLOCATION":     "🔀",
+            "AZIONARI (LONG)":"📈",
+            "BOND":           "🏛️",
+        }
+        _grp_tabs = st.tabs([
+            f"{_GRP_ICON.get(g, '📁')}  {g}" for g in _gruppi
+        ])
+        for _gtab, gruppo in zip(_grp_tabs, _gruppi):
+            with _gtab:
+                sub = df_act[df_act["gruppo"]==gruppo].sort_values(wcol,ascending=False)
+                rows_html = "".join([
+                    f'<div class="fund-row">'
+                    f'<div class="fund-dot" style="background:{r["color"]};"></div>'
+                    f'<div style="flex:1;min-width:0;">'
+                    f'<div class="fund-name">{r["nome"]}</div>'
+                    f'<div class="fund-cat">'
+                    f'{r["categoria"][:48]+"…" if r["categoria"] and len(r["categoria"])>48 else (r["categoria"] or "—")}'
+                    f'</div></div>'
+                    f'<div class="fund-pct">{r[wcol]*100:.1f}%</div>'
+                    f'</div>'
+                    for _, r in sub.iterrows()
+                ])
+                st.markdown(
+                    f'<div style="background:#fff;border:1px solid #e2e8f0;'
+                    f'border-radius:10px;overflow:hidden;">{rows_html}</div>',
+                    unsafe_allow_html=True)
 
     # ── Load cached FondiDoc data (bundled in repo) ──────────────────────────
     cached_fd, cache_date = load_fund_cache()
