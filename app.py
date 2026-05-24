@@ -74,6 +74,47 @@ MANUAL_URL_OVERRIDES = {
         "https://www.fondidoc.it/d/Index/AZPOA/LU0346933400_az-f1-allocation-balanced-fof-a-az-fund-cap-eur",
 }
 
+# ── ASSET ALLOCATION CONSIGLIATA ─────────────────────────────────────────────
+# Azimut Capital Management — Asset Allocation Strategica per profilo di rischio
+# (Aprile 2026) — band midpoints used to distribute weights across asset classes.
+_AA_PROFILES = ["PRUDENTE", "CONSERVATIVO", "EQUILIBRATO", "ACCRESCITIVO", "AGGRESSIVO"]
+_AA_ICONS = {
+    "PRUDENTE":     "🛡️",
+    "CONSERVATIVO": "🔰",
+    "EQUILIBRATO":  "⚖️",
+    "ACCRESCITIVO": "📈",
+    "AGGRESSIVO":   "🚀",
+}
+# Midpoints of the official allocation bands per profile
+# Keys: bond, equity, commodities, er (Economia Reale)
+# Cash/Monetario is excluded from the investable portfolio
+_AA_BANDS = {
+    #               bond   equity  comm   er
+    "PRUDENTE":     {"bond": 87.5, "equity":  2.5, "commodities":  2.5, "er":  2.5},
+    "CONSERVATIVO": {"bond": 70.0, "equity": 17.5, "commodities": 10.0, "er":  5.0},
+    "EQUILIBRATO":  {"bond": 50.0, "equity": 37.5, "commodities": 10.0, "er":  7.5},
+    "ACCRESCITIVO": {"bond": 30.0, "equity": 52.5, "commodities": 10.0, "er": 10.0},
+    "AGGRESSIVO":   {"bond": 15.0, "equity": 82.5, "commodities": 10.0, "er": 12.5},
+}
+# Map AA profile → standard PROFILE_W_COL key (for analytics display)
+_AA_TO_PROFILE = {
+    "PRUDENTE":     "CONSERVATIVO",
+    "CONSERVATIVO": "CONSERVATIVO",
+    "EQUILIBRATO":  "EQUILIBRATO",
+    "ACCRESCITIVO": "ACCRESCITIVO",
+    "AGGRESSIVO":   "ACCRESCITIVO",
+}
+# Average UNP/IUNP of Economia Reale funds (from UNP_CATALOG ER section)
+_ER_FUNDS_UNP = [
+    (2.73, 1.36),  # Italian Long-Term Opp.
+    (1.94, 0.97),  # Long Term Credit Opp.
+    (2.73, 1.36),  # Long-Term Equity Opp.
+    (1.23, 0.61),  # ABS
+    (2.51, 1.25),  # Future Opportunities
+]
+_ER_AVG_UNP  = sum(u for u, _ in _ER_FUNDS_UNP) / len(_ER_FUNDS_UNP)   # ~2.23 %
+_ER_AVG_IUNP = sum(i for _, i in _ER_FUNDS_UNP) / len(_ER_FUNDS_UNP)   # ~1.11 %
+
 # ── FUND DATA CACHE ──────────────────────────────────────────────────────────
 # fund_cache.json is bundled in the repo and updated by the user after a fresh
 # FondiDoc fetch (download button → commit to git).
@@ -2171,6 +2212,133 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
 
 # ════════════════════════════════════════════════════════════
+# ASSET ALLOCATION CONSIGLIATA BUILDER
+# ════════════════════════════════════════════════════════════
+
+def build_aa_portfolio(data: dict, aa_profile: str, fd_live: dict) -> pd.DataFrame:
+    """Build an Asset Allocation Consigliata portfolio DataFrame.
+
+    Fund selection rules:
+    - BOND (gruppo "BOND"):        top-4 Obbligazionari by FIDArating from FIDA sheet
+    - EQUITY (gruppo "AZIONARI"):  top-4 Azionari by FIDArating from FIDA sheet
+    - COMMODITIES (gruppo "ALLOCATION"): fund with 'commodit' in name (max 1)
+    - ECONOMIA REALE: not included as fund rows; shown only as info row in UNP tab
+
+    Weights: band midpoints for the chosen profile, normalised across
+    bond + equity + commodities (cash and ER are excluded from the investable mix).
+    Within each class the total class weight is split equally among the selected funds.
+    """
+    fida = data.get("FIDA", pd.DataFrame())
+    if fida.empty:
+        return pd.DataFrame()
+
+    # ── FIDArating helper ──────────────────────────────────────────────────
+    def _get_fr(nome: str) -> int:
+        try:
+            return int(
+                fd_live.get(nome, {}).get("overview", {}).get("fida_rating", 0) or 0
+            )
+        except Exception:
+            return 0
+
+    fida = fida.copy()
+    fida["_fida_r"] = fida["nome"].apply(_get_fr)
+
+    # ── Class weights from AA bands (normalise excl. cash & ER) ───────────
+    bands  = _AA_BANDS.get(aa_profile, _AA_BANDS["EQUILIBRATO"])
+    _b, _e, _c = bands["bond"], bands["equity"], bands["commodities"]
+    _total = _b + _e + _c
+    if _total <= 0:
+        _total = 100.0
+    w_bond = _b / _total
+    w_eq   = _e / _total
+    w_comm = _c / _total
+
+    # ── Fund selection ──────────────────────────────────────────────────────
+    # Bond: Obbligazionari, highest FIDArating first, max 4
+    bond_pool = (
+        fida[fida["macro_cat"] == "Obbligazionari"]
+        .sort_values("_fida_r", ascending=False)
+        .head(4)
+    )
+
+    # Equity: Azionari, highest FIDArating first, max 4
+    eq_pool = (
+        fida[fida["macro_cat"] == "Azionari"]
+        .sort_values("_fida_r", ascending=False)
+        .head(4)
+    )
+
+    # Commodities: find fund with "commodit" in name (case-insensitive), max 1
+    comm_pool = fida[fida["nome"].str.lower().str.contains("commodit", na=False)].head(1)
+    if comm_pool.empty:
+        # Fallback: best Alternative fund
+        comm_pool = (
+            fida[fida["macro_cat"] == "Alternativi"]
+            .sort_values("_fida_r", ascending=False)
+            .head(1)
+        )
+
+    # ── Build rows ──────────────────────────────────────────────────────────
+    funds = []
+
+    n_bond = max(len(bond_pool), 1)
+    for _, r in bond_pool.iterrows():
+        funds.append({
+            "nome":      r["nome"],
+            "categoria": r["categoria"],
+            "gruppo":    "BOND",
+            "az_pct":    0.05,
+            "obb_pct":   0.95,
+            "r_weight":  w_bond / n_bond,
+            "mc": 1.0, "me": 1.0, "ma": 1.0,
+        })
+
+    n_eq = max(len(eq_pool), 1)
+    for _, r in eq_pool.iterrows():
+        funds.append({
+            "nome":      r["nome"],
+            "categoria": r["categoria"],
+            "gruppo":    "AZIONARI (LONG)",
+            "az_pct":    0.95,
+            "obb_pct":   0.05,
+            "r_weight":  w_eq / n_eq,
+            "mc": 1.0, "me": 1.0, "ma": 1.0,
+        })
+
+    for _, r in comm_pool.iterrows():
+        funds.append({
+            "nome":      r["nome"],
+            "categoria": r["categoria"],
+            "gruppo":    "ALLOCATION",
+            "az_pct":    0.30,
+            "obb_pct":   0.10,
+            "r_weight":  w_comm,
+            "mc": 1.0, "me": 1.0, "ma": 1.0,
+        })
+
+    if not funds:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(funds)
+
+    # Normalise r_weight to sum exactly to 1.0
+    _tot_w = df["r_weight"].sum()
+    if _tot_w > 0:
+        df["r_weight"] = df["r_weight"] / _tot_w
+
+    # All three profile weight columns carry the same AA weights so the rest of
+    # the analytics code (which picks one column via PROFILE_W_COL) works unchanged.
+    df["w_cons"]  = df["r_weight"]
+    df["w_equil"] = df["r_weight"]
+    df["w_accr"]  = df["r_weight"]
+
+    df["macro_cat"] = df["categoria"].apply(get_macro)
+    df = assign_colors(df)
+    return df
+
+
+# ════════════════════════════════════════════════════════════
 # FREE PORTFOLIO BUILDER
 # ════════════════════════════════════════════════════════════
 
@@ -2386,23 +2554,61 @@ def main():
         else:
             st.caption("⬆️ Carica prima il file Excel")
 
+        # ── Optional AA PDF (informational only) ──────────────────────────────
         st.markdown("---")
-        ptf_choice = st.radio("TIPO PORTAFOGLIO", ["📋  PTF FULL","⚡  PTF SHORT","🎨  LIBERO"])
+        st.file_uploader(
+            "ASSET ALLOCATION CONSIGLIATA (PDF, facoltativo)",
+            type=["pdf"],
+            key="_aa_pdf_upload",
+            help="Carica il PDF Asset Allocation Strategica per riferimento visivo. "
+                 "La selezione dei fondi usa i dati FIDA dal foglio Excel.",
+        )
         st.markdown("---")
-        profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0)
+        ptf_choice = st.radio(
+            "TIPO PORTAFOGLIO",
+            ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO", "🎯  ASSET CONSIGLIATA"],
+        )
+        st.markdown("---")
+        if "ASSET CONSIGLIATA" in ptf_choice:
+            aa_profile = st.selectbox(
+                "PROFILO ASSET ALLOCATION",
+                _AA_PROFILES,
+                index=2,
+                format_func=lambda x: f"{_AA_ICONS.get(x, '')}  {x}",
+            )
+            profile = _AA_TO_PROFILE[aa_profile]
+        else:
+            aa_profile = None
+            profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0)
         if "LIBERO" not in ptf_choice and "free_ptf" in st.session_state:
             del st.session_state["free_ptf"]
 
     ptf_label = ptf_choice.split("  ",1)[1] if "  " in ptf_choice else ptf_choice
 
     # ── Invalidate cached PDF when portfolio type or profile changes ──────────
-    _ptf_key = f"{ptf_choice}|{profile}"
+    _ptf_key = f"{ptf_choice}|{profile}|{aa_profile or ''}"
     if st.session_state.get("_last_ptf_key") != _ptf_key:
         for _k in ("_pdf_bytes_ready", "_pdf_fname_ready", "_pdf_lbl"):
             st.session_state.pop(_k, None)
         st.session_state["_last_ptf_key"] = _ptf_key
 
-    st.markdown(f"""<div class="az-header"><div class="az-eyebrow">AZIMUT INVESTMENTS · AAS EMILIA ROMAGNA MARCHE UMBRIA</div><div class="az-rule"></div><div class="az-title">{ptf_label}</div><div class="az-meta">{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()} &nbsp;·&nbsp; {datetime.date.today().strftime('%d %B %Y')}</div></div>""",unsafe_allow_html=True)
+    # Header meta line — show AA profile when in AA mode
+    if aa_profile:
+        _meta_icon  = _AA_ICONS.get(aa_profile, "🎯")
+        _meta_label = f"Asset Allocation {aa_profile.title()}"
+    else:
+        _meta_icon  = PROFILE_ICONS.get(profile, "●")
+        _meta_label = f"Profilo {profile.title()}"
+    st.markdown(
+        f'<div class="az-header">'
+        f'<div class="az-eyebrow">AZIMUT INVESTMENTS · AAS EMILIA ROMAGNA MARCHE UMBRIA</div>'
+        f'<div class="az-rule"></div>'
+        f'<div class="az-title">{ptf_label}</div>'
+        f'<div class="az-meta">{_meta_icon} {_meta_label}'
+        f' &nbsp;·&nbsp; {datetime.date.today().strftime("%d %B %Y")}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     if uploaded is None:
         st.info("⬅️ **Carica il file Excel** nella barra laterale per iniziare.")
@@ -2484,6 +2690,16 @@ def main():
 
     if "LIBERO" in ptf_choice:
         df = free_portfolio_ui(raw)
+    elif "ASSET CONSIGLIATA" in ptf_choice:
+        _fd_for_aa = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
+        df = build_aa_portfolio(raw, aa_profile, _fd_for_aa)
+        if df is None or df.empty:
+            st.warning(
+                "⚠️ Impossibile costruire il portafoglio Asset Allocation Consigliata. "
+                "Assicurati di caricare il file Excel con il foglio **FIDA** e, "
+                "per la selezione per qualità, clicca **Scarica Dati FondiDoc**."
+            )
+            return
     else:
         key = "PTF FULL" if "FULL" in ptf_choice else "PTF SHORT"
         if key not in raw or raw[key].empty:
@@ -2494,6 +2710,29 @@ def main():
 
     wcol   = PROFILE_W_COL[profile]
     df_act = df[df[wcol]>0.001].copy()
+
+    # ── AA info box: show allocation bands for the selected profile ───────────
+    if aa_profile and "ASSET CONSIGLIATA" in ptf_choice:
+        _ab = _AA_BANDS[aa_profile]
+        _er_w   = _ab["er"]
+        _aa_icon = _AA_ICONS.get(aa_profile, "🎯")
+        st.markdown(
+            f"<div style='background:#0d2230;border:1px solid #1e4d6b;"
+            f"border-radius:10px;padding:.9rem 1.2rem;margin-bottom:.8rem;'>"
+            f"<div style='font-size:.73rem;letter-spacing:.12em;color:#7ab8d4;"
+            f"text-transform:uppercase;font-weight:700;margin-bottom:.55rem;'>"
+            f"{_aa_icon}  Asset Allocation Strategica — {aa_profile.title()}"
+            f"  <span style='font-size:.65rem;color:#4a7a96;font-weight:400;'>"
+            f"(Azimut Capital Management · Aprile 2026)</span></div>"
+            f"<div style='display:flex;gap:1.5rem;flex-wrap:wrap;font-size:.79rem;color:#c8dde9;line-height:2;'>"
+            f"<span>🏛️ <b>Obbligazionario</b>&nbsp; {_ab['bond']:.0f}%</span>"
+            f"<span>📈 <b>Azionario</b>&nbsp; {_ab['equity']:.0f}%</span>"
+            f"<span>🛢️ <b>Materie Prime</b>&nbsp; {_ab['commodities']:.0f}%</span>"
+            f"<span style='color:#C9A84C;'>🏗️ <b>Economia Reale</b>&nbsp; {_er_w:.0f}%"
+            f" <span style='font-weight:400;font-size:.72rem;'>(non investito)</span></span>"
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
 
     # KPI row
     n_fondi = len(df_act)
@@ -2862,6 +3101,23 @@ def main():
                 f"{_uu:.2f}%"  if _uu  is not None else "—",
                 f"{_iuu:.2f}%" if _iuu is not None else "—",
             ])
+
+        # ── Economia Reale placeholder row (AA mode only) ─────────────────
+        if aa_profile and "ASSET CONSIGLIATA" in ptf_choice:
+            _er_suggested_w = _AA_BANDS[aa_profile]["er"]
+            _er_cell = (
+                f"<span style='color:#C9A84C;font-style:italic;'>"
+                f"🏗️ Economia Reale (suggerito {_er_suggested_w:.0f}% — non in portafoglio)"
+                f"</span>"
+            )
+            _u_funds.append([
+                _er_cell,
+                f"~{_er_suggested_w:.0f}% <span style='font-size:.7rem;color:#C9A84C;"
+                f"font-style:italic;'>(suggerito)</span>",
+                f"{_ER_AVG_UNP:.2f}%",
+                f"{_ER_AVG_IUNP:.2f}%",
+            ])
+
         _ptf_unp  = f"{_u_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
         _ptf_iunp = f"{_iu_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
         st.markdown(
@@ -2871,10 +3127,16 @@ def main():
                 _u_funds,
             ),
             unsafe_allow_html=True)
+        _er_footnote = (
+            f" &nbsp;·&nbsp; 🏗️ Economia Reale: UNP/IUNP36 medi su 5 fondi ER "
+            f"({_ER_AVG_UNP:.2f}% / {_ER_AVG_IUNP:.2f}%)."
+            if (aa_profile and "ASSET CONSIGLIATA" in ptf_choice) else ""
+        )
         st.markdown(
             f"<p style='{_note_style}'>"
             f"UNP = Utile Netto di Portafoglio · IUNP36 = indice su orizzonte triennale. "
-            f"Fonte: Catalogo Prodotti &amp; Servizi Azimut, settembre 2025.</p>",
+            f"Fonte: Catalogo Prodotti &amp; Servizi Azimut, settembre 2025."
+            f"{_er_footnote}</p>",
             unsafe_allow_html=True)
 
     # ── DOWNLOAD SECTION ─────────────────────────────────────
