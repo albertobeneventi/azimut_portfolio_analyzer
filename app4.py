@@ -2296,6 +2296,7 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stSidebar"] .stFileUploader label,[data-testid="stSidebar"] .stRadio > label,[data-testid="stSidebar"] .stSelectbox > label{color:#4a6582 !important;font-size:.68rem !important;letter-spacing:.12em !important;text-transform:uppercase !important;font-weight:600 !important;}
 [data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p{color:#c0cfe0 !important;font-size:.9rem !important;}
 [data-testid="stSidebar"] .stSelectbox>div>div{background:#132035 !important;border:1px solid #243d5a !important;color:#dde6f0 !important;border-radius:6px !important;}
+[data-testid="stSidebar"] .stSelectbox svg{fill:#C9A84C !important;width:22px !important;height:22px !important;opacity:1 !important;}
 [data-testid="stSidebar"] .stFileUploader>div{background:#132035 !important;border:1px dashed #2a4a6a !important;border-radius:8px !important;}
 [data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.8rem !important;}
 .main{background:#f6f8fb !important;}.block-container{padding-top:1.8rem !important;max-width:1300px;}
@@ -2346,6 +2347,25 @@ def main():
             help="Carica il file Excel scaricato dopo la prima estrazione del "
                  "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
         )
+        # ── FondiDoc data loader ─────────────────────────────────────────────
+        st.markdown("---")
+        _fd_now = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
+        if _fd_now:
+            st.markdown(
+                f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+                f"color:#86efac;margin-bottom:.5rem;line-height:1.5;'>"
+                f"✅ <b>Dati FondiDoc</b> — {len(_fd_now)} fondi caricati</div>",
+                unsafe_allow_html=True)
+        if uploaded:
+            if st.button("📥  Scarica Dati FondiDoc",
+                         use_container_width=True,
+                         help="Scarica Cat. FIDA, FIDArating e rendimenti "
+                              "per tutti i fondi dei portafogli"):
+                st.session_state["_fetch_fd_requested"] = True
+        else:
+            st.caption("⬆️ Carica prima il file Excel")
+
         st.markdown("---")
         ptf_choice = st.radio("TIPO PORTAFOGLIO", ["📋  PTF FULL","⚡  PTF SHORT","🎨  LIBERO"])
         st.markdown("---")
@@ -2371,6 +2391,24 @@ def main():
     with st.spinner("⏳ Caricamento dati…"):
         file_bytes = uploaded.read()
         raw = parse_excel(file_bytes)
+
+    # ── Sidebar-triggered FondiDoc fetch ──────────────────────────────────────
+    if st.session_state.pop("_fetch_fd_requested", False):
+        _fida_urls_all = raw.get("fida_urls", {})
+        _sheets = [raw[s] for s in ("PTF FULL", "PTF SHORT")
+                   if s in raw and not raw[s].empty]
+        _df_all = (pd.concat(_sheets, ignore_index=True)
+                   .drop_duplicates(subset=["nome"]) if _sheets else pd.DataFrame())
+        if not _df_all.empty:
+            _pb_fd = st.progress(0, text="Scarico dati FondiDoc…")
+            def _upd_fd(v): _pb_fd.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+            _fd_new = fetch_all_fund_data(_df_all, _fida_urls_all, _upd_fd)
+            _pb_fd.empty()
+            save_fund_cache(_fd_new)
+            st.session_state["_scomp_fd"] = _fd_new
+            st.rerun()
+        else:
+            st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
 
     # ── Factbook data ──────────────────────────────────────────────────────────
     # Priority:
@@ -2618,17 +2656,6 @@ def main():
     fida_df = raw.get("FIDA", pd.DataFrame())
 
     with col_btn:
-        # ── Hint: shown only until first fetch ──────────────────────────────
-        if not st.session_state.get("_scomp_fd") and not cached_fd:
-            st.markdown(
-                "<div style='background:#fefce8;border:1px solid #fde047;"
-                "border-radius:8px;padding:.6rem .85rem;margin-bottom:.6rem;"
-                "font-size:.78rem;color:#713f12;line-height:1.5;'>"
-                "⚡ Clicca <b>Genera PDF</b> per scaricare i dati FondiDoc "
-                "(Cat. FIDA, FIDArating, rendimenti) e popolare "
-                "la tabella Scomposizione qui sopra.</div>",
-                unsafe_allow_html=True)
-
         # ── Show download button if PDF was already generated this session ──
         if st.session_state.get("_pdf_bytes_ready"):
             st.download_button(
