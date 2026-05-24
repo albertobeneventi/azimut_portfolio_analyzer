@@ -2354,6 +2354,14 @@ def main():
             del st.session_state["free_ptf"]
 
     ptf_label = ptf_choice.split("  ",1)[1] if "  " in ptf_choice else ptf_choice
+
+    # ── Invalidate cached PDF when portfolio type or profile changes ──────────
+    _ptf_key = f"{ptf_choice}|{profile}"
+    if st.session_state.get("_last_ptf_key") != _ptf_key:
+        for _k in ("_pdf_bytes_ready", "_pdf_fname_ready", "_pdf_lbl"):
+            st.session_state.pop(_k, None)
+        st.session_state["_last_ptf_key"] = _ptf_key
+
     st.markdown(f"""<div class="az-header"><div class="az-eyebrow">AZIMUT INVESTMENTS · AAS EMILIA ROMAGNA MARCHE UMBRIA</div><div class="az-rule"></div><div class="az-title">{ptf_label}</div><div class="az-meta">{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()} &nbsp;·&nbsp; {datetime.date.today().strftime('%d %B %Y')}</div></div>""",unsafe_allow_html=True)
 
     if uploaded is None:
