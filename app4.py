@@ -2186,15 +2186,66 @@ def free_portfolio_ui(data):
 
     if "free_ptf" not in st.session_state: st.session_state.free_ptf = []
     st.markdown('<p class="sec-title">Costruttore Portafoglio Libero</p>',unsafe_allow_html=True)
-    options = fida.apply(lambda r: f"{r['nome']}  [{r['macro_cat']}]" if r['macro_cat']!='Altro' else r['nome'],axis=1).tolist()
+
+    # ── FIDArating filter ─────────────────────────────────────────────────────
+    _fd_live_free = st.session_state.get("_scomp_fd", {})
+    # Build rating map: fund_name → "5"/"4"/"3"/"2"/"1"/"—"
+    _fr_map = {
+        r["nome"]: (str(_fd_live_free.get(r["nome"], {})
+                        .get("overview", {}).get("fida_rating", "") or "").strip()
+                    or "—")
+        for _, r in fida.iterrows()
+    }
+    _has_ratings = any(v != "—" for v in _fr_map.values())
+
+    _RATING_OPTS  = ["5", "4", "3", "2", "1", "—"]
+    _RATING_LABEL = {
+        "5": "⭐⭐⭐⭐⭐  FIDArating 5 — Ottimo",
+        "4": "⭐⭐⭐⭐  FIDArating 4 — Buono",
+        "3": "⭐⭐⭐  FIDArating 3 — Sufficiente",
+        "2": "⭐⭐  FIDArating 2 — Scarso",
+        "1": "⭐  FIDArating 1 — Pessimo",
+        "—": "Nessun rating",
+    }
+
+    if _has_ratings:
+        _sel_ratings = st.multiselect(
+            "🔍  Filtra per FIDArating",
+            options=_RATING_OPTS,
+            default=_RATING_OPTS,
+            format_func=lambda x: _RATING_LABEL[x],
+            key="free_fida_filter",
+        )
+        _active_ratings = set(_sel_ratings) if _sel_ratings else set(_RATING_OPTS)
+        fida_filtered = fida[fida["nome"].apply(
+            lambda n: _fr_map.get(n, "—") in _active_ratings)]
+        if fida_filtered.empty:
+            st.warning("⚠️ Nessun fondo corrisponde ai filtri selezionati.")
+            fida_filtered = fida   # fallback: show all
+    else:
+        fida_filtered = fida
+        st.caption(
+            "ℹ️ FIDArating non disponibile — clicca **Genera PDF** "
+            "per scaricare i dati FondiDoc e abilitare il filtro.")
+
+    # Build option labels: include FIDArating badge when data is available
+    def _fund_option(r):
+        fr  = _fr_map.get(r["nome"], "—")
+        tag = f" · R{fr}" if fr != "—" else ""
+        if r["macro_cat"] != "Altro":
+            return f"{r['nome']}{tag}  [{r['macro_cat']}]"
+        return f"{r['nome']}{tag}"
+
+    options = fida_filtered.apply(_fund_option, axis=1).tolist()
 
     c1,c2,c3 = st.columns([3.5,1,0.8])
-    with c1: sel = st.selectbox("Seleziona fondo:",options,key="sel_fund")
+    with c1: sel = st.selectbox("Seleziona fondo:", options, key="sel_fund")
     with c2: w   = st.number_input("Peso %",0.1,100.0,10.0,0.5,key="sel_w")
     with c3:
         st.markdown("<br>",unsafe_allow_html=True)
         if st.button("➕ Aggiungi",use_container_width=True):
-            fname = sel.split("  [")[0].strip()
+            # Strip both the FIDArating tag "· RN" and the macro-cat "  [...]"
+            fname = re.split(r'\s+·\s+R\d|\s{2}\[', sel)[0].strip()
             if any(f["nome"]==fname for f in st.session_state.free_ptf):
                 st.toast("⚠️ Fondo già presente!",icon="⚠️")
             else:
