@@ -2526,11 +2526,12 @@ def main():
     # ── Load cached FondiDoc data (bundled in repo) ──────────────────────────
     cached_fd, cache_date = load_fund_cache()
 
-    # ── SCOMPOSIZIONE TABLE ───────────────────────────────────────────────────
+    # ── TABBED ANALYTICS TABLES ──────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<p class="sec-title">Scomposizione Azionario / Obbligazionario</p>',
+    st.markdown('<p class="sec-title">Analisi del Portafoglio</p>',
                 unsafe_allow_html=True)
 
+    # ── Shared helpers for all four tabs ──────────────────────────────────────
     def _fb_metric(nome: str, key: str):
         """Return metric from factbook_data (duration / credit_rating / az_pct …)."""
         if not factbook_data:
@@ -2550,80 +2551,268 @@ def main():
             return None
         return entry.get(key)
 
-    _TH = ("background:#0D1B2A;color:#fff;font-size:.74rem;"
-           "padding:8px 10px;white-space:nowrap;")
-    _TC = "font-size:.77rem;padding:6px 10px;border-bottom:1px solid #f1f5f9;"
-    _tbl_hdr = (
-        f"<tr>"
-        f"<th style='{_TH}text-align:left;'>Fondo</th>"
-        f"<th style='{_TH}text-align:center;'>Peso</th>"
-        f"<th style='{_TH}text-align:center;'>% Az.</th>"
-        f"<th style='{_TH}text-align:center;'>% Obb.</th>"
-        f"<th style='{_TH}text-align:center;'>Duration</th>"
-        f"<th style='{_TH}text-align:center;'>Rating Medio</th>"
-        f"<th style='{_TH}text-align:left;'>Cat. FIDA</th>"
-        f"<th style='{_TH}text-align:center;'>FIDArating</th>"
-        f"</tr>"
-    )
     # Prefer live FondiDoc data fetched in this session over on-disk cache
     _fd_live = st.session_state.get("_scomp_fd") or cached_fd
+
+    # Shared HTML style tokens
+    _TH  = ("background:#0D1B2A;color:#fff;font-size:.74rem;"
+            "padding:8px 10px;white-space:nowrap;")
+    _TC  = "font-size:.77rem;padding:6px 10px;border-bottom:1px solid #f1f5f9;"
+    _TP  = ("background:#1B4332;color:#fff;font-size:.77rem;font-weight:700;"
+            "padding:6px 10px;border-bottom:2px solid #C9A84C;")
 
     # FIDArating color scale: 5=best (dark green) … 1=worst (dark red)
     _FIDA_COL = {5: "#166534", 4: "#15803d", 3: "#22c55e",
                  2: "#f87171", 1: "#b91c1c"}
+    _FIDA_BG  = {5: "#166534", 4: "#15803d", 3: "#22c55e"}
 
-    _tbl_body = ""
-    for _, _tr in df_act.sort_values(wcol, ascending=False).iterrows():
-        _dur   = _fb_metric(_tr["nome"], "duration")
-        _rat   = _fb_metric(_tr["nome"], "credit_rating")
-        _azfb  = _fb_metric(_tr["nome"], "fb_az_pct")
-        _obfb  = _fb_metric(_tr["nome"], "fb_obb_pct")
-        _az_d  = (_azfb if _azfb is not None else _tr["az_pct"]) * 100
-        _ob_d  = (_obfb if _obfb is not None else _tr["obb_pct"]) * 100
-        _fd_ov = _fd_live.get(_tr["nome"], {}).get("overview", {})
-        _cat   = _fd_ov.get("cat_assog") or "—"
-        _fida  = _fd_ov.get("fida_rating") or "—"
-        _dur_s = f"{_dur:.2f} y" if isinstance(_dur, (int, float)) else "—"
-        _rat_s = _rat if isinstance(_rat, str) else "—"
-        _rat_w = "600" if _rat_s != "—" else "400"
+    # Source note labels (reused in all tab footers)
+    _note_fb  = ("Factbook AZ Investments" if factbook_data
+                 else "n.d. — carica il Factbook PDF nella barra laterale")
+    if st.session_state.get("_scomp_fd"):
+        _note_fd = "FondiDoc live (questa sessione)"
+    elif cached_fd:
+        _note_fd = f"FondiDoc (cache {cache_date})"
+    else:
+        _note_fd = "n.d. — clicca «Genera PDF» per popolare i dati FondiDoc"
+    _note_style = "font-size:.71rem;color:#94A3B8;margin-top:5px;"
+
+    # Pre-sort funds by weight (descending) — shared across all tabs
+    _df_sorted = df_act.sort_values(wcol, ascending=False)
+
+    def _perf_val_col(raw) -> str:
+        """Wrap a performance string in green/red HTML span."""
+        s = str(raw) if raw is not None else "N/D"
         try:
-            _fr_col = _FIDA_COL.get(int(_fida), "#64748B")
-        except (ValueError, TypeError):
-            _fr_col = "#64748B"
-        _tbl_body += (
-            f"<tr>"
-            f"<td style='{_TC}color:#0D1B2A;font-weight:500;'>{_tr['nome']}</td>"
-            f"<td style='{_TC}text-align:center;color:#1B4FBB;font-weight:600;'>"
-            f"{_tr[wcol]*100:.1f}%</td>"
-            f"<td style='{_TC}text-align:center;'>{_az_d:.1f}%</td>"
-            f"<td style='{_TC}text-align:center;'>{_ob_d:.1f}%</td>"
-            f"<td style='{_TC}text-align:center;'>{_dur_s}</td>"
-            f"<td style='{_TC}text-align:center;font-weight:{_rat_w};'>{_rat_s}</td>"
-            f"<td style='{_TC}color:#64748B;'>{_cat}</td>"
-            f"<td style='{_TC}text-align:center;font-weight:700;color:{_fr_col};'>"
-            f"{_fida}</td>"
-            f"</tr>"
+            v   = float(s.replace("%", "").replace(",", ".").strip())
+            col = "#1A7A4A" if v > 0 else ("#C0392B" if v < 0 else "#475569")
+            return f"<span style='color:{col};font-weight:700;'>{s}</span>"
+        except Exception:
+            return f"<span style='color:#94A3B8;'>{s}</span>"
+
+    def _perf_wavg(keys: list) -> dict:
+        """Weighted average of performance/risk metrics across active funds."""
+        totals = {k: 0.0 for k in keys}
+        cov_w  = {k: 0.0 for k in keys}
+        for _, _row in df_act.iterrows():
+            _w   = _row[wcol]
+            _ana = _fd_live.get(_row["nome"], {}).get("analysis", {})
+            for k in keys:
+                raw = _fb_metric(_row["nome"], k) or _ana.get(k, "")
+                try:
+                    num = float(str(raw).replace("%", "").replace(",", ".").strip())
+                    totals[k] += num * _w
+                    cov_w[k]  += _w
+                except Exception:
+                    pass
+        return {k: (f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "N/D")
+                for k in keys}
+
+    def _html_table(hdr_cols: list, ptf_row: list, fund_rows: list) -> str:
+        """Render a styled HTML table with header, portfolio summary row, fund rows."""
+        def _align(i):
+            return "left" if i == 0 else "center"
+        hdr_html = "".join(
+            f"<th style='{_TH}text-align:{_align(i)};'>{h}</th>"
+            for i, h in enumerate(hdr_cols)
         )
-    if _tbl_body:
-        st.markdown(
+        ptf_html = "".join(
+            f"<td style='{_TP}text-align:{_align(i)};'>{v}</td>"
+            for i, v in enumerate(ptf_row)
+        )
+        body_html = f"<tr>{ptf_html}</tr>"
+        for fr in fund_rows:
+            row_html = "".join(
+                f"<td style='{_TC}text-align:{_align(i)};'>{v}</td>"
+                for i, v in enumerate(fr)
+            )
+            body_html += f"<tr>{row_html}</tr>"
+        return (
             f"<div style='overflow-x:auto;border-radius:10px;"
             f"border:1px solid #e2e8f0;background:#fff;'>"
             f"<table style='width:100%;border-collapse:collapse;'>"
-            f"<thead>{_tbl_hdr}</thead><tbody>{_tbl_body}</tbody>"
-            f"</table></div>",
-            unsafe_allow_html=True)
-        _note_dur = ("Factbook AZ Investments" if factbook_data
-                     else "n.d. — carica il Factbook PDF nella barra laterale")
-        if st.session_state.get("_scomp_fd"):
-            _note_cat = "FondiDoc live (questa sessione)"
-        elif cached_fd:
-            _note_cat = f"FondiDoc (cache {cache_date})"
-        else:
-            _note_cat = "n.d. — clicca «Genera PDF» per popolare la cache"
+            f"<thead><tr>{hdr_html}</tr></thead>"
+            f"<tbody>{body_html}</tbody>"
+            f"</table></div>"
+        )
+
+    _ptf_row_label = f"◆ PORTAFOGLIO {ptf_label.upper()}"
+
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊  Scomposizione Az/Obb",
+        "📈  Rendimenti",
+        "⚠️  Rischio",
+        "💰  UNP / IUNP",
+    ])
+
+    # ── TAB 1 — SCOMPOSIZIONE ────────────────────────────────────────────────
+    with tab1:
+        _scomp_hdr = (
+            f"<tr>"
+            f"<th style='{_TH}text-align:left;'>Fondo</th>"
+            f"<th style='{_TH}text-align:center;'>Peso</th>"
+            f"<th style='{_TH}text-align:center;'>% Az.</th>"
+            f"<th style='{_TH}text-align:center;'>% Obb.</th>"
+            f"<th style='{_TH}text-align:center;'>Duration</th>"
+            f"<th style='{_TH}text-align:center;'>Rating Medio</th>"
+            f"<th style='{_TH}text-align:left;'>Cat. FIDA</th>"
+            f"<th style='{_TH}text-align:center;'>FIDArating</th>"
+            f"</tr>"
+        )
+        _tbl_body = ""
+        for _, _tr in _df_sorted.iterrows():
+            _dur   = _fb_metric(_tr["nome"], "duration")
+            _rat   = _fb_metric(_tr["nome"], "credit_rating")
+            _azfb  = _fb_metric(_tr["nome"], "fb_az_pct")
+            _obfb  = _fb_metric(_tr["nome"], "fb_obb_pct")
+            _az_d  = (_azfb if _azfb is not None else _tr["az_pct"]) * 100
+            _ob_d  = (_obfb if _obfb is not None else _tr["obb_pct"]) * 100
+            _fd_ov = _fd_live.get(_tr["nome"], {}).get("overview", {})
+            _cat   = _fd_ov.get("cat_assog") or "—"
+            _fida  = _fd_ov.get("fida_rating") or "—"
+            _dur_s = f"{_dur:.2f} y" if isinstance(_dur, (int, float)) else "—"
+            _rat_s = _rat if isinstance(_rat, str) else "—"
+            _rat_w = "600" if _rat_s != "—" else "400"
+            try:
+                _fr_int = int(_fida)
+                _fr_col = _FIDA_COL.get(_fr_int, "#64748B")
+                _fr_bg  = _FIDA_BG.get(_fr_int)
+            except (ValueError, TypeError):
+                _fr_col, _fr_bg = "#64748B", None
+            _fida_cell = (
+                f"<span style='background:{_fr_bg};color:#fff;padding:2px 8px;"
+                f"border-radius:4px;font-weight:700;'>{_fida}</span>"
+                if _fr_bg else
+                f"<span style='color:{_fr_col};font-weight:700;'>{_fida}</span>"
+            )
+            _tbl_body += (
+                f"<tr>"
+                f"<td style='{_TC}color:#0D1B2A;font-weight:500;'>{_tr['nome']}</td>"
+                f"<td style='{_TC}text-align:center;color:#1B4FBB;font-weight:600;'>"
+                f"{_tr[wcol]*100:.1f}%</td>"
+                f"<td style='{_TC}text-align:center;'>{_az_d:.1f}%</td>"
+                f"<td style='{_TC}text-align:center;'>{_ob_d:.1f}%</td>"
+                f"<td style='{_TC}text-align:center;'>{_dur_s}</td>"
+                f"<td style='{_TC}text-align:center;font-weight:{_rat_w};'>{_rat_s}</td>"
+                f"<td style='{_TC}color:#64748B;'>{_cat}</td>"
+                f"<td style='{_TC}text-align:center;'>{_fida_cell}</td>"
+                f"</tr>"
+            )
+        if _tbl_body:
+            st.markdown(
+                f"<div style='overflow-x:auto;border-radius:10px;"
+                f"border:1px solid #e2e8f0;background:#fff;'>"
+                f"<table style='width:100%;border-collapse:collapse;'>"
+                f"<thead>{_scomp_hdr}</thead><tbody>{_tbl_body}</tbody>"
+                f"</table></div>",
+                unsafe_allow_html=True)
+            st.markdown(
+                f"<p style='{_note_style}'>"
+                f"Duration &amp; Rating Medio: {_note_fb}"
+                f" &nbsp;·&nbsp; Cat. FIDA &amp; FIDArating: {_note_fd}</p>",
+                unsafe_allow_html=True)
+
+    # ── TAB 2 — RENDIMENTI ───────────────────────────────────────────────────
+    with tab2:
+        _pk      = ["ytd", "perf_1y", "perf_3y", "perf_5y", "vol_1y", "sharpe_1y"]
+        _ptf_p   = _perf_wavg(_pk)
+        _p_hdr   = ["Fondo", "Peso", "YTD", "1 Anno", "3 Anni", "5 Anni",
+                    "Vol. 1A", "Sharpe 1A"]
+        _p_ptf   = [_ptf_row_label, "100%",
+                    _ptf_p.get("ytd",      "N/D"),
+                    _ptf_p.get("perf_1y",  "N/D"),
+                    _ptf_p.get("perf_3y",  "N/D"),
+                    _ptf_p.get("perf_5y",  "N/D"),
+                    _ptf_p.get("vol_1y",   "N/D"),
+                    _ptf_p.get("sharpe_1y","N/D")]
+        _p_funds = []
+        for _, _pr in _df_sorted.iterrows():
+            _np  = _pr["nome"]
+            _ana = _fd_live.get(_np, {}).get("analysis", {})
+            def _gp(k, _n=_np, _a=_ana):
+                v = _fb_metric(_n, k) or _a.get(k, "") or ""
+                return str(v) if v else "N/D"
+            _p_funds.append([
+                _np,
+                f"{_pr[wcol]*100:.1f}%",
+                _perf_val_col(_gp("ytd")),
+                _perf_val_col(_gp("perf_1y")),
+                _perf_val_col(_gp("perf_3y")),
+                _perf_val_col(_gp("perf_5y")),
+                _gp("vol_1y"),
+                _gp("sharpe_1y"),
+            ])
+        st.markdown(_html_table(_p_hdr, _p_ptf, _p_funds), unsafe_allow_html=True)
         st.markdown(
-            f"<p style='font-size:.71rem;color:#94A3B8;margin-top:5px;'>"
-            f"Duration &amp; Rating Medio: {_note_dur}"
-            f" &nbsp;·&nbsp; Cat. FIDA &amp; FIDArating: {_note_cat}</p>",
+            f"<p style='{_note_style}'>"
+            f"YTD, 1A, 3A, 5A: {_note_fb} &nbsp;·&nbsp; Vol. e Sharpe: {_note_fd}</p>",
+            unsafe_allow_html=True)
+
+    # ── TAB 3 — RISCHIO ──────────────────────────────────────────────────────
+    with tab3:
+        _rk      = ["vol_1y", "vol_3y", "vol_5y", "neg_vol_1y", "sharpe_3y", "sortino_1y"]
+        _ptf_r   = _perf_wavg(_rk)
+        _r_hdr   = ["Fondo", "Peso", "Vol. 1A", "Vol. 3A", "Vol. 5A",
+                    "Vol. Neg. 1A", "Sharpe 3A", "Sortino 1A"]
+        _r_ptf   = [_ptf_row_label, "100%",
+                    _ptf_r.get("vol_1y",     "N/D"),
+                    _ptf_r.get("vol_3y",     "N/D"),
+                    _ptf_r.get("vol_5y",     "N/D"),
+                    _ptf_r.get("neg_vol_1y", "N/D"),
+                    _ptf_r.get("sharpe_3y",  "N/D"),
+                    _ptf_r.get("sortino_1y", "N/D")]
+        _r_funds = []
+        for _, _rr in _df_sorted.iterrows():
+            _nr  = _rr["nome"]
+            _ana = _fd_live.get(_nr, {}).get("analysis", {})
+            def _gr(k, _a=_ana):
+                return str(_a.get(k, "") or "") or "N/D"
+            _r_funds.append([
+                _nr,
+                f"{_rr[wcol]*100:.1f}%",
+                _gr("vol_1y"),
+                _gr("vol_3y"),
+                _gr("vol_5y"),
+                _gr("neg_vol_1y"),
+                _gr("sharpe_3y"),
+                _gr("sortino_1y"),
+            ])
+        st.markdown(_html_table(_r_hdr, _r_ptf, _r_funds), unsafe_allow_html=True)
+        st.markdown(
+            f"<p style='{_note_style}'>Metriche di rischio: {_note_fd}</p>",
+            unsafe_allow_html=True)
+
+    # ── TAB 4 — UNP / IUNP ───────────────────────────────────────────────────
+    with tab4:
+        _u_wtd = _iu_wtd = _u_covw = 0.0
+        _u_funds = []
+        for _, _ur in _df_sorted.iterrows():
+            _nu       = _ur["nome"]
+            _uu, _iuu = lookup_unp(_nu)
+            _wu       = _ur[wcol]
+            if _uu is not None:
+                _u_wtd  += _uu  * _wu
+                _iu_wtd += _iuu * _wu
+                _u_covw += _wu
+            _u_funds.append([
+                _nu,
+                f"{_wu*100:.1f}%",
+                f"{_uu:.2f}%"  if _uu  is not None else "—",
+                f"{_iuu:.2f}%" if _iuu is not None else "—",
+            ])
+        _ptf_unp  = f"{_u_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
+        _ptf_iunp = f"{_iu_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
+        st.markdown(
+            _html_table(
+                ["Fondo", "Peso", "%UNP", "%IUNP36"],
+                [_ptf_row_label, "100%", _ptf_unp, _ptf_iunp],
+                _u_funds,
+            ),
+            unsafe_allow_html=True)
+        st.markdown(
+            f"<p style='{_note_style}'>"
+            f"UNP = Utile Netto di Portafoglio · IUNP36 = indice su orizzonte triennale. "
+            f"Fonte: Catalogo Prodotti &amp; Servizi Azimut, settembre 2025.</p>",
             unsafe_allow_html=True)
 
     # ── DOWNLOAD SECTION ─────────────────────────────────────
