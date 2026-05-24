@@ -7,7 +7,11 @@ import re
 import json
 from pathlib import Path
 import streamlit as st
-from streamlit_keyup import st_keyup
+try:
+    from streamlit_keyup import st_keyup as _st_keyup
+    _HAS_KEYUP = True
+except ImportError:
+    _HAS_KEYUP = False
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -2240,11 +2244,18 @@ def free_portfolio_ui(data):
     # ── Text search filter (min 4 chars) ──────────────────────────────────────
     _search_row_l, _search_row_r = st.columns([3, 2])
     with _search_row_l:
-        _search_q = (st_keyup(
-            "🔍  Cerca per nome (live):",
-            key="free_fund_search",
-            placeholder="Es. «comm» → Commodities, «glob» → Global…",
-        ) or "").strip()
+        if _HAS_KEYUP:
+            _search_q = (_st_keyup(
+                "🔍  Cerca per nome (live):",
+                key="free_fund_search",
+                placeholder="Es. «comm» → Commodities, «glob» → Global…",
+            ) or "").strip()
+        else:
+            _search_q = st.text_input(
+                "🔍  Cerca per nome:",
+                key="free_fund_search",
+                placeholder="Es. «comm» → Commodities, «glob» → Global…",
+            ).strip()
 
     if len(_search_q) >= 4:
         _q_lower     = _search_q.lower()
