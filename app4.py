@@ -2673,6 +2673,23 @@ def main():
 
     _ptf_row_label = f"◆ PORTAFOGLIO {ptf_label.upper()}"
 
+    # URL lookup: Excel hyperlinks first, FondiDoc cache as enriched fallback
+    _fida_urls_raw = raw.get("fida_urls", {})
+
+    def _fund_url(nome: str) -> str:
+        """Return the FondiDoc URL for a fund, or '' if not available."""
+        return (_fd_live.get(nome, {}).get("url", "")
+                or _fida_urls_raw.get(nome, ""))
+
+    def _fund_link(nome: str) -> str:
+        """Return fund name as HTML — hyperlinked if URL is available."""
+        url = _fund_url(nome)
+        if url:
+            return (f'<a href="{url}" target="_blank" rel="noopener noreferrer" '
+                    f'style="color:#1B4FBB;text-decoration:underline;'
+                    f'text-underline-offset:2px;">{nome}</a>')
+        return nome
+
     tab1, tab2, tab3, tab4 = st.tabs([
         "📊  Scomposizione Az/Obb",
         "📈  Rendimenti",
@@ -2722,7 +2739,7 @@ def main():
             )
             _tbl_body += (
                 f"<tr>"
-                f"<td style='{_TC}color:#0D1B2A;font-weight:500;'>{_tr['nome']}</td>"
+                f"<td style='{_TC}font-weight:500;'>{_fund_link(_tr['nome'])}</td>"
                 f"<td style='{_TC}text-align:center;color:#1B4FBB;font-weight:600;'>"
                 f"{_tr[wcol]*100:.1f}%</td>"
                 f"<td style='{_TC}text-align:center;'>{_az_d:.1f}%</td>"
@@ -2768,7 +2785,7 @@ def main():
                 v = _fb_metric(_n, k) or _a.get(k, "") or ""
                 return str(v) if v else "N/D"
             _p_funds.append([
-                _np,
+                _fund_link(_np),
                 f"{_pr[wcol]*100:.1f}%",
                 _perf_val_col(_gp("ytd")),
                 _perf_val_col(_gp("perf_1y")),
@@ -2803,7 +2820,7 @@ def main():
             def _gr(k, _a=_ana):
                 return str(_a.get(k, "") or "") or "N/D"
             _r_funds.append([
-                _nr,
+                _fund_link(_nr),
                 f"{_rr[wcol]*100:.1f}%",
                 _gr("vol_1y"),
                 _gr("vol_3y"),
@@ -2830,7 +2847,7 @@ def main():
                 _iu_wtd += _iuu * _wu
                 _u_covw += _wu
             _u_funds.append([
-                _nu,
+                _fund_link(_nu),
                 f"{_wu*100:.1f}%",
                 f"{_uu:.2f}%"  if _uu  is not None else "—",
                 f"{_iuu:.2f}%" if _iuu is not None else "—",
