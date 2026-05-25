@@ -1350,11 +1350,14 @@ def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
         # Query 2: nome PDF completo
         if not url and pdf_name != res_name:
             url = _fondidoc_search_url(pdf_name)
-        # Query 3: nome breve (strip "AZ [Famiglia] - ")
-        if not url:
-            short = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', pdf_name, flags=re.I).strip()
-            if short and short not in (res_name, pdf_name):
-                url = _fondidoc_search_url(short)
+        # Query 3 & 4: nome breve (strip "AZ [Famiglia] - ") e variante con "AZ " prefisso
+        _short = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', pdf_name, flags=re.I).strip()
+        if not url and _short and _short not in (res_name, pdf_name):
+            url = _fondidoc_search_url(_short)
+        if not url and _short:
+            _short_az = "AZ " + _short
+            if _short_az not in (res_name, pdf_name, _short):
+                url = _fondidoc_search_url(_short_az)
         if url:
             try:
                 data = fetch_fund_data(url)
@@ -3004,6 +3007,21 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                 or (extra_urls or {}).get(resolved, "")
                 or (extra_urls or {}).get(fname, "")
             )
+            # Fuzzy fallback: cerca per nome breve nel cache e negli extra_urls
+            if not url_sg:
+                _skey = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', fname, flags=re.I).strip().lower()
+                if _skey:
+                    for _k, _fv in (fund_data or {}).items():
+                        if _skey in _k.lower():
+                            _u = _fv.get("url", "") if isinstance(_fv, dict) else ""
+                            if _u:
+                                url_sg = _u
+                                break
+                    if not url_sg:
+                        for _k, _eu in (extra_urls or {}).items():
+                            if _skey in _k.lower() and _eu:
+                                url_sg = _eu
+                                break
             name_html = (
                 f'<a href="{url_sg}" target="_blank" rel="noopener noreferrer" '
                 f'style="color:#1B4FBB;text-decoration:underline;'
@@ -3307,7 +3325,7 @@ def main():
     _is_already_fetching = any(st.session_state.get(k) for k in (
         "_fetch_fd_requested", "_fetch_ms_requested", "_fetch_gp_requested"))
     if _is_suggerito and _gp_loaded_now and _gp_miss > 0 and not _is_already_fetching:
-        _auto_sig = f"{_n_gp}|{len(_fd_now)}"
+        _auto_sig = f"{_n_gp}|{_gp_miss}"
         if st.session_state.get("_gp_auto_fetch_sig") != _auto_sig:
             st.session_state["_gp_auto_fetch_sig"] = _auto_sig
             st.session_state["_fetch_gp_requested"] = True
