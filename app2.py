@@ -2779,7 +2779,8 @@ def _ms_badge_gp(ms_r) -> str:
     if bg:
         return (f"<span style='background:{bg};color:#fff;padding:2px 8px;"
                 f"border-radius:4px;font-weight:700;font-size:.8rem;'>{filled}</span>")
-    return (f"<span style='color:{_MS_COL_GP.get(v,\"#64748B\")};font-weight:700;"
+    _col = _MS_COL_GP.get(v, "#64748B")
+    return (f"<span style='color:{_col};font-weight:700;"
             f"font-size:.8rem;'>{filled}</span>")
 
 # Sub-category display names (Italian labels)
