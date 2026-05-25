@@ -3191,8 +3191,22 @@ def main():
             unsafe_allow_html=True)
 
         # ── Unico tasto Aggiorna Dati ─────────────────────────────────────────
-        _can_update = bool(uploaded or _gp_loaded_now)
-        if _can_update:
+        _can_update  = bool(uploaded or _gp_loaded_now)
+        _is_fetching = any(st.session_state.get(k) for k in (
+            "_fetch_fd_requested", "_fetch_ms_requested", "_fetch_gp_requested"))
+
+        if _is_fetching:
+            # Tasto "in corso" — arancio pulsante, non cliccabile
+            st.markdown(
+                "<div style='background:linear-gradient(135deg,#92400E,#B45309);"
+                "color:#fff;padding:.6rem 1rem;border-radius:8px;font-size:.88rem;"
+                "font-weight:600;text-align:center;letter-spacing:.02em;"
+                "animation:pulse 1.2s ease-in-out infinite;opacity:.92;'>"
+                "⏳  Aggiornamento in corso…</div>"
+                "<style>@keyframes pulse{"
+                "0%{opacity:.92}50%{opacity:.55}100%{opacity:.92}}</style>",
+                unsafe_allow_html=True)
+        elif _can_update:
             if st.button("📥  Aggiorna Dati",
                          use_container_width=True,
                          help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
