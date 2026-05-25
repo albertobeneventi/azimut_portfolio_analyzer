@@ -3065,8 +3065,13 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p{color:#c0cfe0 !important;font-size:.9rem !important;}
 [data-testid="stSidebar"] .stSelectbox>div>div{background:#132035 !important;border:1px solid #243d5a !important;color:#dde6f0 !important;border-radius:6px !important;}
 [data-testid="stSidebar"] .stSelectbox svg{fill:#C9A84C !important;width:22px !important;height:22px !important;opacity:1 !important;}
-[data-testid="stSidebar"] .stFileUploader>div{background:#132035 !important;border:1px dashed #2a4a6a !important;border-radius:8px !important;}
-[data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.8rem !important;}
+[data-testid="stSidebar"] .stFileUploader>div{background:#132035 !important;border:1px dashed #2a4a6a !important;border-radius:8px !important;padding:.35rem .6rem !important;}
+[data-testid="stSidebar"] .stFileUploader section{padding:.2rem 0 !important;min-height:unset !important;}
+[data-testid="stSidebar"] .stFileUploader [data-testid="stFileUploaderDropzone"]{padding:.3rem .5rem !important;min-height:unset !important;}
+[data-testid="stSidebar"] .stFileUploader [data-testid="stFileUploaderDropzoneInstructions"]{display:none !important;}
+[data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.75rem !important;line-height:1.3 !important;}
+[data-testid="stSidebar"] .stFileUploader{margin-bottom:.2rem !important;}
+[data-testid="stSidebar"] hr{margin:.3rem 0 !important;border-color:#1a3050 !important;}
 [data-testid="stSidebar"] ::-webkit-scrollbar{width:6px;}
 [data-testid="stSidebar"] ::-webkit-scrollbar-track{background:#06101e;}
 [data-testid="stSidebar"] ::-webkit-scrollbar-thumb{background:#C9A84C;border-radius:3px;}
@@ -3119,7 +3124,7 @@ def main():
                  "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
         )
         # ── FondiDoc + Morningstar — unico tasto ─────────────────────────────
-        st.markdown("---")
+        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         _fd_now = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
         _ms_now = st.session_state.get("_ms_data") or load_ms_cache()
         _ms_with_rating = sum(1 for v in _ms_now.values() if v.get("ms_rating"))
@@ -3151,7 +3156,7 @@ def main():
             st.caption("⬆️ Carica prima il file Excel")
 
         # ── Global Perspectives PDF ──────────────────────────────────────────────
-        st.markdown("---")
+        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         uploaded_gp = st.file_uploader(
             "GLOBAL PERSPECTIVES PDF",
             type=["pdf"],
@@ -3216,13 +3221,13 @@ def main():
                 st.session_state.pop("_gp_data",     None)
                 st.session_state.pop("_gp_filename",  None)
 
-        st.markdown("---")
+        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         _gp_loaded    = bool(st.session_state.get("_gp_data"))
         _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO"]
         if _gp_loaded:
             _ptf_options.append("🌐  SUGGERITO")
         ptf_choice = st.radio("TIPO PORTAFOGLIO", _ptf_options)
-        st.markdown("---")
+        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0)
         if "LIBERO" not in ptf_choice and "free_ptf" in st.session_state:
             del st.session_state["free_ptf"]
