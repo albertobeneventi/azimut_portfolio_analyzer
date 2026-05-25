@@ -1812,16 +1812,23 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         # Torta + legenda centrate nella pagina (padding sinistro = spazio rimanente / 2)
         BLOCK_W  = PIE_W2 + DOT_W2 + 0.15*cm + LEG2_TXT   # ~15.1 cm
         PAD_LEFT = max((PW - BLOCK_W) / 2, 0)
+        # Padding superiore per centrare verticalmente la legenda rispetto alla torta
+        # 2 righe × (leading 17pt + top 10pt + bottom 10pt) = ~74pt
+        LEG_TOP_PAD = max((PIE_W2 - 74) / 2, 0)   # PIE_W2 in pt (cm×28.35)
+        LEG_TOP_PAD = max((PIE_W2 * 28.35 - 74) / 2, 0)
         macro_row = Table(
             [[macro_img, macro_leg_inner]],
             colWidths=[PIE_W2, PW - PIE_W2],
         )
         macro_row.setStyle(TableStyle([
-            ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
-            ("LEFTPADDING",  (0,0), (0,0),   PAD_LEFT),
-            ("RIGHTPADDING", (0,0), (-1,-1),  0),
-            ("TOPPADDING",   (0,0), (-1,-1),  0),
-            ("BOTTOMPADDING",(0,0), (-1,-1),  0),
+            ("LEFTPADDING",   (0,0), (0,0),   PAD_LEFT),
+            ("LEFTPADDING",   (1,0), (1,0),   14),
+            ("RIGHTPADDING",  (0,0), (-1,-1),  0),
+            ("TOPPADDING",    (0,0), (-1,-1),  0),
+            ("BOTTOMPADDING", (0,0), (-1,-1),  0),
+            # Spinge la legenda in basso per centrarla rispetto all'altezza torta
+            ("TOPPADDING",    (1,0), (1,0),    LEG_TOP_PAD),
+            ("VALIGN",        (0,0), (-1,-1), "TOP"),
         ]))
         macro_block = [Spacer(1, 18), macro_row]
 
