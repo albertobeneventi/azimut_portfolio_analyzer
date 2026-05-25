@@ -2992,36 +2992,38 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
             fname    = f["nome"]
             resolved = _resolve_nome_for_fd(fname, fund_data)
 
-            # Ratings from cache
-            fd_ov  = (fund_data or {}).get(resolved, {}).get("overview", {})
+            # Fuzzy fallback: se la chiave risolta non ha dati, cerca per nome
+            # breve nel cache — aggiorna resolved così URL + rating usano la
+            # stessa chiave arricchita di dati (fida_rating, ms_rating, url).
+            _skey_f   = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', fname, flags=re.I).strip().lower()
+            _fd_entry = (fund_data or {}).get(resolved) or {}
+            if _skey_f and not _fd_entry.get("url") and not _fd_entry.get("overview"):
+                for _k, _fv in (fund_data or {}).items():
+                    if isinstance(_fv, dict) and _skey_f in _k.lower():
+                        _fd_entry = _fv
+                        resolved  = _k
+                        break
+
+            # Ratings from cache (usa resolved aggiornato)
+            fd_ov  = _fd_entry.get("overview", {})
             fida_r = str(fd_ov.get("fida_rating") or "").strip() or "—"
             ms_r   = (ms_data or {}).get(resolved, {}).get("ms_rating")
 
-            # Display name: strip "AZ [Family] - " prefix
+            # Display name: strip "AZ [Family] - " prefix (sempre dall'fname originale)
             short = re.sub(r'^AZ\s+(?:Allocation|Bond|Equity)\s*[-–]\s*',
                            '', fname, flags=re.I).strip()
 
+            # URL lookup (usa chiave aggiornata e fallback extra_urls)
             url_sg = (
-                (fund_data or {}).get(resolved, {}).get("url", "")
-                or (fund_data or {}).get(fname, {}).get("url", "")
+                _fd_entry.get("url", "")
                 or (extra_urls or {}).get(resolved, "")
                 or (extra_urls or {}).get(fname, "")
             )
-            # Fuzzy fallback: cerca per nome breve nel cache e negli extra_urls
-            if not url_sg:
-                _skey = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', fname, flags=re.I).strip().lower()
-                if _skey:
-                    for _k, _fv in (fund_data or {}).items():
-                        if _skey in _k.lower():
-                            _u = _fv.get("url", "") if isinstance(_fv, dict) else ""
-                            if _u:
-                                url_sg = _u
-                                break
-                    if not url_sg:
-                        for _k, _eu in (extra_urls or {}).items():
-                            if _skey in _k.lower() and _eu:
-                                url_sg = _eu
-                                break
+            if not url_sg and _skey_f:
+                for _k, _eu in (extra_urls or {}).items():
+                    if _skey_f in _k.lower() and _eu:
+                        url_sg = _eu
+                        break
             name_html = (
                 f'<a href="{url_sg}" target="_blank" rel="noopener noreferrer" '
                 f'style="color:#1B4FBB;text-decoration:underline;'
@@ -3083,6 +3085,14 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
         if peso <= 0:
             continue
         nome = _resolve_nome_for_fd(f["nome"], fund_data)
+        # Fuzzy fallback: usa la chiave che ha effettivamente dati (URL/overview)
+        if not (fund_data or {}).get(nome, {}).get("url"):
+            _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', f["nome"], flags=re.I).strip().lower()
+            if _sk:
+                for _k2, _fv2 in (fund_data or {}).items():
+                    if isinstance(_fv2, dict) and _sk in _k2.lower() and _fv2.get("url"):
+                        nome = _k2
+                        break
         records.append({
             "nome":      nome,
             "categoria": f["categoria"],
@@ -3403,10 +3413,26 @@ def main():
             _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp, quick_urls=_quick)
             _pb_gp.empty()
             if _gp_new:
-                # Merge into existing cache and save
+                # Merge FondiDoc data into cache and save
                 _fd_merged = {**_fd_base, **_gp_new}
                 save_fund_cache(_fd_merged)
                 st.session_state["_scomp_fd"] = _fd_merged
+                # Aggiorna rating Morningstar per i fondi GP tramite ISIN
+                try:
+                    _isin_to_ms = _fo_fetch_company_ratings(FO_AZ_COMPANY_ID)
+                    if _isin_to_ms:
+                        _ms_existing = st.session_state.get("_ms_data") or load_ms_cache()
+                        _ms_gp_new = {}
+                        for _rn, _fd_v in _gp_new.items():
+                            _isin_v = _fd_v.get("isin", "") if isinstance(_fd_v, dict) else ""
+                            if _isin_v and _isin_v in _isin_to_ms:
+                                _ms_gp_new[_rn] = _isin_to_ms[_isin_v]
+                        if _ms_gp_new:
+                            _ms_merged = {**_ms_existing, **_ms_gp_new}
+                            save_ms_cache(_ms_merged)
+                            st.session_state["_ms_data"] = _ms_merged
+                except Exception:
+                    pass  # MS update è best-effort
                 st.success(
                     f"✅ Trovati dati FondiDoc per "
                     f"{len(_gp_new)}/{len(_gp_new)} fondi GP")
