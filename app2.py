@@ -69,9 +69,13 @@ FONDIDOC_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9,it;q=0.8",
 }
 # Override for one fund whose FIDA sheet hyperlink points to class B
+# Aggiungere qui i fondi assenti da FondiDoc o con URL errati.
 MANUAL_URL_OVERRIDES = {
     "AZ F.1 All. Balanced FoF A Cap EUR":
         "https://www.fondidoc.it/d/Index/AZPOA/LU0346933400_az-f1-allocation-balanced-fof-a-az-fund-cap-eur",
+    # AZ Bond - Convertible Bond: non indicizzato su FondiDoc → pagina ufficiale Azimut
+    "AZ Bond - Convertible Bond":
+        "https://www.azimut.it/tutte-le-quote/-/fund/AZ+Fund+1+_+AZ+Bond+_+Convertible+Classe+A+_Acc_/11904",
 }
 
 # ── FUND DATA CACHE ──────────────────────────────────────────────────────────
