@@ -1322,13 +1322,14 @@ def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
         for f in sc_data.get("funds", []):
             pdf_name = f["nome"]
             res_name = _resolve_nome_for_fd(pdf_name, existing_cache)
-            has_url = (
+            # Controlla solo la cache reale — non quick_urls.
+            # Il pre-pass sotto gestisce i fondi trovati in quick_urls
+            # e li salva nel cache (così _gp_miss scende a 0).
+            has_url_in_cache = (
                 existing_cache.get(res_name, {}).get("url", "")
                 or existing_cache.get(pdf_name, {}).get("url", "")
-                or quick_urls.get(res_name, "")
-                or quick_urls.get(pdf_name, "")
             )
-            if not has_url:
+            if not has_url_in_cache:
                 missing[res_name] = pdf_name
 
     if not missing and not quick_urls:
