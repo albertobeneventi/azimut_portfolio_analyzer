@@ -1350,15 +1350,19 @@ def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
         # Query 2: nome PDF completo (es. "AZ Allocation - Balanced Plus")
         if not url and pdf_name != res_name:
             url = _fondidoc_search_url(pdf_name)
-        # Query 3: prefisso "AZ Fund 1 - " (formato ESATTO usato su FondiDoc:
-        # "AZ Fund 1 - AZ Allocation - Balanced Plus" → trova la pagina corretta
-        # anche quando il nome abbreviato/breve non dà risultati)
+        # Nome breve (strip "AZ [Famiglia] - "), usato in più query
+        _short = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', pdf_name, flags=re.I).strip()
+        # Query 3a: "AZ Fund 1 - " + nome breve  (es. "AZ Fund 1 - Convertible Bond")
+        if not url and _short:
+            _fund1_short = "AZ Fund 1 - " + _short
+            if _fund1_short not in (res_name, pdf_name):
+                url = _fondidoc_search_url(_fund1_short)
+        # Query 3b: "AZ Fund 1 - " + nome completo PDF (es. "AZ Fund 1 - AZ Allocation - Balanced Plus")
         if not url:
             _fund1 = "AZ Fund 1 - " + pdf_name
             if _fund1 not in (res_name, pdf_name):
                 url = _fondidoc_search_url(_fund1)
-        # Query 4 & 5: nome breve (strip "AZ [Famiglia] - ") e variante con "AZ " prefisso
-        _short = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', pdf_name, flags=re.I).strip()
+        # Query 4 & 5: nome breve da solo e variante con "AZ " prefisso
         if not url and _short and _short not in (res_name, pdf_name):
             url = _fondidoc_search_url(_short)
         if not url and _short:
