@@ -94,10 +94,43 @@ def save_fund_cache(fund_data: dict):
     """Persist fund data to data/fund_cache.json (overwrites)."""
     try:
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "last_updated": datetime.date.today().isoformat(),
-            "fund_data": fund_data,
-        }
+        # Preserve existing keys (es. ms_data) while updating fund_data
+        payload = {}
+        if CACHE_FILE.exists():
+            try:
+                payload = json.loads(CACHE_FILE.read_text(encoding="utf-8-sig"))
+            except Exception:
+                payload = {}
+        payload["last_updated"] = datetime.date.today().isoformat()
+        payload["fund_data"] = fund_data
+        CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                              encoding="utf-8")
+    except Exception:
+        pass
+
+
+def load_ms_cache() -> dict:
+    """Load cached Morningstar ratings. Returns {fund_name: {ms_rating, fo_url}}."""
+    try:
+        if CACHE_FILE.exists():
+            payload = json.loads(CACHE_FILE.read_text(encoding="utf-8-sig"))
+            return payload.get("ms_data", {})
+    except Exception:
+        pass
+    return {}
+
+
+def save_ms_cache(ms_data: dict):
+    """Persist Morningstar ratings to data/fund_cache.json alongside fund_data."""
+    try:
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {}
+        if CACHE_FILE.exists():
+            try:
+                payload = json.loads(CACHE_FILE.read_text(encoding="utf-8-sig"))
+            except Exception:
+                payload = {}
+        payload["ms_data"] = ms_data
         CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
                               encoding="utf-8")
     except Exception:
@@ -1260,6 +1293,184 @@ def fetch_all_fund_data(df: pd.DataFrame, fida_urls: dict,
 
 
 # ════════════════════════════════════════════════════════════
+# FONDIONLINE SCRAPING — Morningstar rating
+# ════════════════════════════════════════════════════════════
+
+FONDIONLINE_BASE = "https://www.fondionline.it"
+FONDIONLINE_HDR  = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+    "Accept": "text/html,application/xhtml+xml",
+    "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+}
+
+# Module-level ISIN → FondiOnline URL cache (populated once from sitemap)
+_FO_ISIN_MAP: dict = {}
+_FO_MAP_LOADED: bool = False
+
+FO_ISIN_MAP_FILE = Path("data/fo_isin_map.json")
+
+
+def _fo_load_isin_map() -> dict:
+    """Return (and lazy-build) the ISIN → FondiOnline URL mapping.
+
+    Priority:
+    1. In-memory cache (_FO_ISIN_MAP)
+    2. data/fo_isin_map.json on disk
+    3. Live fetch of FondiOnline sitemaps
+    """
+    global _FO_ISIN_MAP, _FO_MAP_LOADED
+    if _FO_MAP_LOADED:
+        return _FO_ISIN_MAP
+    # Try disk cache first
+    if FO_ISIN_MAP_FILE.exists():
+        try:
+            _FO_ISIN_MAP = json.loads(FO_ISIN_MAP_FILE.read_text(encoding="utf-8"))
+            _FO_MAP_LOADED = True
+            return _FO_ISIN_MAP
+        except Exception:
+            pass
+    # Build from sitemap
+    _FO_ISIN_MAP = _fo_build_from_sitemap()
+    _FO_MAP_LOADED = True
+    if _FO_ISIN_MAP:
+        try:
+            FO_ISIN_MAP_FILE.parent.mkdir(parents=True, exist_ok=True)
+            FO_ISIN_MAP_FILE.write_text(
+                json.dumps(_FO_ISIN_MAP, ensure_ascii=False),
+                encoding="utf-8")
+        except Exception:
+            pass
+    return _FO_ISIN_MAP
+
+
+def _fo_parse_sitemap_xml(xml_text: str, result: dict):
+    """Extract ISIN → URL pairs from a sitemap XML string."""
+    try:
+        root = ET.fromstring(xml_text)
+        ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+        for loc in root.findall("sm:url/sm:loc", ns):
+            url = (loc.text or "").strip()
+            if "/elenco-fondi/" in url:
+                m = re.search(r'-([A-Z]{2}[A-Z0-9]{10})\.html$', url)
+                if m:
+                    result[m.group(1)] = url
+    except Exception:
+        pass
+
+
+def _fo_build_from_sitemap() -> dict:
+    """Fetch FondiOnline sitemaps and build ISIN → URL dict."""
+    result: dict = {}
+    try:
+        r = requests.get(f"{FONDIONLINE_BASE}/sitemap.xml",
+                         headers=FONDIONLINE_HDR, timeout=15)
+        if r.status_code != 200:
+            return result
+        root = ET.fromstring(r.text)
+        ns_sm = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+        # If it's a sitemap index, recurse into sub-sitemaps
+        sub_locs = [e.text for e in root.findall("sm:sitemap/sm:loc", ns_sm)
+                    if e.text]
+        if sub_locs:
+            for sub_url in sub_locs:
+                try:
+                    sr = requests.get(sub_url, headers=FONDIONLINE_HDR, timeout=10)
+                    if sr.status_code == 200:
+                        _fo_parse_sitemap_xml(sr.text, result)
+                except Exception:
+                    pass
+        else:
+            # Direct sitemap
+            _fo_parse_sitemap_xml(r.text, result)
+    except Exception:
+        pass
+    return result
+
+
+def _fo_find_url(isin: str) -> str | None:
+    """Return FondiOnline URL for a fund by ISIN, or None."""
+    if not isin or len(isin) < 10:
+        return None
+    isin_map = _fo_load_isin_map()
+    return isin_map.get(isin.strip())
+
+
+def _fo_extract_ms_rating(html: str) -> int | None:
+    """Extract Morningstar star rating (1-5) from a FondiOnline fund page."""
+    if not html:
+        return None
+    soup = BeautifulSoup(html, "lxml")
+    lines = [l.strip() for l in soup.get_text(separator="\n").split("\n") if l.strip()]
+    for i, line in enumerate(lines):
+        # Patterns: "Rating Morningstar" / "Morningstar" followed by a number
+        if "morningstar" in line.lower():
+            # Check next few lines for a standalone digit 1-5
+            for j in range(i, min(i + 8, len(lines))):
+                m = re.match(r'^([1-5])\s*(stelle?)?$', lines[j], re.IGNORECASE)
+                if m:
+                    return int(m.group(1))
+            # Also check inline: "Rating Morningstar: 4" or "Morningstar 4 stelle"
+            m = re.search(r'([1-5])\s*stelle?', line, re.IGNORECASE)
+            if m:
+                return int(m.group(1))
+            m = re.search(r'morningstar[:\s]+([1-5])', line, re.IGNORECASE)
+            if m:
+                return int(m.group(1))
+    return None
+
+
+def fetch_ms_for_fund(nome: str, isin: str) -> dict:
+    """Fetch Morningstar rating for one fund via FondiOnline."""
+    result: dict = {"ms_rating": None, "fo_url": None}
+    url = _fo_find_url(isin)
+    if not url:
+        return result
+    try:
+        r = requests.get(url, headers=FONDIONLINE_HDR, timeout=8)
+        if r.status_code == 200:
+            result["fo_url"]    = url
+            result["ms_rating"] = _fo_extract_ms_rating(r.text)
+    except Exception:
+        pass
+    return result
+
+
+def fetch_all_ms_ratings(df: pd.DataFrame, fida_df: pd.DataFrame,
+                          progress_cb=None) -> dict:
+    """Parallel fetch of Morningstar ratings for all portfolio funds.
+
+    Uses ISIN from the FIDA sheet to locate FondiOnline pages.
+    Returns {fund_name: {"ms_rating": int_or_None, "fo_url": str_or_None}}.
+    """
+    # Build ISIN lookup from FIDA sheet
+    isin_map: dict = {}
+    if not fida_df.empty and "isin" in fida_df.columns:
+        for _, fr in fida_df.iterrows():
+            if fr.get("isin"):
+                isin_map[fr["nome"]] = str(fr["isin"]).strip()
+
+    tasks = {nome: isin_map.get(nome, "") for nome in df["nome"].unique()}
+    results: dict = {}
+    total = max(len(tasks), 1)
+    done  = 0
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futs = {pool.submit(fetch_ms_for_fund, nome, isin): nome
+                for nome, isin in tasks.items()}
+        for fut in as_completed(futs):
+            nome = futs[fut]
+            try:
+                results[nome] = fut.result()
+            except Exception:
+                results[nome] = {"ms_rating": None, "fo_url": None}
+            done += 1
+            if progress_cb:
+                progress_cb(done / total)
+
+    return results
+
+
+# ════════════════════════════════════════════════════════════
 # PLOTLY CHARTS (unchanged)
 # ════════════════════════════════════════════════════════════
 
@@ -1846,7 +2057,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     alloc_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
                  ["Fondo", "Peso", "% Azionario", "% Obbligazionario",
-                  "Duration", "Rating Medio", "Cat. FIDA", "FIDArating"]]
+                  "Duration", "Rating Medio", "Cat. FIDA", "FIDArating",
+                  "Morningstar"]]
     alloc_ptf = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph("<b>100%</b>",                       WH),
@@ -1854,6 +2066,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         Paragraph(f"<b>{_ptf_obb_wtd*100:.1f}%</b>",  WH),
         Paragraph(f"<b>{_ptf_dur_str}</b>",            WH),
         Paragraph(f"<b>{_ptf_rat_str}</b>",            WH),
+        Paragraph("",                                  WH),
         Paragraph("",                                  WH),
         Paragraph("",                                  WH),
     ]
@@ -1880,8 +2093,34 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                   textColor=rl_colors.HexColor("#1E293B"), leading=11))
         return Paragraph(val, SM)   # "—" or unknown
 
+    # Morningstar data for PDF (loaded from cache / session state)
+    _ms_pdf = st.session_state.get("_ms_data") or load_ms_cache()
+
+    # Morningstar amber/gold palette for PDF
+    _MS_BG_HEX = {"5": "#78350F", "4": "#92400E", "3": "#B45309"}
+
+    def _ms_para(val) -> Paragraph:
+        """ReportLab Paragraph for a Morningstar rating value.
+        Shows numeric value with star count in ASCII to stay within Helvetica charset.
+        """
+        try:
+            v = int(val)
+        except (TypeError, ValueError):
+            return Paragraph("—", SM)
+        label = f"{v} {'*'*v}"   # e.g. "4 ****" — ASCII-safe, no Unicode stars
+        if str(v) in _MS_BG_HEX:
+            return Paragraph(
+                label,
+                S(f"SMMSP{v}", fontName="Helvetica-Bold", fontSize=7,
+                  textColor=rl_colors.white, leading=11))
+        return Paragraph(
+            label,
+            S(f"SMMSd{v}", fontName="Helvetica", fontSize=7,
+              textColor=rl_colors.HexColor("#475569"), leading=11))
+
     alloc_fund_rows = []
     _fida_vals = []   # keep to build BACKGROUND commands after the loop
+    _ms_vals   = []
     for _, _row in d_sorted.iterrows():
         _dur2  = get_fi_metric(_row["nome"], "duration")
         _rat2  = get_fi_metric(_row["nome"], "credit_rating")
@@ -1890,7 +2129,9 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _fd_ov2 = (fund_data or {}).get(_row["nome"], {}).get("overview", {})
         _cat2   = _fd_ov2.get("cat_assog") or "—"
         _fida2  = _fd_ov2.get("fida_rating") or "—"
+        _ms2    = _ms_pdf.get(_row["nome"], {}).get("ms_rating")
         _fida_vals.append(str(_fida2).strip())
+        _ms_vals.append(str(_ms2).strip() if _ms2 is not None else "—")
         alloc_fund_rows.append([
             Paragraph(_row["nome"][:48], SM),
             Paragraph(f"{_row[wcol]*100:.1f}%",                          SM),
@@ -1900,11 +2141,10 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             Paragraph(_rat2 if isinstance(_rat2, str) else "—",           SM),
             Paragraph(_cat2,                                               SM),
             _fida_para(_fida2),
+            _ms_para(_ms2),
         ])
 
-    # Build per-row BACKGROUND commands for the FIDArating column (col 7).
-    # These are added AFTER ROWBACKGROUNDS so they override the alternating
-    # white/grey for that specific cell.
+    # Build per-row BACKGROUND commands for FIDArating (col 7) and Morningstar (col 8).
     _fida_bg_cmds = []
     for _fi, _fv in enumerate(_fida_vals):
         _bg_hex = _FIDA_BG_HEX.get(_fv)
@@ -1913,10 +2153,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             _fida_bg_cmds.append(
                 ("BACKGROUND", (7, _tr), (7, _tr),
                  rl_colors.HexColor(_bg_hex)))
+    for _mi, _mv in enumerate(_ms_vals):
+        _bg_hex_ms = _MS_BG_HEX.get(_mv)
+        if _bg_hex_ms:
+            _tr = _mi + 2
+            _fida_bg_cmds.append(
+                ("BACKGROUND", (8, _tr), (8, _tr),
+                 rl_colors.HexColor(_bg_hex_ms)))
 
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
-        colWidths=[4.1*cm, 1.1*cm, 1.5*cm, 1.8*cm, 1.6*cm, 1.9*cm, 3.1*cm, 1.9*cm],
+        # Slightly reduced cols to fit new Morningstar column (total ~17.1 cm)
+        colWidths=[3.8*cm, 1.1*cm, 1.3*cm, 1.5*cm, 1.4*cm, 1.8*cm, 2.6*cm, 1.5*cm, 2.1*cm],
         repeatRows=1,
     )
     alloc_tbl.setStyle(TableStyle([
@@ -2198,8 +2446,17 @@ def free_portfolio_ui(data):
     }
     _has_ratings = any(v != "—" for v in _fr_map.values())
 
+    # ── Morningstar filter ────────────────────────────────────────────────────
+    _ms_live_free = st.session_state.get("_ms_data") or load_ms_cache()
+    _ms_fr_map = {
+        r["nome"]: (str(_ms_live_free.get(r["nome"], {}).get("ms_rating", "") or "").strip()
+                    or "—")
+        for _, r in fida.iterrows()
+    }
+    _has_ms_ratings = any(v != "—" for v in _ms_fr_map.values())
+
     _RATING_OPTS  = ["5", "4", "3", "2", "1", "—"]
-    _RATING_LABEL = {
+    _FIDA_LABEL = {
         "5": "⭐⭐⭐⭐⭐  FIDArating 5",
         "4": "⭐⭐⭐⭐  FIDArating 4",
         "3": "⭐⭐⭐  FIDArating 3",
@@ -2207,34 +2464,63 @@ def free_portfolio_ui(data):
         "1": "⭐  FIDArating 1",
         "—": "Nessun rating",
     }
+    _MS_LABEL = {
+        "5": "★★★★★  Morningstar 5",
+        "4": "★★★★  Morningstar 4",
+        "3": "★★★  Morningstar 3",
+        "2": "★★  Morningstar 2",
+        "1": "★  Morningstar 1",
+        "—": "Nessun rating",
+    }
 
-    if _has_ratings:
-        _sel_ratings = st.multiselect(
-            "🔍  Filtra per FIDArating",
-            options=_RATING_OPTS,
-            default=_RATING_OPTS,
-            format_func=lambda x: _RATING_LABEL[x],
-            key="free_fida_filter",
+    # Layout: two filter columns side by side
+    _fcol1, _fcol2 = st.columns(2)
+    with _fcol1:
+        if _has_ratings:
+            _sel_fida = st.multiselect(
+                "🔵  Filtra per FIDArating",
+                options=_RATING_OPTS,
+                default=_RATING_OPTS,
+                format_func=lambda x: _FIDA_LABEL[x],
+                key="free_fida_filter",
+            )
+            _active_fida = set(_sel_fida) if _sel_fida else set(_RATING_OPTS)
+        else:
+            _active_fida = set(_RATING_OPTS)
+            st.caption("ℹ️ FIDArating — scarica dati FondiDoc")
+    with _fcol2:
+        if _has_ms_ratings:
+            _sel_ms = st.multiselect(
+                "⭐  Filtra per Morningstar",
+                options=_RATING_OPTS,
+                default=_RATING_OPTS,
+                format_func=lambda x: _MS_LABEL[x],
+                key="free_ms_filter",
+            )
+            _active_ms = set(_sel_ms) if _sel_ms else set(_RATING_OPTS)
+        else:
+            _active_ms = set(_RATING_OPTS)
+            st.caption("ℹ️ Morningstar — scarica rating FondiOnline")
+
+    fida_filtered = fida[fida["nome"].apply(
+        lambda n: (
+            _fr_map.get(n, "—") in _active_fida
+            and _ms_fr_map.get(n, "—") in _active_ms
         )
-        _active_ratings = set(_sel_ratings) if _sel_ratings else set(_RATING_OPTS)
-        fida_filtered = fida[fida["nome"].apply(
-            lambda n: _fr_map.get(n, "—") in _active_ratings)]
-        if fida_filtered.empty:
-            st.warning("⚠️ Nessun fondo corrisponde ai filtri selezionati.")
-            fida_filtered = fida   # fallback: show all
-    else:
-        fida_filtered = fida
-        st.caption(
-            "ℹ️ FIDArating non disponibile — clicca **Genera PDF** "
-            "per scaricare i dati FondiDoc e abilitare il filtro.")
+    )]
+    if fida_filtered.empty:
+        st.warning("⚠️ Nessun fondo corrisponde ai filtri selezionati.")
+        fida_filtered = fida  # fallback: show all
 
-    # Build option labels: include FIDArating badge when data is available
+    # Build option labels: include FIDArating and Morningstar badges
     def _fund_option(r):
-        fr  = _fr_map.get(r["nome"], "—")
-        tag = f" · R{fr}" if fr != "—" else ""
+        fr   = _fr_map.get(r["nome"], "—")
+        ms_r = _ms_fr_map.get(r["nome"], "—")
+        ftag = f" · F{fr}"   if fr   != "—" else ""
+        mtag = f" · M{ms_r}" if ms_r != "—" else ""
         if r["macro_cat"] != "Altro":
-            return f"{r['nome']}{tag}  [{r['macro_cat']}]"
-        return f"{r['nome']}{tag}"
+            return f"{r['nome']}{ftag}{mtag}  [{r['macro_cat']}]"
+        return f"{r['nome']}{ftag}{mtag}"
 
     options = fida_filtered.apply(_fund_option, axis=1).tolist()
 
@@ -2254,8 +2540,8 @@ def free_portfolio_ui(data):
     with c3:
         st.markdown("<br>",unsafe_allow_html=True)
         if st.button("➕ Aggiungi",use_container_width=True):
-            # Strip both the FIDArating tag "· RN" and the macro-cat "  [...]"
-            fname = re.split(r'\s+·\s+R\d|\s{2}\[', sel)[0].strip()
+            # Strip FIDArating tag "· FN", Morningstar tag "· MN" and macro-cat "  [...]"
+            fname = re.split(r'\s+·\s+[FM]\d|\s{2}\[', sel)[0].strip()
             if any(f["nome"]==fname for f in st.session_state.free_ptf):
                 st.toast("⚠️ Fondo già presente!",icon="⚠️")
             else:
@@ -2338,6 +2624,7 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 
 def main():
     st.markdown(_APP_CSS, unsafe_allow_html=True)
+    _ms_with_rating = 0   # default; updated inside sidebar block below
     with st.sidebar:
         st.markdown("""<div style='padding:1.4rem 0 .8rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:10px;'></div></div>""", unsafe_allow_html=True)
         st.markdown("---")
@@ -2386,6 +2673,26 @@ def main():
         else:
             st.caption("⬆️ Carica prima il file Excel")
 
+        # ── FondiOnline — Morningstar rating ─────────────────────────────────
+        st.markdown("---")
+        _ms_now = st.session_state.get("_ms_data") or load_ms_cache()
+        _ms_with_rating = sum(1 for v in _ms_now.values() if v.get("ms_rating"))
+        if _ms_with_rating:
+            st.markdown(
+                f"<div style='background:#1c1a08;border:1px solid #854d0e;"
+                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+                f"color:#fde68a;margin-bottom:.5rem;line-height:1.5;'>"
+                f"⭐ <b>Morningstar</b> — {_ms_with_rating} rating caricati</div>",
+                unsafe_allow_html=True)
+        if uploaded:
+            if st.button("⭐  Scarica Rating Morningstar",
+                         use_container_width=True,
+                         help="Recupera il rating Morningstar (stelle 1–5) "
+                              "da FondiOnline per tutti i fondi."):
+                st.session_state["_fetch_ms_requested"] = True
+        else:
+            st.caption("⬆️ Carica prima il file Excel")
+
         st.markdown("---")
         ptf_choice = st.radio("TIPO PORTAFOGLIO", ["📋  PTF FULL","⚡  PTF SHORT","🎨  LIBERO"])
         st.markdown("---")
@@ -2426,6 +2733,30 @@ def main():
             _pb_fd.empty()
             save_fund_cache(_fd_new)
             st.session_state["_scomp_fd"] = _fd_new
+            st.rerun()
+        else:
+            st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
+
+    # ── Sidebar-triggered Morningstar (FondiOnline) fetch ─────────────────────
+    if st.session_state.pop("_fetch_ms_requested", False):
+        _fida_df   = raw.get("FIDA", pd.DataFrame())
+        _sheets_ms = [raw[s] for s in ("PTF FULL", "PTF SHORT")
+                      if s in raw and not raw[s].empty]
+        _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
+                  .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
+        if not _df_ms.empty:
+            _pb_ms = st.progress(0, text="Carico mappa ISIN FondiOnline…")
+            # Eagerly load sitemap (shows progress while loading)
+            _fo_load_isin_map()
+            _pb_ms.progress(0.1, text="Scarico rating Morningstar…")
+            def _upd_ms(v):
+                _pb_ms.progress(0.1 + v * 0.9, text=f"Morningstar: {int(v*100)}%…")
+            _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df, _upd_ms)
+            _pb_ms.empty()
+            save_ms_cache(_ms_new)
+            st.session_state["_ms_data"] = _ms_new
+            _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
+            st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
             st.rerun()
         else:
             st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
@@ -2599,6 +2930,29 @@ def main():
     # Prefer live FondiDoc data fetched in this session over on-disk cache
     _fd_live = st.session_state.get("_scomp_fd") or cached_fd
 
+    # Morningstar ratings — from this session or from disk cache
+    _ms_live = st.session_state.get("_ms_data") or load_ms_cache()
+
+    # Morningstar color scale (amber/gold palette)
+    _MS_COL = {5: "#78350F", 4: "#92400E", 3: "#B45309", 2: "#475569", 1: "#94A3B8"}
+    _MS_BG  = {5: "#78350F", 4: "#92400E", 3: "#B45309"}   # bg only for top-3
+
+    def _ms_badge_html(ms_r) -> str:
+        """Return HTML span for a Morningstar rating integer."""
+        try:
+            v = int(ms_r)
+        except (TypeError, ValueError):
+            return "<span style='color:#94A3B8;'>—</span>"
+        stars = "★" * v + "☆" * (5 - v)
+        bg = _MS_BG.get(v)
+        if bg:
+            return (f"<span style='background:{bg};color:#fff;padding:2px 8px;"
+                    f"border-radius:4px;font-weight:700;font-size:.8rem;'>"
+                    f"{stars}</span>")
+        col = _MS_COL.get(v, "#64748B")
+        return (f"<span style='color:{col};font-weight:700;font-size:.8rem;'>"
+                f"{stars}</span>")
+
     # Shared HTML style tokens
     _TH  = ("background:#0D1B2A;color:#fff;font-size:.74rem;"
             "padding:8px 10px;white-space:nowrap;")
@@ -2719,6 +3073,7 @@ def main():
             f"<th style='{_TH}text-align:center;'>Rating Medio</th>"
             f"<th style='{_TH}text-align:left;'>Cat. FIDA</th>"
             f"<th style='{_TH}text-align:center;'>FIDArating</th>"
+            f"<th style='{_TH}text-align:center;'>Morningstar</th>"
             f"</tr>"
         )
         _tbl_body = ""
@@ -2747,6 +3102,8 @@ def main():
                 if _fr_bg else
                 f"<span style='color:{_fr_col};font-weight:700;'>{_fida}</span>"
             )
+            _ms_r = _ms_live.get(_tr["nome"], {}).get("ms_rating")
+            _ms_cell = _ms_badge_html(_ms_r)
             _tbl_body += (
                 f"<tr>"
                 f"<td style='{_TC}font-weight:500;'>{_fund_link(_tr['nome'])}</td>"
@@ -2758,6 +3115,7 @@ def main():
                 f"<td style='{_TC}text-align:center;font-weight:{_rat_w};'>{_rat_s}</td>"
                 f"<td style='{_TC}color:#64748B;'>{_cat}</td>"
                 f"<td style='{_TC}text-align:center;'>{_fida_cell}</td>"
+                f"<td style='{_TC}text-align:center;'>{_ms_cell}</td>"
                 f"</tr>"
             )
         if _tbl_body:
@@ -2768,10 +3126,14 @@ def main():
                 f"<thead>{_scomp_hdr}</thead><tbody>{_tbl_body}</tbody>"
                 f"</table></div>",
                 unsafe_allow_html=True)
+            _ms_note = (f" &nbsp;·&nbsp; Morningstar: FondiOnline"
+                        if _ms_with_rating else
+                        " &nbsp;·&nbsp; Morningstar: clicca «Scarica Rating Morningstar»")
             st.markdown(
                 f"<p style='{_note_style}'>"
                 f"Duration &amp; Rating Medio: {_note_fb}"
-                f" &nbsp;·&nbsp; Cat. FIDA &amp; FIDArating: {_note_fd}</p>",
+                f" &nbsp;·&nbsp; Cat. FIDA &amp; FIDArating: {_note_fd}"
+                f"{_ms_note}</p>",
                 unsafe_allow_html=True)
 
     # ── TAB 2 — RENDIMENTI ───────────────────────────────────────────────────
