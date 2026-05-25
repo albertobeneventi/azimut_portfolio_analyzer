@@ -3027,51 +3027,34 @@ def main():
             help="Carica il file Excel scaricato dopo la prima estrazione del "
                  "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
         )
-        # ── FondiDoc data loader ─────────────────────────────────────────────
+        # ── FondiDoc + Morningstar — unico tasto ─────────────────────────────
         st.markdown("---")
         _fd_now = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
-        if _fd_now:
-            st.markdown(
-                f"<div style='background:#0d2b1a;border:1px solid #166534;"
-                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-                f"color:#86efac;margin-bottom:.5rem;line-height:1.5;'>"
-                f"✅ <b>Dati FondiDoc</b> — {len(_fd_now)} fondi caricati</div>",
-                unsafe_allow_html=True)
-        if uploaded:
-            if not _fd_now:
-                st.markdown(
-                    "<div style='background:#431407;border:1px solid #C9A84C;"
-                    "border-radius:8px;padding:.6rem .9rem;font-size:.74rem;"
-                    "color:#fde68a;margin-bottom:.55rem;line-height:1.6;'>"
-                    "⚠️ <b>Azione consigliata</b><br>"
-                    "Clicca <b>Scarica Dati FondiDoc</b> per popolare le tabelle "
-                    "a schermo con Cat.&nbsp;FIDA, FIDArating, rendimenti e "
-                    "metriche di rischio.</div>",
-                    unsafe_allow_html=True)
-            if st.button("📥  Scarica Dati FondiDoc",
-                         use_container_width=True,
-                         help="Scarica Cat. FIDA, FIDArating e rendimenti "
-                              "per tutti i fondi dei portafogli"):
-                st.session_state["_fetch_fd_requested"] = True
-        else:
-            st.caption("⬆️ Carica prima il file Excel")
-
-        # ── FondiOnline — Morningstar rating ─────────────────────────────────
-        st.markdown("---")
         _ms_now = st.session_state.get("_ms_data") or load_ms_cache()
         _ms_with_rating = sum(1 for v in _ms_now.values() if v.get("ms_rating"))
-        if _ms_with_rating:
-            st.markdown(
-                f"<div style='background:#1c1a08;border:1px solid #854d0e;"
-                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-                f"color:#fde68a;margin-bottom:.5rem;line-height:1.5;'>"
-                f"⭐ <b>Morningstar</b> — {_ms_with_rating} rating caricati</div>",
-                unsafe_allow_html=True)
+
+        # Card stato dati
+        _fd_line = (f"✅ <b>FondiDoc</b> — {len(_fd_now)} fondi"
+                    if _fd_now else "⚠️ <b>FondiDoc</b> — non ancora scaricato")
+        _ms_line = (f"⭐ <b>Morningstar</b> — {_ms_with_rating} rating"
+                    if _ms_with_rating else "⚠️ <b>Morningstar</b> — non ancora scaricato")
+        _card_bg  = "#0d2b1a" if (_fd_now and _ms_with_rating) else "#1a1a08"
+        _card_brd = "#166534" if (_fd_now and _ms_with_rating) else "#854d0e"
+        _card_clr = "#86efac" if (_fd_now and _ms_with_rating) else "#fde68a"
+        st.markdown(
+            f"<div style='background:{_card_bg};border:1px solid {_card_brd};"
+            f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+            f"color:{_card_clr};margin-bottom:.5rem;line-height:1.8;'>"
+            f"{_fd_line}<br>{_ms_line}</div>",
+            unsafe_allow_html=True)
+
         if uploaded:
-            if st.button("⭐  Scarica Rating Morningstar",
+            if st.button("📥  Aggiorna Dati (FondiDoc + Morningstar)",
                          use_container_width=True,
-                         help="Recupera il rating Morningstar (stelle 1–5) "
-                              "da FondiOnline per tutti i fondi."):
+                         help="Scarica in sequenza: Cat. FIDA, FIDArating, "
+                              "rendimenti e metriche di rischio da FondiDoc, "
+                              "poi i rating Morningstar da FondiOnline."):
+                st.session_state["_fetch_fd_requested"] = True
                 st.session_state["_fetch_ms_requested"] = True
         else:
             st.caption("⬆️ Carica prima il file Excel")
