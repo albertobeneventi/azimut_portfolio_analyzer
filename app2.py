@@ -3883,50 +3883,81 @@ def main():
             f"<span style='color:#3b82f6;'>{_src_note}</span></div></div>",
             unsafe_allow_html=True)
 
-    fida_df = raw.get("FIDA", pd.DataFrame())
+    fida_df  = raw.get("FIDA", pd.DataFrame())
+    _is_free = "LIBERO" in ptf_choice
+
+    # ── Cache key: invalidate when portfolio/profile/fund-data changes ──────
+    _pdf_cache_key = (f"{_ptf_key}|{len(df_act)}|{len(_fd_live)}"
+                      + (f"|{hash(tuple(sorted(df_act['nome'].tolist())))}"
+                         if _is_free else ""))
+
+    # ── Auto-generate PDF for stable portfolios (FULL/SHORT/SUGGERITO) ──────
+    # For LIBERO the weights change on every interaction, so we keep the button.
+    if not _is_free and st.session_state.get("_pdf_cache_key") != _pdf_cache_key:
+        _fname_auto = (f"Azimut_{ptf_label.replace(' ','_').replace('—','')}"
+                       f"_{profile}_{datetime.date.today().strftime('%Y%m%d')}.pdf")
+        with st.spinner("⚡ Genero PDF…"):
+            try:
+                _pdf_auto = generate_pdf(
+                    df_act, wcol, profile, ptf_label, _fd_live,
+                    fida_df=fida_df, factbook_data=factbook_data,
+                    cache_date=cache_date)
+                st.session_state["_pdf_bytes_ready"]  = _pdf_auto
+                st.session_state["_pdf_fname_ready"]  = _fname_auto
+                st.session_state["_pdf_lbl"]          = (
+                    f"{len(_fd_live)} schede da FondiDoc" if _fd_live
+                    else "dati base (lancia Aggiorna Dati per arricchire)")
+                st.session_state["_pdf_cache_key"]    = _pdf_cache_key
+            except Exception as _pe:
+                st.error(f"Errore generazione PDF: {_pe}")
 
     with col_btn:
-        if st.session_state.get("_pdf_bytes_ready"):
-            # PDF già generato per questo portafoglio/profilo: mostra solo download
+        if st.session_state.get("_pdf_bytes_ready") and not _is_free:
+            # One-click download for stable portfolios
             st.download_button(
-                "📥   Scarica Report PDF",
+                "📥  Scarica Report PDF",
                 data=st.session_state["_pdf_bytes_ready"],
                 file_name=st.session_state.get("_pdf_fname_ready", "report.pdf"),
                 mime="application/pdf",
                 use_container_width=True,
+                type="primary",
             )
-            st.success(f"✅ PDF pronto — {st.session_state.get('_pdf_lbl','')}")
-            st.caption("Cambia portafoglio, profilo o fondi per rigenerare.")
-        if not st.session_state.get("_pdf_bytes_ready") and \
-                st.button("⚡  Genera PDF", use_container_width=True, type="primary"):
-            # Clear any stale PDF from a previous run
-            for _k in ("_pdf_bytes_ready", "_pdf_fname_ready", "_pdf_lbl"):
-                st.session_state.pop(_k, None)
-
-            pb = st.progress(0, text="Scarico dati FondiDoc…")
-            def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
-            fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
-            pb.progress(1.0, text="✅ Genero PDF…")
-            save_fund_cache(fund_data)
-            # Store fund data so the Scomposizione table gets populated
-            # on the immediate rerun triggered below
-            st.session_state["_scomp_fd"] = fund_data
-            try:
-                pdf_bytes = generate_pdf(
-                    df_act, wcol, profile, ptf_label, fund_data,
-                    fida_df=fida_df, factbook_data=factbook_data,
-                    cache_date=cache_date)
-                fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
-                         f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
-                st.session_state["_pdf_bytes_ready"] = pdf_bytes
-                st.session_state["_pdf_fname_ready"] = fname
-                st.session_state["_pdf_lbl"] = f"{len(fund_data)} schede da FondiDoc"
-            except Exception as _pe:
-                st.error(f"Errore PDF: {_pe}")
-            pb.empty()
-            # Force immediate rerun so the Scomposizione table and download
-            # button both reflect the freshly fetched FondiDoc data
-            st.rerun()
+            st.caption(f"✅ {st.session_state.get('_pdf_lbl','PDF pronto')}")
+        else:
+            # LIBERO: manual generate (portfolio changes at every interaction)
+            if st.session_state.get("_pdf_bytes_ready") and _is_free:
+                st.download_button(
+                    "📥  Scarica Report PDF",
+                    data=st.session_state["_pdf_bytes_ready"],
+                    file_name=st.session_state.get("_pdf_fname_ready", "report.pdf"),
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+                st.caption("Clicca 'Genera' per aggiornare con i pesi attuali.")
+            if st.button("⚡  Genera PDF", use_container_width=True, type="primary"):
+                for _k in ("_pdf_bytes_ready", "_pdf_fname_ready", "_pdf_lbl"):
+                    st.session_state.pop(_k, None)
+                pb = st.progress(0, text="Scarico dati FondiDoc…")
+                def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+                fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
+                pb.progress(1.0, text="✅ Genero PDF…")
+                save_fund_cache(fund_data)
+                st.session_state["_scomp_fd"] = fund_data
+                try:
+                    pdf_bytes = generate_pdf(
+                        df_act, wcol, profile, ptf_label, fund_data,
+                        fida_df=fida_df, factbook_data=factbook_data,
+                        cache_date=cache_date)
+                    fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
+                             f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
+                    st.session_state["_pdf_bytes_ready"]  = pdf_bytes
+                    st.session_state["_pdf_fname_ready"]  = fname
+                    st.session_state["_pdf_lbl"]          = f"{len(fund_data)} schede"
+                    st.session_state["_pdf_cache_key"]    = _pdf_cache_key
+                except Exception as _pe:
+                    st.error(f"Errore PDF: {_pe}")
+                pb.empty()
+                st.rerun()
 
     st.markdown("<br><br>",unsafe_allow_html=True)
 
