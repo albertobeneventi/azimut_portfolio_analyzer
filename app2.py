@@ -1352,12 +1352,22 @@ def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
             url = _fondidoc_search_url(pdf_name)
         # Nome breve (strip "AZ [Famiglia] - "), usato in più query
         _short = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', pdf_name, flags=re.I).strip()
-        # Query 3a: "AZ Fund 1 - " + nome breve  (es. "AZ Fund 1 - Convertible Bond")
+        # Famiglia (es. "Bond", "Allocation", "Equity") → abbreviazione FondiDoc
+        _fam_m = re.match(r'^AZ\s+(\S+)\s*[-–]', pdf_name, re.I)
+        _fam   = _fam_m.group(1) if _fam_m else ""
+        _FABBR = {"Bond": "AZ F.1 Bd", "Allocation": "AZ F.1 All.", "Equity": "AZ F.1 Eq."}
+        _fabbr = _FABBR.get(_fam, "")
+        # Query 3a: abbreviazione famiglia + nome breve (es. "AZ F.1 Bd Convertible Bond")
+        if not url and _fabbr and _short:
+            _q3a = f"{_fabbr} {_short}"
+            if _q3a not in (res_name, pdf_name):
+                url = _fondidoc_search_url(_q3a)
+        # Query 3b: "AZ Fund 1 - " + nome breve  (es. "AZ Fund 1 - Convertible Bond")
         if not url and _short:
             _fund1_short = "AZ Fund 1 - " + _short
             if _fund1_short not in (res_name, pdf_name):
                 url = _fondidoc_search_url(_fund1_short)
-        # Query 3b: "AZ Fund 1 - " + nome completo PDF (es. "AZ Fund 1 - AZ Allocation - Balanced Plus")
+        # Query 3c: "AZ Fund 1 - " + nome completo PDF (es. "AZ Fund 1 - AZ Allocation - Balanced Plus")
         if not url:
             _fund1 = "AZ Fund 1 - " + pdf_name
             if _fund1 not in (res_name, pdf_name):
@@ -3649,18 +3659,33 @@ def main():
     n_fondi = len(df_act)
     w_az    = (df_act[wcol]*df_act["az_pct"]).sum()*100
     w_obb   = (df_act[wcol]*df_act["obb_pct"]).sum()*100
+    w_other = 0.0
+    _other_label_kpi = ""
 
     # SUGGERITO: il DEFAULT_AZ per categoria (92% az, 50% bilanciati, 6% bond)
     # dà stime grossolane (es. 73%). Il PDF GP riporta direttamente la quota
     # equity/bond dello scenario → usala se disponibile.
+    # Vengono estratti TUTTI i componenti (Equity, Bond, Private Markets…)
+    # così da mostrare anche la quota "Economia Reale / Altro".
     if _is_suggerito:
         _sc_info_kpi = (st.session_state.get("_gp_data") or {}).get(
             st.session_state.get("_gp_sc_key", "Base"), {}).get("info", "")
-        _m_eq_kpi = re.search(r'Equity\s+(\d+)', _sc_info_kpi)
-        _m_bd_kpi = re.search(r'Bond\s+(\d+)',   _sc_info_kpi)
-        if _m_eq_kpi and _m_bd_kpi:
-            w_az  = float(_m_eq_kpi.group(1))
-            w_obb = float(_m_bd_kpi.group(1))
+        # Formato: "Equity 32% · Bond 38% · Private Markets 30%"
+        _info_parts = re.findall(r'([A-Za-z][A-Za-z\s&]+?)\s+(\d+)\s*%', _sc_info_kpi)
+        _other_parts = []
+        for _pname, _pval in _info_parts:
+            _pname = _pname.strip()
+            if re.search(r'equity', _pname, re.I):
+                w_az  = float(_pval)
+            elif re.search(r'bond', _pname, re.I):
+                w_obb = float(_pval)
+            else:
+                w_other += float(_pval)
+                _other_parts.append(_pname)
+        if len(_other_parts) == 1:
+            _other_label_kpi = _other_parts[0]
+        elif len(_other_parts) > 1:
+            _other_label_kpi = "Economia Reale / Altro"
 
     srri = max(1, min(7, round(w_az/100*6+1)))
 
@@ -3681,14 +3706,23 @@ def main():
         f"Scala 1 (min) → 7 (max) · stima da quota azionaria</span>"
     )
 
-    c1,c2,c3,c4 = st.columns(4)
-    for col,val,lbl,sub in [
-        (c1,str(n_fondi),"Fondi in Portafoglio",f"{df_act['gruppo'].nunique()} gruppi"),
-        (c2,f"{w_az:.1f}%","Quota Azionaria","ponderata per peso"),
-        (c3,f"{w_obb:.1f}%","Quota Obbligazionaria","ponderata per peso"),
-        (c4,f"{srri} / 7","Risk Score (SRRI proxy)", _srri_sub),
-    ]:
-        col.markdown(f'<div class="kpi"><div class="kpi-label">{lbl}</div><div class="kpi-value">{val}</div><div class="kpi-sub">{sub}</div></div>',unsafe_allow_html=True)
+    # Costruisci la lista KPI dinamicamente (aggiunge "Economia Reale" se presente)
+    _kpi_items = [
+        (str(n_fondi),      "Fondi in Portafoglio",     f"{df_act['gruppo'].nunique()} gruppi"),
+        (f"{w_az:.1f}%",    "Quota Azionaria",          "ponderata per peso"),
+        (f"{w_obb:.1f}%",   "Quota Obbligazionaria",    "ponderata per peso"),
+    ]
+    if w_other > 0.5:
+        _kpi_items.append((f"{w_other:.1f}%", _other_label_kpi or "Economia Reale", "ponderata per peso"))
+    _kpi_items.append((f"{srri} / 7", "Risk Score (SRRI proxy)", _srri_sub))
+
+    _kpi_cols = st.columns(len(_kpi_items))
+    for col, (val, lbl, sub) in zip(_kpi_cols, _kpi_items):
+        col.markdown(
+            f'<div class="kpi"><div class="kpi-label">{lbl}</div>'
+            f'<div class="kpi-value">{val}</div>'
+            f'<div class="kpi-sub">{sub}</div></div>',
+            unsafe_allow_html=True)
 
     st.markdown("<br>",unsafe_allow_html=True)
 
