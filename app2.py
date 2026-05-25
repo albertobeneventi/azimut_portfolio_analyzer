@@ -3260,17 +3260,32 @@ def main():
         _all_ok   = bool(_fd_now and _ms_with_rating
                         and (_gp_miss == 0 if _gp_loaded_now else True))
         _any_data = bool(_fd_now or _ms_with_rating)
-        # card colore: verde / giallo / rosso scuro
+        # card colore: verde / giallo / rosso scuro lampeggiante
         if _all_ok:
             _card_bg, _card_brd, _card_clr = "#0d2b1a", "#166534", "#86efac"
+            _card_extra_style = ""
+            _card_anim_css    = ""
         elif _any_data:
             _card_bg, _card_brd, _card_clr = "#1a1a08", "#854d0e", "#fde68a"
+            _card_extra_style = ""
+            _card_anim_css    = ""
         else:
-            _card_bg, _card_brd, _card_clr = "#1f0808", "#991b1b", "#fca5a5"
+            _card_bg, _card_brd, _card_clr = "#3b0000", "#ef4444", "#fca5a5"
+            _card_extra_style = (
+                "border-width:2px;"
+                "box-shadow:0 0 10px 2px #ef444488;"
+                "animation:_card_alert 1s ease-in-out infinite;")
+            _card_anim_css = (
+                "<style>@keyframes _card_alert{"
+                "0%,100%{opacity:1;box-shadow:0 0 10px 2px #ef444488}"
+                "50%{opacity:.55;box-shadow:0 0 18px 5px #ef4444cc}}"
+                "</style>")
         st.markdown(
-            f"<div style='background:{_card_bg};border:1px solid {_card_brd};"
+            f"{_card_anim_css}"
+            f"<div style='background:{_card_bg};border:2px solid {_card_brd};"
             f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-            f"color:{_card_clr};margin-bottom:.4rem;line-height:1.8;'>"
+            f"color:{_card_clr};margin-bottom:.4rem;line-height:1.8;"
+            f"{_card_extra_style}'>"
             f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
             unsafe_allow_html=True)
 
