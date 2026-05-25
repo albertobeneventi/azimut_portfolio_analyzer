@@ -94,10 +94,43 @@ def save_fund_cache(fund_data: dict):
     """Persist fund data to data/fund_cache.json (overwrites)."""
     try:
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "last_updated": datetime.date.today().isoformat(),
-            "fund_data": fund_data,
-        }
+        # Preserve existing keys (es. ms_data) while updating fund_data
+        payload = {}
+        if CACHE_FILE.exists():
+            try:
+                payload = json.loads(CACHE_FILE.read_text(encoding="utf-8-sig"))
+            except Exception:
+                payload = {}
+        payload["last_updated"] = datetime.date.today().isoformat()
+        payload["fund_data"] = fund_data
+        CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                              encoding="utf-8")
+    except Exception:
+        pass
+
+
+def load_ms_cache() -> dict:
+    """Load cached Morningstar ratings. Returns {fund_name: {ms_rating, fo_url}}."""
+    try:
+        if CACHE_FILE.exists():
+            payload = json.loads(CACHE_FILE.read_text(encoding="utf-8-sig"))
+            return payload.get("ms_data", {})
+    except Exception:
+        pass
+    return {}
+
+
+def save_ms_cache(ms_data: dict):
+    """Persist Morningstar ratings to data/fund_cache.json alongside fund_data."""
+    try:
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {}
+        if CACHE_FILE.exists():
+            try:
+                payload = json.loads(CACHE_FILE.read_text(encoding="utf-8-sig"))
+            except Exception:
+                payload = {}
+        payload["ms_data"] = ms_data
         CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
                               encoding="utf-8")
     except Exception:
@@ -1260,6 +1293,96 @@ def fetch_all_fund_data(df: pd.DataFrame, fida_urls: dict,
 
 
 # ════════════════════════════════════════════════════════════
+# FONDIONLINE API — Morningstar rating
+# ════════════════════════════════════════════════════════════
+# FondiOnline exposes a JSON API used by its fund screener page.
+# One HTTP request returns all funds for a company with Rating field.
+
+FONDIONLINE_BASE    = "https://www.fondionline.it"
+FO_API_URL          = "https://www.fondionline.it/offers-list"
+FO_AZ_COMPANY_ID    = "0C00001L0E"   # Azimut Investments S.A. (Morningstar ID)
+FONDIONLINE_HDR     = {
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+    "Accept":          "application/json, text/plain, */*",
+    "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+    "Referer":         "https://www.fondionline.it/fondi/elenco_prodotti.html",
+}
+
+
+def _fo_fetch_company_ratings(company_id: str) -> dict:
+    """Fetch all Morningstar ratings for one company via FondiOnline JSON API.
+
+    Single HTTP request — returns {ISIN: {"ms_rating": int|None, "fo_url": str|None}}.
+    The API paginates; we request pageSize=1000 to get everything in one shot
+    (Azimut has ~310 funds total).
+    """
+    result: dict = {}
+    try:
+        r = requests.get(
+            FO_API_URL,
+            params={
+                "productType":      "OICR",
+                "sortOrder":        "asc",
+                "pageNumber":       1,
+                "pageSize":         1000,
+                "tab":              0,
+                "fundId":           "",
+                "orderBy":          "Name",
+                "brandingCompanyId": company_id,
+                "distribution":     -1,
+            },
+            headers=FONDIONLINE_HDR,
+            timeout=15,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            for fund in data.get("funds", []):
+                isin   = (fund.get("ISIN") or "").strip()
+                rating = fund.get("Rating")          # "1"…"5" or absent
+                url    = (f"{FONDIONLINE_BASE}/elenco-fondi/{fund['detailsUrl']}"
+                          if fund.get("detailsUrl") else None)
+                if isin:
+                    result[isin] = {
+                        "ms_rating": int(rating) if rating else None,
+                        "fo_url":    url,
+                    }
+    except Exception:
+        pass
+    return result
+
+
+def fetch_all_ms_ratings(df: pd.DataFrame, fida_df: pd.DataFrame,
+                          progress_cb=None) -> dict:
+    """Fetch Morningstar ratings for all portfolio funds via FondiOnline API.
+
+    Replaces the old per-page scraping approach with a single JSON API call.
+    Returns {fund_name: {"ms_rating": int_or_None, "fo_url": str_or_None}}.
+    """
+    # 1. Build nome → ISIN map from FIDA sheet
+    nome_to_isin: dict = {}
+    if not fida_df.empty and "isin" in fida_df.columns:
+        for _, fr in fida_df.iterrows():
+            isin = str(fr.get("isin") or "").strip()
+            if isin:
+                nome_to_isin[fr["nome"]] = isin
+
+    portfolio_names = list(df["nome"].unique()) if not df.empty else []
+
+    # 2. One API call → ISIN → {ms_rating, fo_url}
+    isin_to_ms = _fo_fetch_company_ratings(FO_AZ_COMPANY_ID)
+    if progress_cb:
+        progress_cb(1.0)
+
+    # 3. Match portfolio funds by ISIN
+    results: dict = {}
+    for nome in portfolio_names:
+        isin = nome_to_isin.get(nome, "")
+        results[nome] = isin_to_ms.get(isin, {"ms_rating": None, "fo_url": None})
+
+    return results
+
+
+# ════════════════════════════════════════════════════════════
 # PLOTLY CHARTS (unchanged)
 # ════════════════════════════════════════════════════════════
 
@@ -1846,7 +1969,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     alloc_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
                  ["Fondo", "Peso", "% Azionario", "% Obbligazionario",
-                  "Duration", "Rating Medio", "Cat. FIDA", "FIDArating"]]
+                  "Duration", "Rating Medio", "Cat. FIDA", "FIDArating",
+                  "Morningstar"]]
     alloc_ptf = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph("<b>100%</b>",                       WH),
@@ -1854,6 +1978,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         Paragraph(f"<b>{_ptf_obb_wtd*100:.1f}%</b>",  WH),
         Paragraph(f"<b>{_ptf_dur_str}</b>",            WH),
         Paragraph(f"<b>{_ptf_rat_str}</b>",            WH),
+        Paragraph("",                                  WH),
         Paragraph("",                                  WH),
         Paragraph("",                                  WH),
     ]
@@ -1880,8 +2005,34 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                   textColor=rl_colors.HexColor("#1E293B"), leading=11))
         return Paragraph(val, SM)   # "—" or unknown
 
+    # Morningstar data for PDF (loaded from cache / session state)
+    _ms_pdf = st.session_state.get("_ms_data") or load_ms_cache()
+
+    # Morningstar amber/gold palette for PDF
+    _MS_BG_HEX = {"5": "#78350F", "4": "#92400E", "3": "#B45309"}
+
+    def _ms_para(val) -> Paragraph:
+        """ReportLab Paragraph for a Morningstar rating value.
+        Shows numeric value with star count in ASCII to stay within Helvetica charset.
+        """
+        try:
+            v = int(val)
+        except (TypeError, ValueError):
+            return Paragraph("—", SM)
+        label = f"{v} {'*'*v}"   # e.g. "4 ****" — ASCII-safe, no Unicode stars
+        if str(v) in _MS_BG_HEX:
+            return Paragraph(
+                label,
+                S(f"SMMSP{v}", fontName="Helvetica-Bold", fontSize=7,
+                  textColor=rl_colors.white, leading=11))
+        return Paragraph(
+            label,
+            S(f"SMMSd{v}", fontName="Helvetica", fontSize=7,
+              textColor=rl_colors.HexColor("#475569"), leading=11))
+
     alloc_fund_rows = []
     _fida_vals = []   # keep to build BACKGROUND commands after the loop
+    _ms_vals   = []
     for _, _row in d_sorted.iterrows():
         _dur2  = get_fi_metric(_row["nome"], "duration")
         _rat2  = get_fi_metric(_row["nome"], "credit_rating")
@@ -1890,7 +2041,9 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _fd_ov2 = (fund_data or {}).get(_row["nome"], {}).get("overview", {})
         _cat2   = _fd_ov2.get("cat_assog") or "—"
         _fida2  = _fd_ov2.get("fida_rating") or "—"
+        _ms2    = _ms_pdf.get(_row["nome"], {}).get("ms_rating")
         _fida_vals.append(str(_fida2).strip())
+        _ms_vals.append(str(_ms2).strip() if _ms2 is not None else "—")
         alloc_fund_rows.append([
             Paragraph(_row["nome"][:48], SM),
             Paragraph(f"{_row[wcol]*100:.1f}%",                          SM),
@@ -1900,11 +2053,10 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             Paragraph(_rat2 if isinstance(_rat2, str) else "—",           SM),
             Paragraph(_cat2,                                               SM),
             _fida_para(_fida2),
+            _ms_para(_ms2),
         ])
 
-    # Build per-row BACKGROUND commands for the FIDArating column (col 7).
-    # These are added AFTER ROWBACKGROUNDS so they override the alternating
-    # white/grey for that specific cell.
+    # Build per-row BACKGROUND commands for FIDArating (col 7) and Morningstar (col 8).
     _fida_bg_cmds = []
     for _fi, _fv in enumerate(_fida_vals):
         _bg_hex = _FIDA_BG_HEX.get(_fv)
@@ -1913,10 +2065,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             _fida_bg_cmds.append(
                 ("BACKGROUND", (7, _tr), (7, _tr),
                  rl_colors.HexColor(_bg_hex)))
+    for _mi, _mv in enumerate(_ms_vals):
+        _bg_hex_ms = _MS_BG_HEX.get(_mv)
+        if _bg_hex_ms:
+            _tr = _mi + 2
+            _fida_bg_cmds.append(
+                ("BACKGROUND", (8, _tr), (8, _tr),
+                 rl_colors.HexColor(_bg_hex_ms)))
 
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
-        colWidths=[4.1*cm, 1.1*cm, 1.5*cm, 1.8*cm, 1.6*cm, 1.9*cm, 3.1*cm, 1.9*cm],
+        # Slightly reduced cols to fit new Morningstar column (total ~17.1 cm)
+        colWidths=[3.8*cm, 1.1*cm, 1.3*cm, 1.5*cm, 1.4*cm, 1.8*cm, 2.6*cm, 1.5*cm, 2.1*cm],
         repeatRows=1,
     )
     alloc_tbl.setStyle(TableStyle([
@@ -1975,41 +2135,64 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _ptf_unp_str = _ptf_iunp_str = "N/D"
 
     unp_hdr_row = [Paragraph(f"<b>{t}</b>", HDR) for t in
-                   ["Fondo", "Peso", "%UNP", "%IUNP36"]]
+                   ["Fondo", "Peso", "%UNP", "%IUNP36", "FIDArating", "Morningstar"]]
     unp_ptf_row = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph("<b>100%</b>", WH),
         Paragraph(f"<b>{_ptf_unp_str}</b>",  WH),
         Paragraph(f"<b>{_ptf_iunp_str}</b>", WH),
+        Paragraph("", WH),
+        Paragraph("", WH),
     ]
     unp_fund_rows = []
+    _unp_fida_vals: list = []
+    _unp_ms_vals:   list = []
     for _, _row in d_sorted.iterrows():
-        _u, _iu = _fund_unp[_row["nome"]]
+        _u, _iu   = _fund_unp[_row["nome"]]
+        _fd_ov_u  = (fund_data or {}).get(_row["nome"], {}).get("overview", {})
+        _fida_u   = str(_fd_ov_u.get("fida_rating") or "—").strip()
+        _ms_u     = _ms_pdf.get(_row["nome"], {}).get("ms_rating")
+        _unp_fida_vals.append(_fida_u)
+        _unp_ms_vals.append(str(_ms_u).strip() if _ms_u is not None else "—")
         unp_fund_rows.append([
-            Paragraph(_row["nome"][:55], SM),
+            Paragraph(_row["nome"][:50], SM),
             Paragraph(f"{_row[wcol]*100:.1f}%", SM),
             Paragraph(f"{_u:.2f}%"  if _u  is not None else "—", SM),
             Paragraph(f"{_iu:.2f}%" if _iu is not None else "—", SM),
+            _fida_para(_fida_u),
+            _ms_para(_ms_u),
         ])
+
+    # Per-cell background for FIDArating (col 4) and Morningstar (col 5)
+    _unp_bg_cmds: list = []
+    for _fi, _fv in enumerate(_unp_fida_vals):
+        _bh = _FIDA_BG_HEX.get(_fv)
+        if _bh:
+            _unp_bg_cmds.append(("BACKGROUND", (4, _fi+2), (4, _fi+2), rl_colors.HexColor(_bh)))
+    for _mi, _mv in enumerate(_unp_ms_vals):
+        _bh = _MS_BG_HEX.get(_mv)
+        if _bh:
+            _unp_bg_cmds.append(("BACKGROUND", (5, _mi+2), (5, _mi+2), rl_colors.HexColor(_bh)))
 
     unp_tbl = Table(
         [unp_hdr_row, unp_ptf_row] + unp_fund_rows,
-        colWidths=[8.5*cm, 2.0*cm, 3.25*cm, 3.25*cm],
+        colWidths=[5.0*cm, 1.5*cm, 2.0*cm, 2.0*cm, 2.0*cm, 4.5*cm],
         repeatRows=1,
     )
     unp_tbl.setStyle(TableStyle([
-        ("BACKGROUND",  (0,0), (-1,0),  rl_colors.HexColor("#0D1B2A")),
-        ("TEXTCOLOR",   (0,0), (-1,0),  rl_colors.white),
-        ("FONTNAME",    (0,0), (-1,0),  "Helvetica-Bold"),
-        ("BACKGROUND",  (0,1), (-1,1),  rl_colors.HexColor("#1B4332")),
-        ("LINEBELOW",   (0,1), (-1,1),  2, rl_colors.HexColor("#C9A84C")),
-        ("FONTSIZE",    (0,0), (-1,-1), 8),
-        ("PADDING",     (0,0), (-1,-1), 5),
+        ("BACKGROUND",     (0,0), (-1,0),  rl_colors.HexColor("#0D1B2A")),
+        ("TEXTCOLOR",      (0,0), (-1,0),  rl_colors.white),
+        ("FONTNAME",       (0,0), (-1,0),  "Helvetica-Bold"),
+        ("BACKGROUND",     (0,1), (-1,1),  rl_colors.HexColor("#1B4332")),
+        ("LINEBELOW",      (0,1), (-1,1),  2, rl_colors.HexColor("#C9A84C")),
+        ("FONTSIZE",       (0,0), (-1,-1), 8),
+        ("PADDING",        (0,0), (-1,-1), 5),
         ("ROWBACKGROUNDS", (0,2), (-1,-1),
          [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
-        ("LINEBELOW",   (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-        ("ALIGN",       (1,0), (-1,-1), "CENTER"),
-        ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
+        ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+        ("ALIGN",          (1,0), (-1,-1), "CENTER"),
+        ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
+        *_unp_bg_cmds,
     ]))
 
     NOTE_U = S("NTU", fontName="Helvetica-Oblique", fontSize=6.5,
@@ -2198,8 +2381,17 @@ def free_portfolio_ui(data):
     }
     _has_ratings = any(v != "—" for v in _fr_map.values())
 
+    # ── Morningstar filter ────────────────────────────────────────────────────
+    _ms_live_free = st.session_state.get("_ms_data") or load_ms_cache()
+    _ms_fr_map = {
+        r["nome"]: (str(_ms_live_free.get(r["nome"], {}).get("ms_rating", "") or "").strip()
+                    or "—")
+        for _, r in fida.iterrows()
+    }
+    _has_ms_ratings = any(v != "—" for v in _ms_fr_map.values())
+
     _RATING_OPTS  = ["5", "4", "3", "2", "1", "—"]
-    _RATING_LABEL = {
+    _FIDA_LABEL = {
         "5": "⭐⭐⭐⭐⭐  FIDArating 5",
         "4": "⭐⭐⭐⭐  FIDArating 4",
         "3": "⭐⭐⭐  FIDArating 3",
@@ -2207,34 +2399,63 @@ def free_portfolio_ui(data):
         "1": "⭐  FIDArating 1",
         "—": "Nessun rating",
     }
+    _MS_LABEL = {
+        "5": "★★★★★  Morningstar 5",
+        "4": "★★★★  Morningstar 4",
+        "3": "★★★  Morningstar 3",
+        "2": "★★  Morningstar 2",
+        "1": "★  Morningstar 1",
+        "—": "Nessun rating",
+    }
 
-    if _has_ratings:
-        _sel_ratings = st.multiselect(
-            "🔍  Filtra per FIDArating",
-            options=_RATING_OPTS,
-            default=_RATING_OPTS,
-            format_func=lambda x: _RATING_LABEL[x],
-            key="free_fida_filter",
+    # Layout: two filter columns side by side
+    _fcol1, _fcol2 = st.columns(2)
+    with _fcol1:
+        if _has_ratings:
+            _sel_fida = st.multiselect(
+                "🔵  Filtra per FIDArating",
+                options=_RATING_OPTS,
+                default=_RATING_OPTS,
+                format_func=lambda x: _FIDA_LABEL[x],
+                key="free_fida_filter",
+            )
+            _active_fida = set(_sel_fida) if _sel_fida else set(_RATING_OPTS)
+        else:
+            _active_fida = set(_RATING_OPTS)
+            st.caption("ℹ️ FIDArating — scarica dati FondiDoc")
+    with _fcol2:
+        if _has_ms_ratings:
+            _sel_ms = st.multiselect(
+                "⭐  Filtra per Morningstar",
+                options=_RATING_OPTS,
+                default=_RATING_OPTS,
+                format_func=lambda x: _MS_LABEL[x],
+                key="free_ms_filter",
+            )
+            _active_ms = set(_sel_ms) if _sel_ms else set(_RATING_OPTS)
+        else:
+            _active_ms = set(_RATING_OPTS)
+            st.caption("ℹ️ Morningstar — scarica rating FondiOnline")
+
+    fida_filtered = fida[fida["nome"].apply(
+        lambda n: (
+            _fr_map.get(n, "—") in _active_fida
+            and _ms_fr_map.get(n, "—") in _active_ms
         )
-        _active_ratings = set(_sel_ratings) if _sel_ratings else set(_RATING_OPTS)
-        fida_filtered = fida[fida["nome"].apply(
-            lambda n: _fr_map.get(n, "—") in _active_ratings)]
-        if fida_filtered.empty:
-            st.warning("⚠️ Nessun fondo corrisponde ai filtri selezionati.")
-            fida_filtered = fida   # fallback: show all
-    else:
-        fida_filtered = fida
-        st.caption(
-            "ℹ️ FIDArating non disponibile — clicca **Genera PDF** "
-            "per scaricare i dati FondiDoc e abilitare il filtro.")
+    )]
+    if fida_filtered.empty:
+        st.warning("⚠️ Nessun fondo corrisponde ai filtri selezionati.")
+        fida_filtered = fida  # fallback: show all
 
-    # Build option labels: include FIDArating badge when data is available
+    # Build option labels: include FIDArating and Morningstar badges
     def _fund_option(r):
-        fr  = _fr_map.get(r["nome"], "—")
-        tag = f" · R{fr}" if fr != "—" else ""
+        fr   = _fr_map.get(r["nome"], "—")
+        ms_r = _ms_fr_map.get(r["nome"], "—")
+        ftag = f" · F{fr}"   if fr   != "—" else ""
+        mtag = f" · M{ms_r}" if ms_r != "—" else ""
         if r["macro_cat"] != "Altro":
-            return f"{r['nome']}{tag}  [{r['macro_cat']}]"
-        return f"{r['nome']}{tag}"
+            return f"{r['nome']}{ftag}{mtag}  [{r['macro_cat']}]"
+        return f"{r['nome']}{ftag}{mtag}"
 
     options = fida_filtered.apply(_fund_option, axis=1).tolist()
 
@@ -2254,8 +2475,8 @@ def free_portfolio_ui(data):
     with c3:
         st.markdown("<br>",unsafe_allow_html=True)
         if st.button("➕ Aggiungi",use_container_width=True):
-            # Strip both the FIDArating tag "· RN" and the macro-cat "  [...]"
-            fname = re.split(r'\s+·\s+R\d|\s{2}\[', sel)[0].strip()
+            # Strip FIDArating tag "· FN", Morningstar tag "· MN" and macro-cat "  [...]"
+            fname = re.split(r'\s+·\s+[FM]\d|\s{2}\[', sel)[0].strip()
             if any(f["nome"]==fname for f in st.session_state.free_ptf):
                 st.toast("⚠️ Fondo già presente!",icon="⚠️")
             else:
@@ -2309,6 +2530,10 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stSidebar"] .stSelectbox svg{fill:#C9A84C !important;width:22px !important;height:22px !important;opacity:1 !important;}
 [data-testid="stSidebar"] .stFileUploader>div{background:#132035 !important;border:1px dashed #2a4a6a !important;border-radius:8px !important;}
 [data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.8rem !important;}
+[data-testid="stSidebar"] ::-webkit-scrollbar{width:6px;}
+[data-testid="stSidebar"] ::-webkit-scrollbar-track{background:#06101e;}
+[data-testid="stSidebar"] ::-webkit-scrollbar-thumb{background:#C9A84C;border-radius:3px;}
+[data-testid="stSidebar"] ::-webkit-scrollbar-thumb:hover{background:#d4b87a;}
 .main{background:#f6f8fb !important;}.block-container{padding-top:1.8rem !important;max-width:1300px;}
 .az-header{background:linear-gradient(130deg,#081420 0%,#0f2644 50%,#162e52 100%);border-radius:16px;padding:2rem 2.5rem;margin-bottom:1.8rem;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.15);}
 .az-header::after{content:'';position:absolute;bottom:-60px;right:-40px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,76,.18) 0%,transparent 70%);}
@@ -2338,11 +2563,10 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 
 def main():
     st.markdown(_APP_CSS, unsafe_allow_html=True)
+    _ms_with_rating = 0   # default; updated inside sidebar block below
     with st.sidebar:
-        st.markdown("""<div style='padding:1.4rem 0 .8rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:10px;'></div></div>""", unsafe_allow_html=True)
-        st.markdown("---")
-        st.caption("v2.2 — factbook Excel cache")
-        st.markdown("---")
+        st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.2 — factbook Excel cache</div></div>""", unsafe_allow_html=True)
+        st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
         uploaded   = st.file_uploader("FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
         uploaded_fb = st.file_uploader(
             "FACTBOOK PDF (prima estrazione)",
@@ -2386,6 +2610,26 @@ def main():
         else:
             st.caption("⬆️ Carica prima il file Excel")
 
+        # ── FondiOnline — Morningstar rating ─────────────────────────────────
+        st.markdown("---")
+        _ms_now = st.session_state.get("_ms_data") or load_ms_cache()
+        _ms_with_rating = sum(1 for v in _ms_now.values() if v.get("ms_rating"))
+        if _ms_with_rating:
+            st.markdown(
+                f"<div style='background:#1c1a08;border:1px solid #854d0e;"
+                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+                f"color:#fde68a;margin-bottom:.5rem;line-height:1.5;'>"
+                f"⭐ <b>Morningstar</b> — {_ms_with_rating} rating caricati</div>",
+                unsafe_allow_html=True)
+        if uploaded:
+            if st.button("⭐  Scarica Rating Morningstar",
+                         use_container_width=True,
+                         help="Recupera il rating Morningstar (stelle 1–5) "
+                              "da FondiOnline per tutti i fondi."):
+                st.session_state["_fetch_ms_requested"] = True
+        else:
+            st.caption("⬆️ Carica prima il file Excel")
+
         st.markdown("---")
         ptf_choice = st.radio("TIPO PORTAFOGLIO", ["📋  PTF FULL","⚡  PTF SHORT","🎨  LIBERO"])
         st.markdown("---")
@@ -2426,6 +2670,24 @@ def main():
             _pb_fd.empty()
             save_fund_cache(_fd_new)
             st.session_state["_scomp_fd"] = _fd_new
+            st.rerun()
+        else:
+            st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
+
+    # ── Sidebar-triggered Morningstar (FondiOnline) fetch ─────────────────────
+    if st.session_state.pop("_fetch_ms_requested", False):
+        _fida_df   = raw.get("FIDA", pd.DataFrame())
+        _sheets_ms = [raw[s] for s in ("PTF FULL", "PTF SHORT")
+                      if s in raw and not raw[s].empty]
+        _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
+                  .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
+        if not _df_ms.empty:
+            with st.spinner("⭐ Scarico rating Morningstar da FondiOnline…"):
+                _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
+            save_ms_cache(_ms_new)
+            st.session_state["_ms_data"] = _ms_new
+            _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
+            st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
             st.rerun()
         else:
             st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
@@ -2599,6 +2861,34 @@ def main():
     # Prefer live FondiDoc data fetched in this session over on-disk cache
     _fd_live = st.session_state.get("_scomp_fd") or cached_fd
 
+    # Morningstar ratings — from this session or from disk cache
+    _ms_live = st.session_state.get("_ms_data") or load_ms_cache()
+
+    # Morningstar color scale (amber/gold palette)
+    _MS_COL = {5: "#78350F", 4: "#92400E", 3: "#B45309", 2: "#475569", 1: "#94A3B8"}
+    _MS_BG  = {5: "#78350F", 4: "#92400E", 3: "#B45309"}   # bg only for top-3
+
+    def _ms_badge_html(ms_r) -> str:
+        """Return HTML span for a Morningstar rating integer.
+
+        Only filled stars are shown (no empty stars): ☆ on a coloured background
+        is visually indistinguishable from ★ in white text, which caused ratings
+        like 3★ to appear as 5★.  Showing only the earned stars is unambiguous.
+        """
+        try:
+            v = int(ms_r)
+        except (TypeError, ValueError):
+            return "<span style='color:#94A3B8;'>—</span>"
+        filled = "★" * v          # e.g. "★★★" for 3 — no empty stars
+        bg = _MS_BG.get(v)
+        if bg:
+            return (f"<span style='background:{bg};color:#fff;padding:2px 8px;"
+                    f"border-radius:4px;font-weight:700;font-size:.8rem;'>"
+                    f"{filled}</span>")
+        col = _MS_COL.get(v, "#64748B")
+        return (f"<span style='color:{col};font-weight:700;font-size:.8rem;'>"
+                f"{filled}</span>")
+
     # Shared HTML style tokens
     _TH  = ("background:#0D1B2A;color:#fff;font-size:.74rem;"
             "padding:8px 10px;white-space:nowrap;")
@@ -2719,6 +3009,7 @@ def main():
             f"<th style='{_TH}text-align:center;'>Rating Medio</th>"
             f"<th style='{_TH}text-align:left;'>Cat. FIDA</th>"
             f"<th style='{_TH}text-align:center;'>FIDArating</th>"
+            f"<th style='{_TH}text-align:center;'>Morningstar</th>"
             f"</tr>"
         )
         _tbl_body = ""
@@ -2747,6 +3038,8 @@ def main():
                 if _fr_bg else
                 f"<span style='color:{_fr_col};font-weight:700;'>{_fida}</span>"
             )
+            _ms_r = _ms_live.get(_tr["nome"], {}).get("ms_rating")
+            _ms_cell = _ms_badge_html(_ms_r)
             _tbl_body += (
                 f"<tr>"
                 f"<td style='{_TC}font-weight:500;'>{_fund_link(_tr['nome'])}</td>"
@@ -2758,6 +3051,7 @@ def main():
                 f"<td style='{_TC}text-align:center;font-weight:{_rat_w};'>{_rat_s}</td>"
                 f"<td style='{_TC}color:#64748B;'>{_cat}</td>"
                 f"<td style='{_TC}text-align:center;'>{_fida_cell}</td>"
+                f"<td style='{_TC}text-align:center;'>{_ms_cell}</td>"
                 f"</tr>"
             )
         if _tbl_body:
@@ -2768,10 +3062,14 @@ def main():
                 f"<thead>{_scomp_hdr}</thead><tbody>{_tbl_body}</tbody>"
                 f"</table></div>",
                 unsafe_allow_html=True)
+            _ms_note = (f" &nbsp;·&nbsp; Morningstar: FondiOnline"
+                        if _ms_with_rating else
+                        " &nbsp;·&nbsp; Morningstar: clicca «Scarica Rating Morningstar»")
             st.markdown(
                 f"<p style='{_note_style}'>"
                 f"Duration &amp; Rating Medio: {_note_fb}"
-                f" &nbsp;·&nbsp; Cat. FIDA &amp; FIDArating: {_note_fd}</p>",
+                f" &nbsp;·&nbsp; Cat. FIDA &amp; FIDArating: {_note_fd}"
+                f"{_ms_note}</p>",
                 unsafe_allow_html=True)
 
     # ── TAB 2 — RENDIMENTI ───────────────────────────────────────────────────
@@ -2856,18 +3154,38 @@ def main():
                 _u_wtd  += _uu  * _wu
                 _iu_wtd += _iuu * _wu
                 _u_covw += _wu
+            # FIDArating badge
+            _fd_ov_u  = _fd_live.get(_nu, {}).get("overview", {})
+            _fida_u   = _fd_ov_u.get("fida_rating") or "—"
+            try:
+                _fri_u  = int(_fida_u)
+                _fcol_u = _FIDA_COL.get(_fri_u, "#64748B")
+                _fbg_u  = _FIDA_BG.get(_fri_u)
+            except (ValueError, TypeError):
+                _fcol_u, _fbg_u = "#64748B", None
+            _fida_cell_u = (
+                f"<span style='background:{_fbg_u};color:#fff;padding:2px 8px;"
+                f"border-radius:4px;font-weight:700;'>{_fida_u}</span>"
+                if _fbg_u else
+                f"<span style='color:{_fcol_u};font-weight:700;'>{_fida_u}</span>"
+            )
+            # Morningstar badge
+            _ms_r_u    = _ms_live.get(_nu, {}).get("ms_rating")
+            _ms_cell_u = _ms_badge_html(_ms_r_u)
             _u_funds.append([
                 _fund_link(_nu),
                 f"{_wu*100:.1f}%",
                 f"{_uu:.2f}%"  if _uu  is not None else "—",
                 f"{_iuu:.2f}%" if _iuu is not None else "—",
+                _fida_cell_u,
+                _ms_cell_u,
             ])
         _ptf_unp  = f"{_u_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
         _ptf_iunp = f"{_iu_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
         st.markdown(
             _html_table(
-                ["Fondo", "Peso", "%UNP", "%IUNP36"],
-                [_ptf_row_label, "100%", _ptf_unp, _ptf_iunp],
+                ["Fondo", "Peso", "%UNP", "%IUNP36", "FIDArating", "Morningstar"],
+                [_ptf_row_label, "100%", _ptf_unp, _ptf_iunp, "", ""],
                 _u_funds,
             ),
             unsafe_allow_html=True)
