@@ -1343,45 +1343,56 @@ def _fo_load_isin_map() -> dict:
     return _FO_ISIN_MAP
 
 
-def _fo_parse_sitemap_xml(xml_text: str, result: dict):
-    """Extract ISIN → URL pairs from a sitemap XML string."""
-    try:
-        root = ET.fromstring(xml_text)
-        ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-        for loc in root.findall("sm:url/sm:loc", ns):
-            url = (loc.text or "").strip()
-            if "/elenco-fondi/" in url:
-                m = re.search(r'-([A-Z]{2}[A-Z0-9]{10})\.html$', url)
-                if m:
-                    result[m.group(1)] = url
-    except Exception:
-        pass
+def _fo_parse_category_page(html_text: str, result: dict):
+    """Extract ISIN → URL pairs from a FondiOnline category listing page.
+
+    Each fund link on a category page has the form:
+        href="/elenco-fondi/cat-slug/fund-slug-ISIN.html"
+    The ISIN (12-char: 2 letters + 10 alphanumeric) is the last token before .html.
+    """
+    for m in re.finditer(
+        r'href="(/elenco-fondi/[^"]*-([A-Z]{2}[A-Z0-9]{10})\.html)"',
+        html_text
+    ):
+        result[m.group(2)] = f"{FONDIONLINE_BASE}{m.group(1)}"
 
 
 def _fo_build_from_sitemap() -> dict:
-    """Fetch FondiOnline sitemaps and build ISIN → URL dict."""
+    """Build ISIN → URL dict by scraping FondiOnline category listing pages.
+
+    Strategy (sitemap only has category-level pages, NOT individual fund pages):
+      1. Fetch sitemap.xml to discover all /elenco-fondi/*.html category URLs.
+      2. Scrape each category page in parallel; each page lists individual fund
+         links whose URLs end with '-ISIN.html' — extract ISIN → URL from hrefs.
+    """
     result: dict = {}
     try:
-        r = requests.get(f"{FONDIONLINE_BASE}/sitemap.xml",
-                         headers=FONDIONLINE_HDR, timeout=15)
-        if r.status_code != 200:
+        # Step 1: discover all category page URLs from sitemap
+        r0 = requests.get(f"{FONDIONLINE_BASE}/sitemap.xml",
+                          headers=FONDIONLINE_HDR, timeout=15)
+        if r0.status_code != 200:
             return result
-        root = ET.fromstring(r.text)
-        ns_sm = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-        # If it's a sitemap index, recurse into sub-sitemaps
-        sub_locs = [e.text for e in root.findall("sm:sitemap/sm:loc", ns_sm)
-                    if e.text]
-        if sub_locs:
-            for sub_url in sub_locs:
-                try:
-                    sr = requests.get(sub_url, headers=FONDIONLINE_HDR, timeout=10)
-                    if sr.status_code == 200:
-                        _fo_parse_sitemap_xml(sr.text, result)
-                except Exception:
-                    pass
-        else:
-            # Direct sitemap
-            _fo_parse_sitemap_xml(r.text, result)
+        cat_urls = list({
+            m.group(0) for m in re.finditer(
+                r'https://www\.fondionline\.it/elenco-fondi/[^<\s]+\.html',
+                r0.text
+            )
+        })
+        if not cat_urls:
+            return result
+
+        # Step 2: scrape each category page in parallel
+        def _scrape(url: str) -> str:
+            try:
+                sr = requests.get(url, headers=FONDIONLINE_HDR, timeout=8)
+                return sr.text if sr.status_code == 200 else ""
+            except Exception:
+                return ""
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            for html in pool.map(_scrape, cat_urls):
+                if html:
+                    _fo_parse_category_page(html, result)
     except Exception:
         pass
     return result
@@ -2747,12 +2758,14 @@ def main():
         _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
                   .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
         if not _df_ms.empty:
-            _pb_ms = st.progress(0, text="Carico mappa ISIN FondiOnline…")
-            # Eagerly load sitemap (shows progress while loading)
+            _pb_ms = st.progress(0, text="Scarico mappa fondi da FondiOnline (pagine categoria)…")
+            # Build ISIN map: scrapes all category pages from FondiOnline sitemap.
+            # This can take ~20-40 s on first run; result is cached to disk.
             _fo_load_isin_map()
-            _pb_ms.progress(0.1, text="Scarico rating Morningstar…")
+            _n_isin = len(_FO_ISIN_MAP)
+            _pb_ms.progress(0.35, text=f"Mappa pronta: {_n_isin} fondi trovati. Scarico rating…")
             def _upd_ms(v):
-                _pb_ms.progress(0.1 + v * 0.9, text=f"Morningstar: {int(v*100)}%…")
+                _pb_ms.progress(0.35 + v * 0.65, text=f"Morningstar: {int(v*100)}%…")
             _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df, _upd_ms)
             _pb_ms.empty()
             save_ms_cache(_ms_new)
