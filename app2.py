@@ -2515,6 +2515,282 @@ def free_portfolio_ui(data):
 
 
 # ════════════════════════════════════════════════════════════
+# GLOBAL PERSPECTIVES — PDF parsing & SUGGERITO portfolio
+# ════════════════════════════════════════════════════════════
+
+def _resolve_nome_for_fd(nome_pdf: str, fund_data: dict) -> str:
+    """Map a PDF-format name (e.g. "AZ Allocation - Balanced Plus") to the
+    actual key present in fund_data (usually an Excel-abbreviated form like
+    "AZ F.1 All. Balanced Plus A Cap EUR").  Uses the same normalisation logic
+    as UNP lookup.  Falls back to nome_pdf if no match is found."""
+    if not fund_data or nome_pdf in fund_data:
+        return nome_pdf
+    norm = _normalize_for_unp(nome_pdf)
+    norm = _FUND_ALIASES.get(norm, norm)
+    best_key, best_len = None, 0
+    for key in fund_data:
+        k_norm = _normalize_for_unp(key)
+        k_norm = _FUND_ALIASES.get(k_norm, k_norm)
+        if k_norm == norm:
+            return key                               # exact normalised match
+        if (k_norm in norm or norm in k_norm) and len(k_norm) > best_len:
+            best_key, best_len = key, len(k_norm)
+    return best_key if best_key else nome_pdf
+
+
+def parse_global_perspectives(pdf_bytes: bytes):
+    """Parse a *Global Perspectives* quarterly PDF and return the three
+    Azimut View scenario portfolios (Base, Bear, Bull), excluding private-
+    market funds (ELTIF, RAIF, Demos, …).
+
+    Returns
+    -------
+    dict | None
+        ``{
+            "Base": {
+                "info": "Equity 32% · Bond 38% · Private Markets 30%",
+                "funds": [
+                    {"nome": "AZ Allocation - Balanced Plus",
+                     "gruppo": "ALLOCATION",
+                     "categoria": "Bilanciati/Flessibili",
+                     "az_pct": 0.50, "obb_pct": 0.50, "weight": 0.045},
+                    ...
+                ],
+                "subcat_weights": {"alloc_balanced": 25, ...},
+            },
+            "Bear": {...},
+            "Bull": {...},
+        }``
+    or ``None`` if the PDF could not be recognised.
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        return None
+    import io as _io
+
+    # ── 1. Extract text page by page ──────────────────────────────────────────
+    try:
+        pages = []
+        with pdfplumber.open(_io.BytesIO(pdf_bytes)) as pdf:
+            for pg in pdf.pages:
+                t = pg.extract_text()
+                if t:
+                    pages.append(t)
+    except Exception:
+        return None
+    if not pages:
+        return None
+    full = "\n".join(pages)
+
+    # ── 2. Locate scenario section boundaries ─────────────────────────────────
+    _SC_PATS: dict = {
+        "Base": [r"AZIMUT\s+VIEW\s+SCENARIO\s+BASE", r"Scenario\s+Base"],
+        "Bear": [r"AZIMUT\s+VIEW\s+SCENARIO\s+BEAR", r"Scenario\s+Bear"],
+        "Bull": [r"AZIMUT\s+VIEW\s+SCENARIO\s+BULL", r"Scenario\s+Bull"],
+    }
+    positions: dict = {}
+    for sc, pats in _SC_PATS.items():
+        for pat in pats:
+            m = re.search(pat, full, re.IGNORECASE)
+            if m:
+                positions[sc] = m.start()
+                break
+    if len(positions) < 3:
+        return None
+
+    sorted_sc = sorted(positions, key=lambda k: positions[k])
+    sections: dict = {}
+    for i, sc in enumerate(sorted_sc):
+        start = positions[sc]
+        end   = positions[sorted_sc[i + 1]] if i + 1 < len(sorted_sc) else len(full)
+        sections[sc] = full[start:end]
+
+    # ── 3. Sub-category meta ──────────────────────────────────────────────────
+    _SUBCAT_LABELS: list = [
+        ("alloc_balanced",  r"Allocation\s*[-–]\s*Balanced"),
+        ("alloc_flexible",  r"Allocation\s*[-–]\s*Flex"),
+        ("bond_aggregate",  r"Bond\s*[-–]\s*Aggregate"),
+        ("bond_thematic",   r"Bond\s*[-–]\s*Thematic"),
+        ("bond_em",         r"Bond\s*[-–]\s*Paesi\s+emergenti"),
+        ("bond_target",     r"Bond\s*[-–]\s*Target"),
+        ("equity_thematic", r"Equity\s*[-–]\s*Thematic"),
+        ("equity_dev",      r"Equity\s*[-–]\s*Paesi\s+sviluppati"),
+        ("equity_em",       r"Equity\s*[-–]\s*Paesi\s+emergenti"),
+    ]
+    _SUBCAT_GROUP = {
+        "alloc_balanced": "ALLOCATION",   "alloc_flexible": "ALLOCATION",
+        "bond_aggregate": "BOND",         "bond_thematic":  "BOND",
+        "bond_em":        "BOND",         "bond_target":    "BOND",
+        "equity_thematic":"AZIONARI (LONG)",
+        "equity_dev":     "AZIONARI (LONG)", "equity_em": "AZIONARI (LONG)",
+    }
+    _SUBCAT_CAT = {
+        "alloc_balanced":  "Bilanciati/Flessibili",
+        "alloc_flexible":  "Bilanciati/Flessibili",
+        "bond_aggregate":  "Obbligazionari", "bond_thematic": "Obbligazionari",
+        "bond_em":         "Obbligazionari", "bond_target":   "Obbligazionari",
+        "equity_thematic": "Azionari",
+        "equity_dev":      "Azionari",       "equity_em":     "Azionari",
+    }
+    # Private-market keywords → skip these fund lines
+    _PRIV_KW = frozenset([
+        "raif", "eltif", "demos ", "yhox", "direct investments",
+        "hybrid growth", "automobile", "infrastrutture", "real assets",
+        "digitech fund", "young group", "alicrowd", "hipstr", " p103",
+        "italia 500", "globALinvest", "borletti", "broadlight", "highpost",
+        "roundshield", "pensinsula", "ophelia", "gp stakes", "kennedy lewis",
+        "digital assets", "bcp asia", "valsabbina", "d-orbit",
+        "escalator 1", "escalator 2",
+    ])
+
+    def _is_priv(name: str) -> bool:
+        n = name.lower()
+        return any(k in n for k in _PRIV_KW)
+
+    # ── 4. Parse each scenario ────────────────────────────────────────────────
+    result: dict = {}
+
+    for sc_name, sect in sections.items():
+        # ── 4a. Sub-category weights from pie-chart text ──────────────────────
+        fc_m  = re.search(r"Fondi\s+consigliati", sect, re.IGNORECASE)
+        pie   = sect[:fc_m.start()] if fc_m else sect
+        sw: dict = {}
+        for key, lbl_pat in _SUBCAT_LABELS:
+            for m in re.finditer(lbl_pat, pie, re.IGNORECASE):
+                # Search for "N%" within ±200 chars of the label match
+                win  = pie[max(0, m.start() - 200): m.end() + 50]
+                nums = re.findall(r'(\d{1,2})\s*%', win)
+                for n in nums:
+                    v = int(n)
+                    if 1 <= v <= 50:
+                        sw[key] = v
+                        break
+                if key in sw:
+                    break
+
+        # ── 4b. Parse "Fondi consigliati" section ─────────────────────────────
+        if not fc_m:
+            continue
+        fc_txt = sect[fc_m.start():]
+
+        cur_group:  str | None = None
+        cur_subcat: str | None = None
+        fund_subcat: dict = {}      # fund_name → subcat_key
+
+        for line in fc_txt.split("\n"):
+            l = line.strip()
+            if not l:
+                continue
+            # — Group headers —
+            if   re.match(r'^ALLOCATION$',    l, re.I): cur_group = "allocation";  cur_subcat = None
+            elif re.match(r'^BOND$',          l, re.I): cur_group = "bond";         cur_subcat = None
+            elif re.match(r'^EQUITY$',        l, re.I): cur_group = "equity";       cur_subcat = None
+            elif re.match(r'^PRIVATE\s',      l, re.I): cur_group = "private";      cur_subcat = None
+            # — Sub-category headers —
+            elif re.match(r'^BALANCED$',      l, re.I): cur_subcat = "alloc_balanced"
+            elif re.match(r'^FLEXIBLE$',      l, re.I): cur_subcat = "alloc_flexible"
+            elif re.match(r'^AGGREGATE',      l, re.I): cur_subcat = "bond_aggregate"
+            elif re.match(r'^THEMATIC$',      l, re.I):
+                cur_subcat = "bond_thematic" if cur_group == "bond" else "equity_thematic"
+            elif re.match(r'^TARGET',         l, re.I): cur_subcat = "bond_target"
+            elif re.match(r'^PAESI\s+EMERGENTI$', l, re.I):
+                cur_subcat = "bond_em" if cur_group == "bond" else "equity_em"
+            elif re.match(r'^PAESI\s+SVILUPPATI$', l, re.I): cur_subcat = "equity_dev"
+            elif re.match(r'^EMERGENTI$',     l, re.I):
+                cur_subcat = "bond_em" if cur_group == "bond" else "equity_em"
+            elif re.match(r'^SVILUPPATI$',    l, re.I): cur_subcat = "equity_dev"
+            # — Fund lines —
+            elif re.search(r'AZ\s+Fund\s+1\s*[-–]', l, re.I):
+                m = re.search(r'AZ\s+Fund\s+1\s*[-–]\s*(AZ\s+\S.+)', l, re.I)
+                if m and cur_subcat and cur_group != "private":
+                    raw_nm = m.group(1).strip().rstrip("*").strip()
+                    if raw_nm and not _is_priv(raw_nm):
+                        fund_subcat[raw_nm] = cur_subcat
+
+        # ── 4c. Compute equal-weight per sub-category ─────────────────────────
+        subcat_funds: dict = {}
+        for fname, sc_key in fund_subcat.items():
+            subcat_funds.setdefault(sc_key, []).append(fname)
+
+        total_liq = sum(sw.get(k, 0) for k in subcat_funds)
+        if total_liq == 0:
+            total_liq = sum(sw.values()) or 70
+
+        records: list = []
+        for sc_key, funds in subcat_funds.items():
+            w_sc = sw.get(sc_key, 0)
+            if not funds:
+                continue
+            w_per = ((w_sc / len(funds)) / total_liq) if w_sc else (1.0 / max(len(fund_subcat), 1))
+            grp = _SUBCAT_GROUP.get(sc_key, "ALLOCATION")
+            cat = _SUBCAT_CAT.get(sc_key, "Altro")
+            az  = DEFAULT_AZ.get(get_macro(cat), 0.5)
+            for fname in funds:
+                records.append({
+                    "nome":     fname,
+                    "gruppo":   grp,
+                    "categoria": cat,
+                    "az_pct":   az,
+                    "obb_pct":  1.0 - az,
+                    "weight":   w_per,
+                    "subcat":   sc_key,
+                })
+
+        # ── 4d. Info string from summary paragraph ────────────────────────────
+        info_m = re.search(
+            r'azioni\s+(\d+)%.*?obbligazioni\s+(\d+)%.*?private\s+markets\s+(\d+)%',
+            sect, re.IGNORECASE | re.DOTALL)
+        info = (f"Equity {info_m.group(1)}% · Bond {info_m.group(2)}%"
+                f" · Private Markets {info_m.group(3)}%") if info_m else ""
+
+        result[sc_name] = {
+            "info":           info,
+            "funds":          records,
+            "subcat_weights": sw,
+        }
+
+    return result if result else None
+
+
+def build_suggerito_df(scenario: dict, fund_data: dict):
+    """Build a portfolio DataFrame from one SUGGERITO scenario dict.
+
+    Fund names from the PDF (full form) are resolved against *fund_data* keys
+    (Excel-abbreviated form) so that existing ``.get(row["nome"])`` cache
+    lookups work correctly even in SUGGERITO mode.
+    """
+    funds = scenario.get("funds", [])
+    if not funds:
+        return None
+    records: list = []
+    for f in funds:
+        nome = _resolve_nome_for_fd(f["nome"], fund_data)
+        records.append({
+            "nome":      nome,
+            "categoria": f["categoria"],
+            "gruppo":    f["gruppo"],
+            "macro_cat": get_macro(f["categoria"]),
+            "az_pct":    f["az_pct"],
+            "obb_pct":   f["obb_pct"],
+            "r_weight":  f["weight"],
+            "w_cons":    f["weight"],
+            "w_equil":   f["weight"],
+            "w_accr":    f["weight"],
+        })
+    if not records:
+        return None
+    df = pd.DataFrame(records)
+    for wc in ("w_cons", "w_equil", "w_accr"):
+        t = df[wc].sum()
+        if t > 0:
+            df[wc] /= t
+    df["macro_cat"] = df["categoria"].apply(get_macro)
+    df = assign_colors(df)
+    return df
+
+
+# ════════════════════════════════════════════════════════════
 # MAIN APP
 # ════════════════════════════════════════════════════════════
 
@@ -2630,14 +2906,82 @@ def main():
         else:
             st.caption("⬆️ Carica prima il file Excel")
 
+        # ── Global Perspectives PDF ──────────────────────────────────────────────
         st.markdown("---")
-        ptf_choice = st.radio("TIPO PORTAFOGLIO", ["📋  PTF FULL","⚡  PTF SHORT","🎨  LIBERO"])
+        uploaded_gp = st.file_uploader(
+            "GLOBAL PERSPECTIVES PDF",
+            type=["pdf"],
+            help="Carica il PDF Global Perspectives trimestrale per attivare "
+                 "la modalità SUGGERITO con i 3 scenari (Base / Bear / Bull). "
+                 "Il file viene re-parsato solo quando cambia.",
+        )
+        if uploaded_gp is not None:
+            # Re-parse only when a new file is uploaded (name change = new edition)
+            if st.session_state.get("_gp_filename") != uploaded_gp.name:
+                with st.spinner("📄 Parsing Global Perspectives…"):
+                    _gp_parsed = parse_global_perspectives(uploaded_gp.read())
+                if _gp_parsed:
+                    st.session_state["_gp_data"]     = _gp_parsed
+                    st.session_state["_gp_filename"]  = uploaded_gp.name
+                    _n_gp = sum(len(v["funds"]) for v in _gp_parsed.values())
+                    st.success(
+                        f"✅ GP — {_n_gp} fondi · "
+                        f"{', '.join(_gp_parsed.keys())}")
+                else:
+                    st.session_state.pop("_gp_data", None)
+                    st.warning("⚠️ PDF non riconosciuto — verifica che sia un "
+                               "Global Perspectives Azimut.")
+            elif st.session_state.get("_gp_data"):
+                _gp_ok = st.session_state["_gp_data"]
+                _n_gp  = sum(len(v["funds"]) for v in _gp_ok.values())
+                st.markdown(
+                    f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                    f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+                    f"color:#86efac;margin-bottom:.5rem;line-height:1.5;'>"
+                    f"✅ <b>Global Perspectives</b> — {_n_gp} fondi "
+                    f"({', '.join(_gp_ok.keys())})</div>",
+                    unsafe_allow_html=True)
+        else:
+            # If file removed, clear cached data
+            if st.session_state.get("_gp_filename"):
+                st.session_state.pop("_gp_data",     None)
+                st.session_state.pop("_gp_filename",  None)
+
+        st.markdown("---")
+        _gp_loaded    = bool(st.session_state.get("_gp_data"))
+        _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO"]
+        if _gp_loaded:
+            _ptf_options.append("🌐  SUGGERITO")
+        ptf_choice = st.radio("TIPO PORTAFOGLIO", _ptf_options)
         st.markdown("---")
         profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0)
         if "LIBERO" not in ptf_choice and "free_ptf" in st.session_state:
             del st.session_state["free_ptf"]
+        # ── Scenario sub-selector (SUGGERITO only) ────────────────────────────
+        if "SUGGERITO" in ptf_choice:
+            _gp_keys = list(st.session_state.get("_gp_data", {}).keys())
+            _SC_LABELS = {
+                "Base": "⚖️  Scenario Base",
+                "Bear": "🐻  Scenario Bear",
+                "Bull": "🐂  Scenario Bull",
+            }
+            _sc_opts = [_SC_LABELS.get(k, k) for k in _gp_keys]
+            if _sc_opts:
+                _sc_sel = st.radio("SCENARIO", _sc_opts, key="_gp_sc_radio")
+                st.session_state["_gp_sc_key"] = next(
+                    (k for k, v in _SC_LABELS.items() if v == _sc_sel),
+                    _gp_keys[0])
+                # Show scenario info
+                _sc_info = st.session_state["_gp_data"].get(
+                    st.session_state["_gp_sc_key"], {}).get("info", "")
+                if _sc_info:
+                    st.caption(f"📊 {_sc_info}")
 
     ptf_label = ptf_choice.split("  ",1)[1] if "  " in ptf_choice else ptf_choice
+    _is_suggerito = "SUGGERITO" in ptf_choice
+    if _is_suggerito:
+        _sc_key_hdr = st.session_state.get("_gp_sc_key", "Base")
+        ptf_label   = f"SUGGERITO — Scenario {_sc_key_hdr}"
 
     # ── Invalidate cached PDF when portfolio type or profile changes ──────────
     _ptf_key = f"{ptf_choice}|{profile}"
@@ -2648,49 +2992,56 @@ def main():
 
     st.markdown(f"""<div class="az-header"><div class="az-eyebrow">AZIMUT INVESTMENTS · AAS EMILIA ROMAGNA MARCHE UMBRIA</div><div class="az-rule"></div><div class="az-title">{ptf_label}</div><div class="az-meta">{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()} &nbsp;·&nbsp; {datetime.date.today().strftime('%d %B %Y')}</div></div>""",unsafe_allow_html=True)
 
-    if uploaded is None:
+    if uploaded is None and not _is_suggerito:
         st.info("⬅️ **Carica il file Excel** nella barra laterale per iniziare.")
         return
 
-    with st.spinner("⏳ Caricamento dati…"):
-        file_bytes = uploaded.read()
-        raw = parse_excel(file_bytes)
+    if uploaded is not None:
+        with st.spinner("⏳ Caricamento dati…"):
+            file_bytes = uploaded.read()
+            raw = parse_excel(file_bytes)
+    else:
+        raw = {}
 
-    # ── Sidebar-triggered FondiDoc fetch ──────────────────────────────────────
-    if st.session_state.pop("_fetch_fd_requested", False):
-        _fida_urls_all = raw.get("fida_urls", {})
-        _sheets = [raw[s] for s in ("PTF FULL", "PTF SHORT")
-                   if s in raw and not raw[s].empty]
-        _df_all = (pd.concat(_sheets, ignore_index=True)
-                   .drop_duplicates(subset=["nome"]) if _sheets else pd.DataFrame())
-        if not _df_all.empty:
-            _pb_fd = st.progress(0, text="Scarico dati FondiDoc…")
-            def _upd_fd(v): _pb_fd.progress(v, text=f"FondiDoc: {int(v*100)}%…")
-            _fd_new = fetch_all_fund_data(_df_all, _fida_urls_all, _upd_fd)
-            _pb_fd.empty()
-            save_fund_cache(_fd_new)
-            st.session_state["_scomp_fd"] = _fd_new
-            st.rerun()
-        else:
-            st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
+    # ── Sidebar-triggered FondiDoc / MS fetch (only when Excel is loaded) ───────
+    if uploaded is not None:
+        if st.session_state.pop("_fetch_fd_requested", False):
+            _fida_urls_all = raw.get("fida_urls", {})
+            _sheets = [raw[s] for s in ("PTF FULL", "PTF SHORT")
+                       if s in raw and not raw[s].empty]
+            _df_all = (pd.concat(_sheets, ignore_index=True)
+                       .drop_duplicates(subset=["nome"]) if _sheets else pd.DataFrame())
+            if not _df_all.empty:
+                _pb_fd = st.progress(0, text="Scarico dati FondiDoc…")
+                def _upd_fd(v): _pb_fd.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+                _fd_new = fetch_all_fund_data(_df_all, _fida_urls_all, _upd_fd)
+                _pb_fd.empty()
+                save_fund_cache(_fd_new)
+                st.session_state["_scomp_fd"] = _fd_new
+                st.rerun()
+            else:
+                st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
 
-    # ── Sidebar-triggered Morningstar (FondiOnline) fetch ─────────────────────
-    if st.session_state.pop("_fetch_ms_requested", False):
-        _fida_df   = raw.get("FIDA", pd.DataFrame())
-        _sheets_ms = [raw[s] for s in ("PTF FULL", "PTF SHORT")
-                      if s in raw and not raw[s].empty]
-        _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
-                  .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
-        if not _df_ms.empty:
-            with st.spinner("⭐ Scarico rating Morningstar da FondiOnline…"):
-                _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
-            save_ms_cache(_ms_new)
-            st.session_state["_ms_data"] = _ms_new
-            _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
-            st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
-            st.rerun()
-        else:
-            st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
+        if st.session_state.pop("_fetch_ms_requested", False):
+            _fida_df   = raw.get("FIDA", pd.DataFrame())
+            _sheets_ms = [raw[s] for s in ("PTF FULL", "PTF SHORT")
+                          if s in raw and not raw[s].empty]
+            _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
+                      .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
+            if not _df_ms.empty:
+                with st.spinner("⭐ Scarico rating Morningstar da FondiOnline…"):
+                    _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
+                save_ms_cache(_ms_new)
+                st.session_state["_ms_data"] = _ms_new
+                _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
+                st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
+                st.rerun()
+            else:
+                st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
+    else:
+        # Drain any stale fetch flags so they don't fire when Excel is later loaded
+        st.session_state.pop("_fetch_fd_requested", None)
+        st.session_state.pop("_fetch_ms_requested", None)
 
     # ── Factbook data ──────────────────────────────────────────────────────────
     # Priority:
@@ -2744,7 +3095,21 @@ def main():
         else:
             st.warning("⚠️ Excel Factbook vuoto — uso dati precedenti")
 
-    if "LIBERO" in ptf_choice:
+    if _is_suggerito:
+        _gp_data_main = st.session_state.get("_gp_data", {})
+        _sc_key_main  = st.session_state.get("_gp_sc_key", "Base")
+        _sc_data_main = _gp_data_main.get(_sc_key_main)
+        if not _sc_data_main:
+            st.warning("📄 Carica il PDF **Global Perspectives** nella barra "
+                       "laterale per vedere i portafogli suggeriti.")
+            return
+        _fd_for_gp = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
+        df = build_suggerito_df(_sc_data_main, _fd_for_gp)
+        if df is None or df.empty:
+            st.warning("⚠️ Nessun fondo trovato nel scenario selezionato — "
+                       "verifica il PDF caricato.")
+            return
+    elif "LIBERO" in ptf_choice:
         df = free_portfolio_ui(raw)
     else:
         key = "PTF FULL" if "FULL" in ptf_choice else "PTF SHORT"
