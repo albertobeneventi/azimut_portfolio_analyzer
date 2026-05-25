@@ -3269,9 +3269,11 @@ def main():
         _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO"]
         if _gp_loaded:
             _ptf_options.append("🌐  SUGGERITO")
-        ptf_choice = st.radio("TIPO PORTAFOGLIO", _ptf_options)
+        ptf_choice = st.radio("TIPO PORTAFOGLIO", _ptf_options,
+                              key="_ptf_choice_radio")
         st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
-        profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0)
+        profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0,
+                                  key="_profile_select")
         if "LIBERO" not in ptf_choice and "free_ptf" in st.session_state:
             del st.session_state["free_ptf"]
         # ── Scenario sub-selector (SUGGERITO only) ────────────────────────────
