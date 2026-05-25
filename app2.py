@@ -3250,14 +3250,18 @@ def main():
 
         _all_ok = bool(_fd_now and _ms_with_rating
                        and (_gp_miss == 0 if _gp_loaded_now else True))
+        _fetch_done = bool(st.session_state.get("_fetch_ever_done"))
+        _should_pulse = not _all_ok and not _fetch_done
         if _all_ok:
+            # Verde: tutto aggiornato
             st.markdown(
                 f"<div style='background:#0d2b1a;border:1px solid #166534;"
                 f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
                 f"color:#86efac;margin-bottom:.4rem;line-height:1.8;'>"
                 f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
                 unsafe_allow_html=True)
-        else:
+        elif _should_pulse:
+            # Rosso lampeggiante: aggiornamento mai eseguito
             st.markdown(
                 "<style>@keyframes warn-pulse{"
                 "0%{box-shadow:0 0 0 0 rgba(239,68,68,.0);border-color:#b91c1c;}"
@@ -3268,6 +3272,14 @@ def main():
                 f"border-radius:8px;padding:.5rem .85rem;font-size:.75rem;font-weight:600;"
                 f"color:#fca5a5;margin-bottom:.4rem;line-height:1.9;"
                 f"animation:warn-pulse 1.6s ease-in-out infinite;'>"
+                f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
+                unsafe_allow_html=True)
+        else:
+            # Giallo sobrio: aggiornato ma alcuni fondi non trovati su FondiDoc
+            st.markdown(
+                f"<div style='background:#1a1a08;border:1px solid #854d0e;"
+                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+                f"color:#fde68a;margin-bottom:.4rem;line-height:1.8;'>"
                 f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
                 unsafe_allow_html=True)
 
@@ -3385,6 +3397,7 @@ def main():
                 _pb_fd.empty()
                 save_fund_cache(_fd_new)
                 st.session_state["_scomp_fd"] = _fd_new
+                st.session_state["_fetch_ever_done"] = True
                 st.rerun()
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
@@ -3400,6 +3413,7 @@ def main():
                     _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
                 save_ms_cache(_ms_new)
                 st.session_state["_ms_data"] = _ms_new
+                st.session_state["_fetch_ever_done"] = True
                 _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
                 st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
                 st.rerun()
@@ -3421,6 +3435,7 @@ def main():
             _quick = raw.get("fida_urls", {}) if uploaded is not None else {}
             _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp, quick_urls=_quick)
             _pb_gp.empty()
+            st.session_state["_fetch_ever_done"] = True
             if _gp_new:
                 # Merge into existing cache and save
                 _fd_merged = {**_fd_base, **_gp_new}
