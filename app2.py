@@ -1293,154 +1293,59 @@ def fetch_all_fund_data(df: pd.DataFrame, fida_urls: dict,
 
 
 # ════════════════════════════════════════════════════════════
-# FONDIONLINE SCRAPING — Morningstar rating
+# FONDIONLINE API — Morningstar rating
 # ════════════════════════════════════════════════════════════
+# FondiOnline exposes a JSON API used by its fund screener page.
+# One HTTP request returns all funds for a company with Rating field.
 
-FONDIONLINE_BASE = "https://www.fondionline.it"
-FONDIONLINE_HDR  = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
-    "Accept": "text/html,application/xhtml+xml",
+FONDIONLINE_BASE    = "https://www.fondionline.it"
+FO_API_URL          = "https://www.fondionline.it/offers-list"
+FO_AZ_COMPANY_ID    = "0C00001L0E"   # Azimut Investments S.A. (Morningstar ID)
+FONDIONLINE_HDR     = {
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+    "Accept":          "application/json, text/plain, */*",
     "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+    "Referer":         "https://www.fondionline.it/fondi/elenco_prodotti.html",
 }
 
-# Module-level ISIN → FondiOnline URL cache (populated once from sitemap)
-_FO_ISIN_MAP: dict = {}
-_FO_MAP_LOADED: bool = False
 
-FO_ISIN_MAP_FILE = Path("data/fo_isin_map.json")
+def _fo_fetch_company_ratings(company_id: str) -> dict:
+    """Fetch all Morningstar ratings for one company via FondiOnline JSON API.
 
-
-def _fo_load_isin_map() -> dict:
-    """Return (and lazy-build) the ISIN → FondiOnline URL mapping.
-
-    Priority:
-    1. In-memory cache (_FO_ISIN_MAP)
-    2. data/fo_isin_map.json on disk
-    3. Live fetch of FondiOnline sitemaps
-    """
-    global _FO_ISIN_MAP, _FO_MAP_LOADED
-    if _FO_MAP_LOADED:
-        return _FO_ISIN_MAP
-    # Try disk cache first
-    if FO_ISIN_MAP_FILE.exists():
-        try:
-            _FO_ISIN_MAP = json.loads(FO_ISIN_MAP_FILE.read_text(encoding="utf-8"))
-            _FO_MAP_LOADED = True
-            return _FO_ISIN_MAP
-        except Exception:
-            pass
-    # Build from sitemap
-    _FO_ISIN_MAP = _fo_build_from_sitemap()
-    _FO_MAP_LOADED = True
-    if _FO_ISIN_MAP:
-        try:
-            FO_ISIN_MAP_FILE.parent.mkdir(parents=True, exist_ok=True)
-            FO_ISIN_MAP_FILE.write_text(
-                json.dumps(_FO_ISIN_MAP, ensure_ascii=False),
-                encoding="utf-8")
-        except Exception:
-            pass
-    return _FO_ISIN_MAP
-
-
-def _fo_parse_category_page(html_text: str, result: dict):
-    """Extract ISIN → URL pairs from a FondiOnline category listing page.
-
-    Each fund link on a category page has the form:
-        href="/elenco-fondi/cat-slug/fund-slug-ISIN.html"
-    The ISIN (12-char: 2 letters + 10 alphanumeric) is the last token before .html.
-    """
-    for m in re.finditer(
-        r'href="(/elenco-fondi/[^"]*-([A-Z]{2}[A-Z0-9]{10})\.html)"',
-        html_text
-    ):
-        result[m.group(2)] = f"{FONDIONLINE_BASE}{m.group(1)}"
-
-
-def _fo_build_from_sitemap() -> dict:
-    """Build ISIN → URL dict by scraping FondiOnline category listing pages.
-
-    Strategy (sitemap only has category-level pages, NOT individual fund pages):
-      1. Fetch sitemap.xml to discover all /elenco-fondi/*.html category URLs.
-      2. Scrape each category page in parallel; each page lists individual fund
-         links whose URLs end with '-ISIN.html' — extract ISIN → URL from hrefs.
+    Single HTTP request — returns {ISIN: {"ms_rating": int|None, "fo_url": str|None}}.
+    The API paginates; we request pageSize=1000 to get everything in one shot
+    (Azimut has ~310 funds total).
     """
     result: dict = {}
     try:
-        # Step 1: discover all category page URLs from sitemap
-        r0 = requests.get(f"{FONDIONLINE_BASE}/sitemap.xml",
-                          headers=FONDIONLINE_HDR, timeout=15)
-        if r0.status_code != 200:
-            return result
-        cat_urls = list({
-            m.group(0) for m in re.finditer(
-                r'https://www\.fondionline\.it/elenco-fondi/[^<\s]+\.html',
-                r0.text
-            )
-        })
-        if not cat_urls:
-            return result
-
-        # Step 2: scrape each category page in parallel
-        def _scrape(url: str) -> str:
-            try:
-                sr = requests.get(url, headers=FONDIONLINE_HDR, timeout=8)
-                return sr.text if sr.status_code == 200 else ""
-            except Exception:
-                return ""
-
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            for html in pool.map(_scrape, cat_urls):
-                if html:
-                    _fo_parse_category_page(html, result)
-    except Exception:
-        pass
-    return result
-
-
-def _fo_find_url(isin: str) -> str | None:
-    """Return FondiOnline URL for a fund by ISIN, or None."""
-    if not isin or len(isin) < 10:
-        return None
-    isin_map = _fo_load_isin_map()
-    return isin_map.get(isin.strip())
-
-
-def _fo_extract_ms_rating(html: str) -> int | None:
-    """Extract Morningstar star rating (1-5) from a FondiOnline fund page."""
-    if not html:
-        return None
-    soup = BeautifulSoup(html, "lxml")
-    lines = [l.strip() for l in soup.get_text(separator="\n").split("\n") if l.strip()]
-    for i, line in enumerate(lines):
-        # Patterns: "Rating Morningstar" / "Morningstar" followed by a number
-        if "morningstar" in line.lower():
-            # Check next few lines for a standalone digit 1-5
-            for j in range(i, min(i + 8, len(lines))):
-                m = re.match(r'^([1-5])\s*(stelle?)?$', lines[j], re.IGNORECASE)
-                if m:
-                    return int(m.group(1))
-            # Also check inline: "Rating Morningstar: 4" or "Morningstar 4 stelle"
-            m = re.search(r'([1-5])\s*stelle?', line, re.IGNORECASE)
-            if m:
-                return int(m.group(1))
-            m = re.search(r'morningstar[:\s]+([1-5])', line, re.IGNORECASE)
-            if m:
-                return int(m.group(1))
-    return None
-
-
-def fetch_ms_for_fund(nome: str, isin: str) -> dict:
-    """Fetch Morningstar rating for one fund via FondiOnline."""
-    result: dict = {"ms_rating": None, "fo_url": None}
-    url = _fo_find_url(isin)
-    if not url:
-        return result
-    try:
-        r = requests.get(url, headers=FONDIONLINE_HDR, timeout=8)
+        r = requests.get(
+            FO_API_URL,
+            params={
+                "productType":      "OICR",
+                "sortOrder":        "asc",
+                "pageNumber":       1,
+                "pageSize":         1000,
+                "tab":              0,
+                "fundId":           "",
+                "orderBy":          "Name",
+                "brandingCompanyId": company_id,
+                "distribution":     -1,
+            },
+            headers=FONDIONLINE_HDR,
+            timeout=15,
+        )
         if r.status_code == 200:
-            result["fo_url"]    = url
-            result["ms_rating"] = _fo_extract_ms_rating(r.text)
+            data = r.json()
+            for fund in data.get("funds", []):
+                isin   = (fund.get("ISIN") or "").strip()
+                rating = fund.get("Rating")          # "1"…"5" or absent
+                url    = (f"{FONDIONLINE_BASE}/elenco-fondi/{fund['detailsUrl']}"
+                          if fund.get("detailsUrl") else None)
+                if isin:
+                    result[isin] = {
+                        "ms_rating": int(rating) if rating else None,
+                        "fo_url":    url,
+                    }
     except Exception:
         pass
     return result
@@ -1448,35 +1353,31 @@ def fetch_ms_for_fund(nome: str, isin: str) -> dict:
 
 def fetch_all_ms_ratings(df: pd.DataFrame, fida_df: pd.DataFrame,
                           progress_cb=None) -> dict:
-    """Parallel fetch of Morningstar ratings for all portfolio funds.
+    """Fetch Morningstar ratings for all portfolio funds via FondiOnline API.
 
-    Uses ISIN from the FIDA sheet to locate FondiOnline pages.
+    Replaces the old per-page scraping approach with a single JSON API call.
     Returns {fund_name: {"ms_rating": int_or_None, "fo_url": str_or_None}}.
     """
-    # Build ISIN lookup from FIDA sheet
-    isin_map: dict = {}
+    # 1. Build nome → ISIN map from FIDA sheet
+    nome_to_isin: dict = {}
     if not fida_df.empty and "isin" in fida_df.columns:
         for _, fr in fida_df.iterrows():
-            if fr.get("isin"):
-                isin_map[fr["nome"]] = str(fr["isin"]).strip()
+            isin = str(fr.get("isin") or "").strip()
+            if isin:
+                nome_to_isin[fr["nome"]] = isin
 
-    tasks = {nome: isin_map.get(nome, "") for nome in df["nome"].unique()}
+    portfolio_names = list(df["nome"].unique()) if not df.empty else []
+
+    # 2. One API call → ISIN → {ms_rating, fo_url}
+    isin_to_ms = _fo_fetch_company_ratings(FO_AZ_COMPANY_ID)
+    if progress_cb:
+        progress_cb(1.0)
+
+    # 3. Match portfolio funds by ISIN
     results: dict = {}
-    total = max(len(tasks), 1)
-    done  = 0
-
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futs = {pool.submit(fetch_ms_for_fund, nome, isin): nome
-                for nome, isin in tasks.items()}
-        for fut in as_completed(futs):
-            nome = futs[fut]
-            try:
-                results[nome] = fut.result()
-            except Exception:
-                results[nome] = {"ms_rating": None, "fo_url": None}
-            done += 1
-            if progress_cb:
-                progress_cb(done / total)
+    for nome in portfolio_names:
+        isin = nome_to_isin.get(nome, "")
+        results[nome] = isin_to_ms.get(isin, {"ms_rating": None, "fo_url": None})
 
     return results
 
@@ -2758,16 +2659,8 @@ def main():
         _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
                   .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
         if not _df_ms.empty:
-            _pb_ms = st.progress(0, text="Scarico mappa fondi da FondiOnline (pagine categoria)…")
-            # Build ISIN map: scrapes all category pages from FondiOnline sitemap.
-            # This can take ~20-40 s on first run; result is cached to disk.
-            _fo_load_isin_map()
-            _n_isin = len(_FO_ISIN_MAP)
-            _pb_ms.progress(0.35, text=f"Mappa pronta: {_n_isin} fondi trovati. Scarico rating…")
-            def _upd_ms(v):
-                _pb_ms.progress(0.35 + v * 0.65, text=f"Morningstar: {int(v*100)}%…")
-            _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df, _upd_ms)
-            _pb_ms.empty()
+            with st.spinner("⭐ Scarico rating Morningstar da FondiOnline…"):
+                _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
             save_ms_cache(_ms_new)
             st.session_state["_ms_data"] = _ms_new
             _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
