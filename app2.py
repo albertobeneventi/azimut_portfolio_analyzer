@@ -1608,29 +1608,22 @@ def _mpl_annual_bar(annual_perf: dict, fund_name: str) -> io.BytesIO | None:
             years.append(y); vals.append(num)
         except: pass
     if not years: return None
-    fig, ax = plt.subplots(figsize=(6, 2.2))
-    colors = ["#2D9D78" if v >= 0 else "#E05252" for v in vals]
+    fig, ax = plt.subplots(figsize=(6,2.2))
+    colors = ["#2D9D78" if v>=0 else "#E05252" for v in vals]
     bars = ax.bar(years, vals, color=colors, edgecolor="white", linewidth=0.8, width=0.6)
     ax.axhline(0, color="#94A3B8", linewidth=0.8, linestyle="-")
-    for bar, val in zip(bars, vals):
-        ax.text(bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + (0.3 if val >= 0 else -0.9),
+    for bar,val in zip(bars,vals):
+        ax.text(bar.get_x()+bar.get_width()/2,
+                bar.get_height()+(0.3 if val>=0 else -0.9),
                 f"{val:+.1f}%", ha="center", va="bottom", fontsize=7, fontweight="bold",
-                color="#2D9D78" if val >= 0 else "#E05252")
-    # Limiti y espliciti — impedisce che bbox_inches="tight" espanda il PNG
-    # a dimensioni abnormi (es. 3251pt) su server Linux headless
-    _yabs = max(abs(v) for v in vals) if vals else 10
-    ax.set_ylim(-_yabs * 1.45, _yabs * 1.45)
+                color="#2D9D78" if val>=0 else "#E05252")
     ax.set_ylabel("%", fontsize=8, color="#64748B")
-    ax.tick_params(axis="both", labelsize=8, colors="#475569")
-    ax.spines[["top", "right", "left"]].set_visible(False)
+    ax.tick_params(axis="both",labelsize=8,colors="#475569")
+    ax.spines[["top","right","left"]].set_visible(False)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
-    ax.grid(axis="y", alpha=0.3, linestyle="--")
-    fig.patch.set_facecolor("#FFFFFF")
-    plt.tight_layout(pad=0.5)
-    buf = io.BytesIO()
-    # NO bbox_inches="tight": mantiene figsize esatto (6×2.2 in → 780×286 px a 130dpi)
-    fig.savefig(buf, format="png", dpi=130, facecolor="white")
+    ax.grid(axis="y",alpha=0.3,linestyle="--")
+    fig.patch.set_facecolor("#FFFFFF"); plt.tight_layout(pad=0.5)
+    buf=io.BytesIO(); fig.savefig(buf,format="png",dpi=130,bbox_inches="tight",facecolor="white")
     plt.close(fig); buf.seek(0); return buf
 
 
@@ -1648,48 +1641,6 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=1.5*cm, rightMargin=1.5*cm,
                             topMargin=1.5*cm, bottomMargin=1.5*cm)
-
-    # ── Helper: immagine a dimensioni esatte ─────────────────────────────────
-    # Su server Linux, matplotlib con bbox_inches="tight" può produrre PNG con
-    # altezze abnormi (es. 3251pt). Questa funzione garantisce dimensioni esatte.
-    # Strategia: crea immagine PIL NUOVA (senza metadati DPI) così RLImage
-    # legge esattamente _w × _h pt (1px = 1pt a 72dpi default).
-    def _img(buf_or_path, fw, fh):
-        _w = max(1, round(fw))
-        _h = max(1, round(fh))
-        try:
-            from PIL import Image as _PIL
-            # Compatibilità Pillow 9.x e 10.x per il filtro di campionamento
-            _rs = (getattr(getattr(_PIL, 'Resampling', None), 'LANCZOS', None)
-                   or getattr(_PIL, 'LANCZOS', None)
-                   or 1)
-            if hasattr(buf_or_path, 'seek'):
-                buf_or_path.seek(0)
-            _src = _PIL.open(buf_or_path)
-            _src.load()                          # forza lettura completa
-            _src = _src.convert('RGB')
-            _src = _src.resize((_w, _h), _rs)
-            # Immagine NUOVA senza metadati DPI → RLImage legge 1px = 1pt ✓
-            _out = _PIL.new('RGB', (_w, _h), (255, 255, 255))
-            _out.paste(_src)
-            _b = io.BytesIO()
-            _out.save(_b, format='PNG')          # nessun chunk pHYs
-            _b.seek(0)
-            return RLImage(_b)
-        except Exception:
-            pass
-        # Fallback PIL: RLImage lazy=0 (dimensioni lette subito) poi override
-        if hasattr(buf_or_path, 'seek'):
-            buf_or_path.seek(0)
-        try:
-            _ri = RLImage(buf_or_path, lazy=0)
-            _ri.drawWidth  = fw
-            _ri.drawHeight = fh
-            _ri.imageWidth = fw
-            _ri.imageHeight = fh
-            return _ri
-        except Exception:
-            return Spacer(fw, fh)               # placeholder sicuro
 
     ss = getSampleStyleSheet()
     def S(name,**kw): return ParagraphStyle(name,parent=ss["Normal"],**kw)
@@ -1784,7 +1735,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     # — Grafico 1: fondi con hyperlink (torta + legenda a 2 colonne affiancate) —
     pie_buf = _mpl_portfolio_pie(d_act, wcol, profile)
-    pie_img = _img(pie_buf, PIE_W, PIE_W)
+    pie_img = RLImage(pie_buf, width=PIE_W, height=PIE_W)
     d_leg   = d_act[d_act[wcol] > 0.005].sort_values(wcol, ascending=False)
 
     # Costruisci le celle della legenda
@@ -1826,60 +1777,34 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     combo1 = Table([[pie_img, leg_tbl]], colWidths=[PIE_W, LEG_W])
     combo1.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
 
-    # — Grafico 2: asset allocation — torta grande, centrata, legenda spaziosa —
-    PIE_W2   = 8.0 * cm
-    DOT_W2   = 0.45 * cm
-    LG2 = S("LG2", fontName="Helvetica", fontSize=11,
-            textColor=rl_colors.HexColor("#1E293B"), leading=17)
-
-    def _dot2(hex_color):
-        t = Table([[""]], colWidths=[DOT_W2], rowHeights=[DOT_W2])
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), rl_colors.HexColor(hex_color)),
-        ]))
-        return t
-
+    # — Grafico 2: asset allocation — piccola, affiancata alla legenda (sotto la torta) —
+    PIE_W2 = 5.0 * cm
     macro_buf = _mpl_macro_pie(d_act, wcol)
     macro_block = []
     if macro_buf:
-        macro_img = _img(macro_buf, PIE_W2, PIE_W2)
+        macro_img = RLImage(macro_buf, width=PIE_W2, height=PIE_W2)
         w_az_v  = (d_act[wcol] * d_act["az_pct"]).sum()
         w_obb_v = (d_act[wcol] * d_act["obb_pct"]).sum()
-        LEG2_TXT = 6.5 * cm
         macro_leg_rows = [
-            [_dot2("#1B4FBB"), Paragraph(f'Azionario  <b>{w_az_v*100:.1f}%</b>', LG2)],
-            [_dot2("#2D9D78"), Paragraph(f'Obbligazionario  <b>{w_obb_v*100:.1f}%</b>', LG2)],
+            [_dot("#1B4FBB"), Paragraph(f'Azionario  <b>{w_az_v*100:.1f}%</b>', LG)],
+            [_dot("#2D9D78"), Paragraph(f'Obbligazionario  <b>{w_obb_v*100:.1f}%</b>', LG)],
         ]
-        macro_leg_inner = Table(macro_leg_rows, colWidths=[DOT_W2 + 0.15*cm, LEG2_TXT])
+        macro_leg_inner = Table(macro_leg_rows, colWidths=[DOT_W, 5*cm])
         macro_leg_inner.setStyle(TableStyle([
             ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 10),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 10),
-            ("LEFTPADDING",   (1,0), (1,-1),  10),
-            ("LEFTPADDING",   (0,0), (0,-1),   0),
+            ("TOPPADDING",    (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ("LEFTPADDING",   (1,0), (1,-1),  5),
+            ("LEFTPADDING",   (0,0), (0,-1),  0),
         ]))
-        # Torta + legenda centrate nella pagina (padding sinistro = spazio rimanente / 2)
-        BLOCK_W  = PIE_W2 + DOT_W2 + 0.15*cm + LEG2_TXT   # ~15.1 cm
-        PAD_LEFT = max((PW - BLOCK_W) / 2, 0)
-        # Padding superiore per centrare verticalmente la legenda rispetto alla torta
-        # 2 righe × (leading 17pt + top 10pt + bottom 10pt) = ~74pt
-        LEG_TOP_PAD = max((PIE_W2 - 74) / 2, 0)   # PIE_W2 in pt (cm×28.35)
-        LEG_TOP_PAD = max((PIE_W2 * 28.35 - 74) / 2, 0)
-        macro_row = Table(
-            [[macro_img, macro_leg_inner]],
-            colWidths=[PIE_W2, PW - PIE_W2],
-        )
+        # Torta macro + legenda affiancate, allineate sinistra
+        macro_row = Table([[macro_img, macro_leg_inner]],
+                          colWidths=[PIE_W2, PW - PIE_W2])
         macro_row.setStyle(TableStyle([
-            ("LEFTPADDING",   (0,0), (0,0),   PAD_LEFT),
-            ("LEFTPADDING",   (1,0), (1,0),   14),
-            ("RIGHTPADDING",  (0,0), (-1,-1),  0),
-            ("TOPPADDING",    (0,0), (-1,-1),  0),
-            ("BOTTOMPADDING", (0,0), (-1,-1),  0),
-            # Spinge la legenda in basso per centrarla rispetto all'altezza torta
-            ("TOPPADDING",    (1,0), (1,0),    LEG_TOP_PAD),
-            ("VALIGN",        (0,0), (-1,-1), "TOP"),
+            ("VALIGN",  (0,0), (-1,-1), "MIDDLE"),
+            ("PADDING", (0,0), (-1,-1), 0),
         ]))
-        macro_block = [Spacer(1, 18), macro_row]
+        macro_block = [Spacer(1, 6), macro_row]
 
     # Tutto il blocco grafici in KeepTogether → rimane sulla stessa pagina
     story.append(KeepTogether([combo1] + macro_block))
@@ -2521,7 +2446,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         if bar_buf:
             card += [Spacer(1,3),
                      Paragraph("<b>Performance Annuale (%)</b>", SM),
-                     _img(bar_buf, PW, 2.4 * cm)]
+                     RLImage(bar_buf, width=PW, height=2.4*cm)]
         story.append(KeepTogether(card))
 
         # Separatore sottile tra schede
@@ -3299,38 +3224,15 @@ def main():
 
         _all_ok = bool(_fd_now and _ms_with_rating
                        and (_gp_miss == 0 if _gp_loaded_now else True))
-        _fetch_done = bool(st.session_state.get("_fetch_ever_done"))
-        _should_pulse = not _all_ok and not _fetch_done
-        if _all_ok:
-            # Verde: tutto aggiornato
-            st.markdown(
-                f"<div style='background:#0d2b1a;border:1px solid #166534;"
-                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-                f"color:#86efac;margin-bottom:.4rem;line-height:1.8;'>"
-                f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
-                unsafe_allow_html=True)
-        elif _should_pulse:
-            # Rosso lampeggiante: aggiornamento mai eseguito
-            st.markdown(
-                "<style>@keyframes warn-pulse{"
-                "0%{box-shadow:0 0 0 0 rgba(239,68,68,.0);border-color:#b91c1c;}"
-                "50%{box-shadow:0 0 10px 4px rgba(239,68,68,.55);border-color:#ef4444;}"
-                "100%{box-shadow:0 0 0 0 rgba(239,68,68,.0);border-color:#b91c1c;}}"
-                "</style>"
-                f"<div style='background:#2d0a0a;border:2px solid #b91c1c;"
-                f"border-radius:8px;padding:.5rem .85rem;font-size:.75rem;font-weight:600;"
-                f"color:#fca5a5;margin-bottom:.4rem;line-height:1.9;"
-                f"animation:warn-pulse 1.6s ease-in-out infinite;'>"
-                f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
-                unsafe_allow_html=True)
-        else:
-            # Giallo sobrio: aggiornato ma alcuni fondi non trovati su FondiDoc
-            st.markdown(
-                f"<div style='background:#1a1a08;border:1px solid #854d0e;"
-                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-                f"color:#fde68a;margin-bottom:.4rem;line-height:1.8;'>"
-                f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
-                unsafe_allow_html=True)
+        _card_bg  = "#0d2b1a" if _all_ok else "#1a1a08"
+        _card_brd = "#166534" if _all_ok else "#854d0e"
+        _card_clr = "#86efac" if _all_ok else "#fde68a"
+        st.markdown(
+            f"<div style='background:{_card_bg};border:1px solid {_card_brd};"
+            f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+            f"color:{_card_clr};margin-bottom:.4rem;line-height:1.8;'>"
+            f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
+            unsafe_allow_html=True)
 
         # ── Unico tasto Aggiorna Dati ─────────────────────────────────────────
         _can_update  = bool(uploaded or _gp_loaded_now)
@@ -3446,7 +3348,6 @@ def main():
                 _pb_fd.empty()
                 save_fund_cache(_fd_new)
                 st.session_state["_scomp_fd"] = _fd_new
-                st.session_state["_fetch_ever_done"] = True
                 st.rerun()
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
@@ -3462,7 +3363,6 @@ def main():
                     _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
                 save_ms_cache(_ms_new)
                 st.session_state["_ms_data"] = _ms_new
-                st.session_state["_fetch_ever_done"] = True
                 _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
                 st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
                 st.rerun()
@@ -3484,7 +3384,6 @@ def main():
             _quick = raw.get("fida_urls", {}) if uploaded is not None else {}
             _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp, quick_urls=_quick)
             _pb_gp.empty()
-            st.session_state["_fetch_ever_done"] = True
             if _gp_new:
                 # Merge into existing cache and save
                 _fd_merged = {**_fd_base, **_gp_new}
