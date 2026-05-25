@@ -1300,13 +1300,17 @@ def _fondidoc_search_url(query: str) -> str | None:
 
 
 def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
-                           progress_cb=None) -> dict:
+                           progress_cb=None, quick_urls: dict | None = None) -> dict:
     """Cerca su FondiDoc i fondi del GP che non sono già in cache.
 
     Per ogni fondo mancante tenta prima con il nome PDF normalizzato,
-    poi con il nome risolto (Excel abbreviato).
+    poi con il nome risolto (Excel abbreviato), poi con il nome breve.
+    quick_urls (es. _fida_urls_raw dall'Excel) vengono usati direttamente
+    senza chiamate di rete per i fondi corrispondenti.
     Restituisce {nome_risolto: fund_data_dict} da aggiungere alla cache.
     """
+    quick_urls = quick_urls or {}
+
     # Raccoglie tutti i nomi GP unici (PDF → risolto)
     # Include fondi assenti dal cache E fondi in cache ma senza URL
     missing: dict = {}   # resolved_name → pdf_name
@@ -1317,47 +1321,65 @@ def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
             has_url = (
                 existing_cache.get(res_name, {}).get("url", "")
                 or existing_cache.get(pdf_name, {}).get("url", "")
+                or quick_urls.get(res_name, "")
+                or quick_urls.get(pdf_name, "")
             )
             if not has_url:
                 missing[res_name] = pdf_name
 
-    if not missing:
+    if not missing and not quick_urls:
         return {}
 
     results: dict = {}
-    total = len(missing)
+
+    # Pre-pass: URL già disponibili in quick_urls (Excel hyperlinks) — nessuna rete
+    still_missing: dict = {}
+    for res_name, pdf_name in missing.items():
+        url = quick_urls.get(res_name) or quick_urls.get(pdf_name)
+        if url:
+            results[res_name] = {"url": url}
+        else:
+            still_missing[res_name] = pdf_name
+
+    total = len(still_missing)
     done  = 0
 
     def _try_fetch(res_name: str, pdf_name: str):
-        # Query 1: nome abbreviato Excel (più preciso)
+        # Query 1: nome risolto/abbreviato Excel
         url = _fondidoc_search_url(res_name)
-        # Query 2: nome PDF se la prima fallisce
+        # Query 2: nome PDF completo
         if not url and pdf_name != res_name:
             url = _fondidoc_search_url(pdf_name)
+        # Query 3: nome breve (strip "AZ [Famiglia] - ")
+        if not url:
+            short = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', pdf_name, flags=re.I).strip()
+            if short and short not in (res_name, pdf_name):
+                url = _fondidoc_search_url(short)
         if url:
             try:
                 data = fetch_fund_data(url)
-                return res_name, data
+                return res_name, data if data else {"url": url}
             except Exception:
-                pass
+                return res_name, {"url": url}
         return res_name, {}
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {
-            pool.submit(_try_fetch, rn, pn): rn
-            for rn, pn in missing.items()
-        }
-        for future in as_completed(futures):
-            rn = futures[future]
-            try:
-                key, data = future.result()
-                if data:
-                    results[key] = data
-            except Exception:
-                pass
-            done += 1
-            if progress_cb:
-                progress_cb(done / total)
+    if still_missing:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {
+                pool.submit(_try_fetch, rn, pn): rn
+                for rn, pn in still_missing.items()
+            }
+            for future in as_completed(futures):
+                rn = futures[future]
+                try:
+                    key, data = future.result()
+                    if data:
+                        results[key] = data
+                except Exception:
+                    pass
+                done += 1
+                if progress_cb:
+                    progress_cb(done / total)
 
     return results
 
@@ -2891,7 +2913,8 @@ _SUBCAT_DISPLAY = {
 
 
 def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
-                           fund_data: dict, ms_data: dict):
+                           fund_data: dict, ms_data: dict,
+                           extra_urls: dict | None = None):
     """Interactive portfolio builder for a SUGGERITO scenario.
 
     Shows macro-category headers with the scenario-suggested weight, then
@@ -2978,6 +3001,8 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
             url_sg = (
                 (fund_data or {}).get(resolved, {}).get("url", "")
                 or (fund_data or {}).get(fname, {}).get("url", "")
+                or (extra_urls or {}).get(resolved, "")
+                or (extra_urls or {}).get(fname, "")
             )
             name_html = (
                 f'<a href="{url_sg}" target="_blank" rel="noopener noreferrer" '
@@ -3354,7 +3379,8 @@ def main():
             _pb_gp = st.progress(0, text="Cerco fondi GP su FondiDoc…")
             def _upd_gp(v):
                 _pb_gp.progress(v, text=f"Ricerca fondi GP: {int(v*100)}%…")
-            _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp)
+            _quick = raw.get("fida_urls", {}) if uploaded is not None else {}
+            _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp, quick_urls=_quick)
             _pb_gp.empty()
             if _gp_new:
                 # Merge into existing cache and save
@@ -3432,8 +3458,10 @@ def main():
             return
         _fd_for_gp = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
         _ms_for_gp = st.session_state.get("_ms_data") or load_ms_cache()
+        _fida_urls_gp = raw.get("fida_urls", {}) if uploaded is not None else {}
         df = suggerito_portfolio_ui(_sc_key_main, _sc_data_main,
-                                    _fd_for_gp, _ms_for_gp)
+                                    _fd_for_gp, _ms_for_gp,
+                                    extra_urls=_fida_urls_gp)
         if df is None or df.empty:
             return  # weights not balanced yet — builder is shown, analysis waits
     elif "LIBERO" in ptf_choice:
