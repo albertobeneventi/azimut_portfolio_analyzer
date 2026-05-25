@@ -2776,15 +2776,22 @@ def parse_global_perspectives(pdf_bytes: bytes):
         sw: dict = {}
         for key, lbl_pat in _SUBCAT_LABELS:
             for m in re.finditer(lbl_pat, pie, re.IGNORECASE):
-                # Search for "N%" within ±200 chars of the label match
-                win  = pie[max(0, m.start() - 200): m.end() + 50]
-                nums = re.findall(r'(\d{1,2})\s*%', win)
-                for n in nums:
-                    v = int(n)
+                # Search for "N%" within ±200 chars of the label match.
+                # Usa il numero PIÙ VICINO all'etichetta (non il primo)
+                # per evitare di catturare percentuali di altre etichette
+                # nel layout a 2 colonne compresso da pdfplumber.
+                win_start = max(0, m.start() - 200)
+                win = pie[win_start: m.end() + 50]
+                best_v, best_dist = None, 999999
+                for mn in re.finditer(r'(\d{1,2})\s*%', win):
+                    v = int(mn.group(1))
                     if 1 <= v <= 50:
-                        sw[key] = v
-                        break
-                if key in sw:
+                        num_pos = win_start + mn.start()
+                        dist = abs(num_pos - m.start())
+                        if dist < best_dist:
+                            best_v, best_dist = v, dist
+                if best_v is not None:
+                    sw[key] = best_v
                     break
 
         # ── 4b. Parse "Fondi consigliati" section ─────────────────────────────
