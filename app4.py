@@ -3383,22 +3383,34 @@ def main():
             if _all_ok:
                 _btn_bg   = "linear-gradient(135deg,#14532d,#16A34A)"
                 _btn_anim = ""
+                _btn_shadow_kf = ""
             elif _any_data:
                 _btn_bg   = "linear-gradient(135deg,#78350f,#D97706)"
                 _btn_anim = ""
+                _btn_shadow_kf = ""
             else:
                 _btn_bg   = "linear-gradient(135deg,#7f1d1d,#DC2626)"
                 _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite;"
+                _btn_shadow_kf = (
+                    "@keyframes _aggiorna_blink{"
+                    "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
+                    "50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}"
+                )
+            # Selettori multipli per compatibilità con le versioni di Streamlit
+            _btn_sel = (
+                "section[data-testid='stSidebar'] div[data-testid='stButton'] > button,"
+                "section[data-testid='stSidebar'] div[data-testid='stBaseButton-secondary'],"
+                "section[data-testid='stSidebar'] .stButton > button"
+            )
             st.markdown(
                 f"<style>"
-                f"section[data-testid='stSidebar'] .stButton>button{{"
+                f"{_btn_sel}{{"
                 f"background:{_btn_bg} !important;"
                 f"color:#fff !important;border:none !important;"
                 f"font-weight:600 !important;{_btn_anim}}}"
-                f"section[data-testid='stSidebar'] .stButton>button:hover{{"
-                f"filter:brightness(1.15) !important;}}"
-                f"@keyframes _aggiorna_blink{{"
-                f"0%,100%{{opacity:1}}50%{{opacity:.4}}}}"
+                f"{_btn_sel}:hover{{"
+                f"filter:brightness(1.18) !important;}}"
+                f"{_btn_shadow_kf}"
                 f"</style>",
                 unsafe_allow_html=True)
             if st.button("📥  Aggiorna Dati",
