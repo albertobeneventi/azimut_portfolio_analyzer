@@ -3250,15 +3250,26 @@ def main():
 
         _all_ok = bool(_fd_now and _ms_with_rating
                        and (_gp_miss == 0 if _gp_loaded_now else True))
-        _card_bg  = "#0d2b1a" if _all_ok else "#1a1a08"
-        _card_brd = "#166534" if _all_ok else "#854d0e"
-        _card_clr = "#86efac" if _all_ok else "#fde68a"
-        st.markdown(
-            f"<div style='background:{_card_bg};border:1px solid {_card_brd};"
-            f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-            f"color:{_card_clr};margin-bottom:.4rem;line-height:1.8;'>"
-            f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
-            unsafe_allow_html=True)
+        if _all_ok:
+            st.markdown(
+                f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+                f"color:#86efac;margin-bottom:.4rem;line-height:1.8;'>"
+                f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
+                unsafe_allow_html=True)
+        else:
+            st.markdown(
+                "<style>@keyframes warn-pulse{"
+                "0%{box-shadow:0 0 0 0 rgba(239,68,68,.0);border-color:#b91c1c;}"
+                "50%{box-shadow:0 0 10px 4px rgba(239,68,68,.55);border-color:#ef4444;}"
+                "100%{box-shadow:0 0 0 0 rgba(239,68,68,.0);border-color:#b91c1c;}}"
+                "</style>"
+                f"<div style='background:#2d0a0a;border:2px solid #b91c1c;"
+                f"border-radius:8px;padding:.5rem .85rem;font-size:.75rem;font-weight:600;"
+                f"color:#fca5a5;margin-bottom:.4rem;line-height:1.9;"
+                f"animation:warn-pulse 1.6s ease-in-out infinite;'>"
+                f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
+                unsafe_allow_html=True)
 
         # ── Unico tasto Aggiorna Dati ─────────────────────────────────────────
         _can_update  = bool(uploaded or _gp_loaded_now)
