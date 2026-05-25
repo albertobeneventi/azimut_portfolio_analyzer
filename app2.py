@@ -3108,9 +3108,10 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
             short = re.sub(r'^AZ\s+(?:Allocation|Bond|Equity)\s*[-–]\s*',
                            '', fname, flags=re.I).strip()
 
-            # URL lookup (usa chiave aggiornata e fallback extra_urls)
+            # URL lookup: override manuale → cache → extra_urls → fuzzy
             url_sg = (
-                _fd_entry.get("url", "")
+                MANUAL_URL_OVERRIDES.get(fname, "")
+                or _fd_entry.get("url", "")
                 or (extra_urls or {}).get(resolved, "")
                 or (extra_urls or {}).get(fname, "")
             )
@@ -3446,7 +3447,11 @@ def main():
         _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO"]
         if _gp_loaded:
             _ptf_options.append("🌐  SUGGERITO")
+        # Forza index esplicito: evita che st.rerun() resetti la selezione
+        _cur_ptf = st.session_state.get("_ptf_choice_radio", _ptf_options[0])
+        _ptf_idx = _ptf_options.index(_cur_ptf) if _cur_ptf in _ptf_options else 0
         ptf_choice = st.radio("TIPO PORTAFOGLIO", _ptf_options,
+                              index=_ptf_idx,
                               key="_ptf_choice_radio")
         st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0,
@@ -3930,10 +3935,10 @@ def main():
 
     def _fund_url(nome: str) -> str:
         """Return the FondiDoc URL for a fund, or '' if not available.
-        Prova prima la ricerca diretta per chiave, poi fuzzy (nome breve)
-        per gestire i casi in cui la chiave cache differisce dal nome GP.
+        Prova prima MANUAL_URL_OVERRIDES, poi cache, poi fuzzy.
         """
-        url = (_fd_live.get(nome, {}).get("url", "")
+        url = (MANUAL_URL_OVERRIDES.get(nome, "")
+               or _fd_live.get(nome, {}).get("url", "")
                or _fida_urls_raw.get(nome, ""))
         if url:
             return url
