@@ -2688,18 +2688,28 @@ def parse_global_perspectives(pdf_bytes: bytes):
     import io as _io
 
     # ── 1. Extract text page by page ──────────────────────────────────────────
+    # Estrae ENTRAMBI i formati in un solo passaggio:
+    #  • extract_text()           → default, per section/fund parsing
+    #  • extract_text(layout=True) → preserva colonne, per pesi torta
     try:
-        pages = []
+        pages        = []
+        pages_layout = []
         with pdfplumber.open(_io.BytesIO(pdf_bytes)) as pdf:
             for pg in pdf.pages:
-                t = pg.extract_text()
+                t = pg.extract_text() or ""
                 if t:
                     pages.append(t)
+                try:
+                    tl = pg.extract_text(layout=True) or ""
+                except Exception:
+                    tl = ""
+                pages_layout.append(tl)
     except Exception:
         return None
     if not pages:
         return None
-    full = "\n".join(pages)
+    full        = "\n".join(pages)
+    full_layout = "\n".join(pages_layout)
 
     # ── 2. Locate scenario section boundaries ─────────────────────────────────
     _SC_PATS: dict = {
@@ -2723,6 +2733,21 @@ def parse_global_perspectives(pdf_bytes: bytes):
         start = positions[sc]
         end   = positions[sorted_sc[i + 1]] if i + 1 < len(sorted_sc) else len(full)
         sections[sc] = full[start:end]
+
+    # ── 2b. Sezioni layout=True per estrazione colonne torta ──────────────────
+    positions_l: dict = {}
+    for sc, pats in _SC_PATS.items():
+        for pat in pats:
+            ml = re.search(pat, full_layout, re.IGNORECASE)
+            if ml:
+                positions_l[sc] = ml.start()
+                break
+    sorted_sl = sorted(positions_l, key=lambda k: positions_l[k])
+    sections_l: dict = {}
+    for i, sc in enumerate(sorted_sl):
+        sl_s = positions_l[sc]
+        sl_e = positions_l[sorted_sl[i + 1]] if i + 1 < len(sorted_sl) else len(full_layout)
+        sections_l[sc] = full_layout[sl_s:sl_e]
 
     # ── 3. Sub-category meta ──────────────────────────────────────────────────
     _SUBCAT_LABELS: list = [
@@ -2774,25 +2799,62 @@ def parse_global_perspectives(pdf_bytes: bytes):
         fc_m  = re.search(r"Fondi\s+consigliati", sect, re.IGNORECASE)
         pie   = sect[:fc_m.start()] if fc_m else sect
         sw: dict = {}
+
+        # Strategia colonna: usa il testo layout=True che preserva le
+        # posizioni x dei caratteri (come pdftotext -layout). Così la
+        # torta a 2 colonne mantiene l'allineamento visivo e il numero
+        # che appartiene a un'etichetta è quello alla stessa colonna
+        # (stessa posizione orizzontale) sulle 2 righe precedenti.
+        sect_l  = sections_l.get(sc_name, "")
+        fc_ml   = re.search(r"Fondi\s+consigliati", sect_l, re.IGNORECASE) if sect_l else None
+        pie_l   = (sect_l[:fc_ml.start()] if fc_ml else sect_l) if sect_l else ""
+        pie_ll  = pie_l.split('\n') if pie_l else []
+
         for key, lbl_pat in _SUBCAT_LABELS:
-            for m in re.finditer(lbl_pat, pie, re.IGNORECASE):
-                # Search for "N%" within ±200 chars of the label match.
-                # Usa il numero PIÙ VICINO all'etichetta (non il primo)
-                # per evitare di catturare percentuali di altre etichette
-                # nel layout a 2 colonne compresso da pdfplumber.
-                win_start = max(0, m.start() - 200)
-                win = pie[win_start: m.end() + 50]
-                best_v, best_dist = None, 999999
-                for mn in re.finditer(r'(\d{1,2})\s*%', win):
-                    v = int(mn.group(1))
-                    if 1 <= v <= 50:
-                        num_pos = win_start + mn.start()
-                        dist = abs(num_pos - m.start())
-                        if dist < best_dist:
-                            best_v, best_dist = v, dist
-                if best_v is not None:
-                    sw[key] = best_v
-                    break
+            found = False
+
+            # ── Prima scelta: colonna dal testo layout ────────────────────
+            if pie_ll:
+                for li, lline in enumerate(pie_ll):
+                    lm = re.search(lbl_pat, lline, re.IGNORECASE)
+                    if not lm:
+                        continue
+                    label_col = lm.start()
+                    best_v, best_col_dist = None, 999
+                    # Guarda la stessa riga (prima dell'etichetta) e le 2
+                    # righe precedenti: cerca il numero con la posizione
+                    # orizzontale più vicina a quella dell'etichetta.
+                    for lj in range(max(0, li - 2), li + 1):
+                        src = pie_ll[lj]
+                        if lj == li:
+                            src = src[:label_col]   # solo prima dell'etichetta
+                        for mn in re.finditer(r'(\d{1,2})\s*%', src):
+                            v = int(mn.group(1))
+                            if 1 <= v <= 50:
+                                col_dist = abs(mn.start() - label_col)
+                                if col_dist < best_col_dist:
+                                    best_v, best_col_dist = v, col_dist
+                    if best_v is not None:
+                        sw[key] = best_v
+                        found = True
+                        break
+
+            # ── Fallback: distanza caratteri nel testo standard ───────────
+            if not found:
+                for m in re.finditer(lbl_pat, pie, re.IGNORECASE):
+                    win_start = max(0, m.start() - 200)
+                    win = pie[win_start: m.end() + 50]
+                    best_v2, best_dist = None, 999999
+                    for mn in re.finditer(r'(\d{1,2})\s*%', win):
+                        v = int(mn.group(1))
+                        if 1 <= v <= 50:
+                            num_pos = win_start + mn.start()
+                            dist = abs(num_pos - m.start())
+                            if dist < best_dist:
+                                best_v2, best_dist = v, dist
+                    if best_v2 is not None:
+                        sw[key] = best_v2
+                        break
 
         # ── 4b. Parse "Fondi consigliati" section ─────────────────────────────
         if not fc_m:
