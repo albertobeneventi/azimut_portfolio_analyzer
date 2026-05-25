@@ -1651,22 +1651,45 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     # ── Helper: immagine a dimensioni esatte ─────────────────────────────────
     # Su server Linux, matplotlib con bbox_inches="tight" può produrre PNG con
-    # altezze abnormi (es. 3251pt). Ridimensioniamo con PIL a esattamente
-    # fw×fh PIXEL prima di passare a RLImage (senza width/height args).
-    # A 72dpi (default ReportLab) 1 pixel = 1 punto → drawWidth/drawHeight
-    # saranno esattamente fw×fh senza nessun calcolo _restrictSize.
+    # altezze abnormi (es. 3251pt). Questa funzione garantisce dimensioni esatte.
+    # Strategia: crea immagine PIL NUOVA (senza metadati DPI) così RLImage
+    # legge esattamente _w × _h pt (1px = 1pt a 72dpi default).
     def _img(buf_or_path, fw, fh):
-        from PIL import Image as _PIL
-        if hasattr(buf_or_path, 'seek'):
-            buf_or_path.seek(0)
-        _p = _PIL.open(buf_or_path).convert('RGBA')
         _w = max(1, round(fw))
         _h = max(1, round(fh))
-        _p = _p.resize((_w, _h), _PIL.LANCZOS)
-        _b = io.BytesIO()
-        _p.save(_b, format='PNG')
-        _b.seek(0)
-        return RLImage(_b)          # dimensioni naturali = _w × _h pt ✓
+        try:
+            from PIL import Image as _PIL
+            # Compatibilità Pillow 9.x e 10.x per il filtro di campionamento
+            _rs = (getattr(getattr(_PIL, 'Resampling', None), 'LANCZOS', None)
+                   or getattr(_PIL, 'LANCZOS', None)
+                   or 1)
+            if hasattr(buf_or_path, 'seek'):
+                buf_or_path.seek(0)
+            _src = _PIL.open(buf_or_path)
+            _src.load()                          # forza lettura completa
+            _src = _src.convert('RGB')
+            _src = _src.resize((_w, _h), _rs)
+            # Immagine NUOVA senza metadati DPI → RLImage legge 1px = 1pt ✓
+            _out = _PIL.new('RGB', (_w, _h), (255, 255, 255))
+            _out.paste(_src)
+            _b = io.BytesIO()
+            _out.save(_b, format='PNG')          # nessun chunk pHYs
+            _b.seek(0)
+            return RLImage(_b)
+        except Exception:
+            pass
+        # Fallback PIL: RLImage lazy=0 (dimensioni lette subito) poi override
+        if hasattr(buf_or_path, 'seek'):
+            buf_or_path.seek(0)
+        try:
+            _ri = RLImage(buf_or_path, lazy=0)
+            _ri.drawWidth  = fw
+            _ri.drawHeight = fh
+            _ri.imageWidth = fw
+            _ri.imageHeight = fh
+            return _ri
+        except Exception:
+            return Spacer(fw, fh)               # placeholder sicuro
 
     ss = getSampleStyleSheet()
     def S(name,**kw): return ParagraphStyle(name,parent=ss["Normal"],**kw)
