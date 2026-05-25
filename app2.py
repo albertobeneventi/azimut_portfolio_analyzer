@@ -1347,10 +1347,17 @@ def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
     def _try_fetch(res_name: str, pdf_name: str):
         # Query 1: nome risolto/abbreviato Excel
         url = _fondidoc_search_url(res_name)
-        # Query 2: nome PDF completo
+        # Query 2: nome PDF completo (es. "AZ Allocation - Balanced Plus")
         if not url and pdf_name != res_name:
             url = _fondidoc_search_url(pdf_name)
-        # Query 3 & 4: nome breve (strip "AZ [Famiglia] - ") e variante con "AZ " prefisso
+        # Query 3: prefisso "AZ Fund 1 - " (formato ESATTO usato su FondiDoc:
+        # "AZ Fund 1 - AZ Allocation - Balanced Plus" → trova la pagina corretta
+        # anche quando il nome abbreviato/breve non dà risultati)
+        if not url:
+            _fund1 = "AZ Fund 1 - " + pdf_name
+            if _fund1 not in (res_name, pdf_name):
+                url = _fondidoc_search_url(_fund1)
+        # Query 4 & 5: nome breve (strip "AZ [Famiglia] - ") e variante con "AZ " prefisso
         _short = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', pdf_name, flags=re.I).strip()
         if not url and _short and _short not in (res_name, pdf_name):
             url = _fondidoc_search_url(_short)
