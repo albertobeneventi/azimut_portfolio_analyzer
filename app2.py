@@ -2869,20 +2869,25 @@ def main():
     _MS_BG  = {5: "#78350F", 4: "#92400E", 3: "#B45309"}   # bg only for top-3
 
     def _ms_badge_html(ms_r) -> str:
-        """Return HTML span for a Morningstar rating integer."""
+        """Return HTML span for a Morningstar rating integer.
+
+        Only filled stars are shown (no empty stars): ☆ on a coloured background
+        is visually indistinguishable from ★ in white text, which caused ratings
+        like 3★ to appear as 5★.  Showing only the earned stars is unambiguous.
+        """
         try:
             v = int(ms_r)
         except (TypeError, ValueError):
             return "<span style='color:#94A3B8;'>—</span>"
-        stars = "★" * v + "☆" * (5 - v)
+        filled = "★" * v          # e.g. "★★★" for 3 — no empty stars
         bg = _MS_BG.get(v)
         if bg:
             return (f"<span style='background:{bg};color:#fff;padding:2px 8px;"
                     f"border-radius:4px;font-weight:700;font-size:.8rem;'>"
-                    f"{stars}</span>")
+                    f"{filled}</span>")
         col = _MS_COL.get(v, "#64748B")
         return (f"<span style='color:{col};font-weight:700;font-size:.8rem;'>"
-                f"{stars}</span>")
+                f"{filled}</span>")
 
     # Shared HTML style tokens
     _TH  = ("background:#0D1B2A;color:#fff;font-size:.74rem;"
