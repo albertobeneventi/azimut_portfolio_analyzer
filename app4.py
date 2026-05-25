@@ -1268,6 +1268,122 @@ except Exception:
     pass  # run uncached if decorator fails
 
 
+def _fondidoc_search_url(query: str) -> str | None:
+    """Cerca un fondo su FondiDoc per nome o ISIN.
+
+    Interroga la pagina di ricerca inglese e restituisce il primo URL
+    Index trovato, o None se non trovato / errore di rete.
+    """
+    try:
+        import urllib.parse
+        q = urllib.parse.quote(query)
+        r = requests.get(
+            f"https://www.fondidoc.it/en/Search?q={q}",
+            headers=FONDIDOC_HEADERS,
+            timeout=8,
+            allow_redirects=True,
+        )
+        if r.status_code != 200:
+            return None
+        soup = BeautifulSoup(r.text, "lxml")
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            # Fund detail pages live under /d/Index/ or /d/Ana/
+            if "/d/Index/" in href or "/d/Ana/" in href:
+                href = href.replace("/d/Ana/", "/d/Index/")
+                if href.startswith("http"):
+                    return href
+                return "https://www.fondidoc.it" + href
+    except Exception:
+        pass
+    return None
+
+
+def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
+                           progress_cb=None, quick_urls: dict | None = None) -> dict:
+    """Cerca su FondiDoc i fondi del GP che non sono già in cache.
+
+    Per ogni fondo mancante tenta prima con il nome PDF normalizzato,
+    poi con il nome risolto (Excel abbreviato), poi con il nome breve.
+    quick_urls (es. _fida_urls_raw dall'Excel) vengono usati direttamente
+    senza chiamate di rete per i fondi corrispondenti.
+    Restituisce {nome_risolto: fund_data_dict} da aggiungere alla cache.
+    """
+    quick_urls = quick_urls or {}
+
+    # Raccoglie tutti i nomi GP unici (PDF → risolto)
+    # Include fondi assenti dal cache E fondi in cache ma senza URL
+    missing: dict = {}   # resolved_name → pdf_name
+    for sc_data in gp_data.values():
+        for f in sc_data.get("funds", []):
+            pdf_name = f["nome"]
+            res_name = _resolve_nome_for_fd(pdf_name, existing_cache)
+            has_url = (
+                existing_cache.get(res_name, {}).get("url", "")
+                or existing_cache.get(pdf_name, {}).get("url", "")
+                or quick_urls.get(res_name, "")
+                or quick_urls.get(pdf_name, "")
+            )
+            if not has_url:
+                missing[res_name] = pdf_name
+
+    if not missing and not quick_urls:
+        return {}
+
+    results: dict = {}
+
+    # Pre-pass: URL già disponibili in quick_urls (Excel hyperlinks) — nessuna rete
+    still_missing: dict = {}
+    for res_name, pdf_name in missing.items():
+        url = quick_urls.get(res_name) or quick_urls.get(pdf_name)
+        if url:
+            results[res_name] = {"url": url}
+        else:
+            still_missing[res_name] = pdf_name
+
+    total = len(still_missing)
+    done  = 0
+
+    def _try_fetch(res_name: str, pdf_name: str):
+        # Query 1: nome risolto/abbreviato Excel
+        url = _fondidoc_search_url(res_name)
+        # Query 2: nome PDF completo
+        if not url and pdf_name != res_name:
+            url = _fondidoc_search_url(pdf_name)
+        # Query 3: nome breve (strip "AZ [Famiglia] - ")
+        if not url:
+            short = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', pdf_name, flags=re.I).strip()
+            if short and short not in (res_name, pdf_name):
+                url = _fondidoc_search_url(short)
+        if url:
+            try:
+                data = fetch_fund_data(url)
+                return res_name, data if data else {"url": url}
+            except Exception:
+                return res_name, {"url": url}
+        return res_name, {}
+
+    if still_missing:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {
+                pool.submit(_try_fetch, rn, pn): rn
+                for rn, pn in still_missing.items()
+            }
+            for future in as_completed(futures):
+                rn = futures[future]
+                try:
+                    key, data = future.result()
+                    if data:
+                        results[key] = data
+                except Exception:
+                    pass
+                done += 1
+                if progress_cb:
+                    progress_cb(done / total)
+
+    return results
+
+
 def fetch_all_fund_data(df: pd.DataFrame, fida_urls: dict,
                          progress_cb=None) -> dict:
     """Parallel fetch for all portfolio funds."""
@@ -1523,8 +1639,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
-                            leftMargin=2*cm, rightMargin=2*cm,
-                            topMargin=2.2*cm, bottomMargin=2.2*cm)
+                            leftMargin=1.5*cm, rightMargin=1.5*cm,
+                            topMargin=1.5*cm, bottomMargin=1.5*cm)
 
     ss = getSampleStyleSheet()
     def S(name,**kw): return ParagraphStyle(name,parent=ss["Normal"],**kw)
@@ -1546,6 +1662,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story = []
     d_act = df[df[wcol]>0.001].copy()
     n_fondi = len(d_act)
+    PW = 18 * cm   # printable width (A4 21cm - 2×1.5cm margins)
 
     # ISIN da foglio FIDA (fallback per fondi senza URL FondiDoc)
     isin_map = {}
@@ -1556,7 +1673,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     w_obb = (d_act[wcol]*d_act["obb_pct"]).sum()*100
 
     # ── ACCENT BAR ──────────────────────────────────────────
-    story.append(Table([[""]], colWidths=[17*cm], rowHeights=[10],
+    story.append(Table([[""]], colWidths=[PW], rowHeights=[10],
         style=TableStyle([
             ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#0D1B2A")),
             ("LINEBELOW",(0,0),(-1,-1),3,rl_colors.HexColor("#C9A84C")),
@@ -1582,8 +1699,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         [[kpi_cell(str(n_fondi),"Fondi"),kpi_cell(f"{w_az:.1f}%","Quota Azionaria"),
           kpi_cell(f"{w_obb:.1f}%","Quota Obbligazionaria"),
           kpi_cell(datetime.date.today().strftime("%m/%Y"),"Data Report")]],
-        colWidths=[4.25*cm]*4,
-        rowHeights=[2.2*cm],
+        colWidths=[PW/4]*4,
+        rowHeights=[1.9*cm],
     )
     kpi.setStyle(TableStyle([
         ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
@@ -1599,94 +1716,98 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=6, spaceAfter=5)
     story.append(Paragraph("Allocazione del Portafoglio", SC_PIE))
 
-    PIE_W = 7.5 * cm
-    LEG_W = 17 * cm - PIE_W   # 9.5 cm
+    PIE_W  = 6.5 * cm          # torta fondi
+    LEG_W  = PW - PIE_W        # 11.5 cm per la legenda
+    DOT_W  = 0.32 * cm
+    # Ogni colonna di legenda (2 colonne affiancate)
+    GAP_W  = 0.4 * cm          # gap tra le due colonne
+    LC_W   = (LEG_W - DOT_W * 2 - GAP_W) / 2  # larghezza label per colonna
 
-    LG = S("LG", fontName="Helvetica", fontSize=10,
-           textColor=rl_colors.HexColor("#1E293B"), leading=15)
+    LG = S("LG", fontName="Helvetica", fontSize=8,
+           textColor=rl_colors.HexColor("#1E293B"), leading=11)
 
     def _dot(hex_color):
-        t = Table([[""]], colWidths=[0.28*cm], rowHeights=[0.28*cm])
+        t = Table([[""]], colWidths=[DOT_W], rowHeights=[DOT_W])
         t.setStyle(TableStyle([
             ("BACKGROUND", (0,0), (-1,-1), rl_colors.HexColor(hex_color)),
         ]))
         return t
 
-    # — Grafico 1: fondi con hyperlink (torta + didascalia interattiva affiancate) —
+    # — Grafico 1: fondi con hyperlink (torta + legenda a 2 colonne affiancate) —
     pie_buf = _mpl_portfolio_pie(d_act, wcol, profile)
     pie_img = RLImage(pie_buf, width=PIE_W, height=PIE_W)
     d_leg   = d_act[d_act[wcol] > 0.005].sort_values(wcol, ascending=False)
-    leg_rows = []
+
+    # Costruisci le celle della legenda
+    leg_items = []
     for _, r in d_leg.iterrows():
         url    = (fund_data or {}).get(r["nome"], {}).get("url", "")
-        name_s = (r["nome"][:38] + "…") if len(r["nome"]) > 38 else r["nome"]
+        name_s = (r["nome"][:24] + "…") if len(r["nome"]) > 24 else r["nome"]
         pct_s  = f"{r[wcol]*100:.1f}%"
         if url:
             lbl = Paragraph(
                 f'<link href="{url}"><font color="#1B4FBB"><u>{name_s}</u></font></link>'
-                f'  <b>{pct_s}</b>', LG)
+                f' <b>{pct_s}</b>', LG)
         else:
-            lbl = Paragraph(f'{name_s}  <b>{pct_s}</b>', LG)
-        leg_rows.append([_dot(r["color"]), lbl])
-    leg_tbl = Table(leg_rows, colWidths=[0.45*cm, LEG_W - 0.45*cm])
+            lbl = Paragraph(f'{name_s} <b>{pct_s}</b>', LG)
+        leg_items.append((_dot(r["color"]), lbl))
+
+    # Disponi su 2 colonne: pari a sinistra, dispari a destra
+    leg_rows_2c = []
+    for i in range(0, len(leg_items), 2):
+        d1, l1 = leg_items[i]
+        if i + 1 < len(leg_items):
+            d2, l2 = leg_items[i + 1]
+        else:
+            d2, l2 = Spacer(DOT_W, DOT_W), Paragraph("", LG)
+        leg_rows_2c.append([d1, l1, d2, l2])
+
+    leg_tbl = Table(leg_rows_2c,
+                    colWidths=[DOT_W, LC_W, DOT_W + GAP_W, LC_W])
     leg_tbl.setStyle(TableStyle([
-        ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
-        ("TOPPADDING",     (0,0), (-1,-1), 3),
-        ("BOTTOMPADDING",  (0,0), (-1,-1), 3),
-        ("LEFTPADDING",    (1,0), (1,-1),  6),
-        ("LEFTPADDING",    (0,0), (0,-1),  0),
-        ("RIGHTPADDING",   (0,0), (-1,-1), 4),
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",    (0,0), (-1,-1), 2),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+        ("LEFTPADDING",   (1,0), (1,-1),  4),
+        ("LEFTPADDING",   (3,0), (3,-1),  4),
+        ("LEFTPADDING",   (0,0), (0,-1),  0),
+        ("LEFTPADDING",   (2,0), (2,-1),  GAP_W),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 2),
     ]))
     combo1 = Table([[pie_img, leg_tbl]], colWidths=[PIE_W, LEG_W])
     combo1.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(combo1)
 
-    # — Grafico 2: asset allocation — torta centrata sotto la prima,
-    #   righe illustrative Azionario/Obbligazionario sotto la torta —
+    # — Grafico 2: asset allocation — piccola, affiancata alla legenda (sotto la torta) —
+    PIE_W2 = 5.0 * cm
     macro_buf = _mpl_macro_pie(d_act, wcol)
+    macro_block = []
     if macro_buf:
-        story.append(Spacer(1, 8))
-        macro_img = RLImage(macro_buf, width=PIE_W, height=PIE_W)
+        macro_img = RLImage(macro_buf, width=PIE_W2, height=PIE_W2)
         w_az_v  = (d_act[wcol] * d_act["az_pct"]).sum()
         w_obb_v = (d_act[wcol] * d_act["obb_pct"]).sum()
-
-        # Torta centrata orizzontalmente sulla pagina
-        pie2_tbl = Table([[macro_img]], colWidths=[17 * cm])
-        pie2_tbl.setStyle(TableStyle([
-            ("ALIGN",         (0,0), (-1,-1), "CENTER"),
-            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 0),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
-            ("LEFTPADDING",   (0,0), (-1,-1), 0),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 0),
-        ]))
-        story.append(pie2_tbl)
-
-        # Righe illustrative sotto la torta, centrate
-        story.append(Spacer(1, 6))
         macro_leg_rows = [
             [_dot("#1B4FBB"), Paragraph(f'Azionario  <b>{w_az_v*100:.1f}%</b>', LG)],
             [_dot("#2D9D78"), Paragraph(f'Obbligazionario  <b>{w_obb_v*100:.1f}%</b>', LG)],
         ]
-        macro_leg_inner = Table(macro_leg_rows, colWidths=[0.45*cm, 5.5*cm])
+        macro_leg_inner = Table(macro_leg_rows, colWidths=[DOT_W, 5*cm])
         macro_leg_inner.setStyle(TableStyle([
             ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 5),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
-            ("LEFTPADDING",   (1,0), (1,-1),  6),
+            ("TOPPADDING",    (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ("LEFTPADDING",   (1,0), (1,-1),  5),
             ("LEFTPADDING",   (0,0), (0,-1),  0),
         ]))
-        macro_leg_wrapper = Table([[macro_leg_inner]], colWidths=[17 * cm])
-        macro_leg_wrapper.setStyle(TableStyle([
-            ("ALIGN",         (0,0), (-1,-1), "CENTER"),
-            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 0),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
-            ("LEFTPADDING",   (0,0), (-1,-1), 0),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+        # Torta macro + legenda affiancate, allineate sinistra
+        macro_row = Table([[macro_img, macro_leg_inner]],
+                          colWidths=[PIE_W2, PW - PIE_W2])
+        macro_row.setStyle(TableStyle([
+            ("VALIGN",  (0,0), (-1,-1), "MIDDLE"),
+            ("PADDING", (0,0), (-1,-1), 0),
         ]))
-        story.append(macro_leg_wrapper)
+        macro_block = [Spacer(1, 6), macro_row]
 
+    # Tutto il blocco grafici in KeepTogether → rimane sulla stessa pagina
+    story.append(KeepTogether([combo1] + macro_block))
     story.append(PageBreak())
 
     # ════════════════════════════════════════════════════════
@@ -1814,7 +1935,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ])
 
     perf_tbl = Table(perf_rows,
-        colWidths=[5.2*cm,1.4*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
+        colWidths=[6.2*cm,1.4*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
         repeatRows=1)
     ts_perf = [
         ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),  # header
@@ -1879,7 +2000,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ])
 
     risk_tbl = Table(risk_rows,
-        colWidths=[5.2*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
+        colWidths=[6.2*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
         repeatRows=1)
     ts_risk = [
         ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),
@@ -2075,8 +2196,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
-        # Slightly reduced cols to fit new Morningstar column (total ~17.1 cm)
-        colWidths=[3.8*cm, 1.1*cm, 1.3*cm, 1.5*cm, 1.4*cm, 1.8*cm, 2.6*cm, 1.5*cm, 2.1*cm],
+        colWidths=[4.5*cm, 1.1*cm, 1.3*cm, 1.5*cm, 1.4*cm, 1.8*cm, 2.8*cm, 1.5*cm, 2.1*cm],
         repeatRows=1,
     )
     alloc_tbl.setStyle(TableStyle([
@@ -2176,7 +2296,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     unp_tbl = Table(
         [unp_hdr_row, unp_ptf_row] + unp_fund_rows,
-        colWidths=[5.0*cm, 1.5*cm, 2.0*cm, 2.0*cm, 2.0*cm, 4.5*cm],
+        colWidths=[6.0*cm, 1.5*cm, 2.0*cm, 2.0*cm, 2.0*cm, 4.5*cm],
         repeatRows=1,
     )
     unp_tbl.setStyle(TableStyle([
@@ -2220,11 +2340,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Paragraph("Schede Analitiche dei Fondi", T))
     story.append(Paragraph(
         f"Profilo {profile.title()}  ·  Fonte: FIDA FondiDoc  ·  {datetime.date.today().strftime('%d %B %Y')}", SU))
-    story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=6))
+    story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=4))
     story.append(Paragraph(
         '🔍 <link href="https://www.morningstar.it/it/funds/SecuritySearchResults.aspx">'
         '<u>Motore di ricerca Morningstar</u></link>', LK))
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 6))
 
     for idx, (_, row) in enumerate(d_sorted.iterrows()):
         fd  = (fund_data or {}).get(row["nome"], {})
@@ -2233,15 +2353,10 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
         def gv(k,src=ana,fallback="N/D"): return src.get(k,fallback)
 
-        # Fund header block
         srri_str = f"SRRI {gv('srri',ov,'—')}/7" if gv('srri',ov) != "N/D" else ""
         nav_str  = f"NAV {gv('nav')} € ({gv('last_update')})" if gv('nav') != "N/D" else ""
         rating_s = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("N/D","—") else ""
-
-        # ── Intestazione fondo (3 righe × 1 colonna) ─────────
         meta_extra = "  ·  ".join(x for x in [srri_str, rating_s, nav_str] if x)
-
-        # ISIN: estratto dall'URL FondiDoc oppure dal foglio FIDA
         isin = fd.get("isin", "") or isin_map.get(row["nome"], "")
         isin_str = f"  ·  ISIN: <b>{isin}</b>" if isin else ""
 
@@ -2250,20 +2365,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             [Paragraph(f"Peso: <b>{row[wcol]*100:.1f}%</b>  ·  {row['categoria']}{isin_str}", FK)],
             [Paragraph(meta_extra or "—", FK)],
         ]
-
-        hdr_tbl = Table(hdr_rows, colWidths=[17*cm])
+        hdr_tbl = Table(hdr_rows, colWidths=[PW])
         hdr_tbl.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,-1), rl_colors.HexColor("#F0F4F9")),
-            ("LEFTPADDING",(0,0),(-1,-1), 10),
-            ("RIGHTPADDING",(0,0),(-1,-1), 10),
-            ("TOPPADDING",(0,0),(-1,0), 10),
-            ("BOTTOMPADDING",(0,-1),(-1,-1), 10),
-            ("TOPPADDING",(0,1),(-1,-1), 2),
-            ("BOTTOMPADDING",(0,0),(-1,-2), 2),
+            ("LEFTPADDING",(0,0),(-1,-1), 8),
+            ("RIGHTPADDING",(0,0),(-1,-1), 8),
+            ("TOPPADDING",(0,0),(-1,0), 6),
+            ("BOTTOMPADDING",(0,-1),(-1,-1), 6),
+            ("TOPPADDING",(0,1),(-1,-1), 1),
+            ("BOTTOMPADDING",(0,0),(-1,-2), 1),
             ("LINEBELOW",(0,-1),(-1,-1), 2, rl_colors.HexColor("#C9A84C")),
         ]))
 
-        # ── Tabella rendimenti fondo ──────────────────────────
         def pval(v):
             try:
                 num = float(v.replace("%","").replace(",","."))
@@ -2285,19 +2398,21 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             [Paragraph("Sortino",SM),
              Paragraph("—",SM), Paragraph(gv("sortino_1y"),SM), Paragraph("—",SM), Paragraph("—",SM)],
         ]
-        perf_tbl2 = Table(perf_data, colWidths=[2.4*cm,1.5*cm,1.8*cm,1.8*cm,1.8*cm])
+        # Larghezze colonne scheda: metriche + dettagli affiancati
+        PERF_C = [2.5*cm, 1.5*cm, 1.8*cm, 1.8*cm, 1.8*cm]   # totale 9.4 cm
+        DET_W  = PW - sum(PERF_C) - 0.6*cm                    # ~8.0 cm
+        perf_tbl2 = Table(perf_data, colWidths=PERF_C)
         perf_tbl2.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),
             ("TEXTCOLOR",(0,0),(-1,0),  rl_colors.white),
             ("FONTNAME",(0,0),(-1,0),   "Helvetica-Bold"),
-            ("FONTSIZE",(0,0),(-1,-1),  7.5),
-            ("PADDING",(0,0),(-1,-1),   4),
+            ("FONTSIZE",(0,0),(-1,-1),  7),
+            ("PADDING",(0,0),(-1,-1),   3),
             ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
             ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
             ("ALIGN",(1,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
         ]))
 
-        # ── Dettagli fondo ───────────────────────────────────
         det_data = [
             [Paragraph("<b>Dettagli Fondo</b>", BD)],
             [Paragraph(f"Data avvio: {gv('start_date',ov,'—')}", SM)],
@@ -2307,42 +2422,42 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             [Paragraph(f"Sottoscrizione: {gv('sub_fee',ov,'—')}", SM)],
             [Paragraph(f"<b>FIDArating:</b> {gv('fida_rating',ov,'—')}  |  Score: {gv('fida_score',ov,'—')}", SM)],
         ]
-        det_tbl = Table([[d[0]] for d in det_data], colWidths=[7.3*cm])
+        det_tbl = Table([[d[0]] for d in det_data], colWidths=[DET_W])
         det_tbl.setStyle(TableStyle([
-            ("PADDING",(0,0),(-1,-1), 3),
-            ("TOPPADDING",(0,0),(-1,0), 6),
+            ("PADDING",(0,0),(-1,-1), 2),
+            ("TOPPADDING",(0,0),(-1,0), 5),
             ("LINEBELOW",(0,0),(0,0), 0.8, rl_colors.HexColor("#C9A84C")),
             ("BACKGROUND",(0,0),(0,-1), rl_colors.HexColor("#F8FAFC")),
         ]))
 
-        mid_row = Table([[perf_tbl2, det_tbl]], colWidths=[9.7*cm, 7.3*cm])
+        mid_row = Table([[perf_tbl2, det_tbl]],
+                        colWidths=[sum(PERF_C), DET_W + 0.6*cm])
         mid_row.setStyle(TableStyle([
             ("VALIGN",(0,0),(-1,-1), "TOP"),
             ("PADDING",(0,0),(-1,-1), 0),
-            ("LEFTPADDING",(1,0),(1,-1), 10),
+            ("LEFTPADDING",(1,0),(1,-1), 8),
         ]))
 
-        # ── Grafico rendimenti annuali ───────────────────────
         annual  = ana.get("annual_perf")
         bar_buf = _mpl_annual_bar(annual, row["nome"]) if annual else None
 
-        # ── KeepTogether: tutta la scheda su stessa pagina ───
-        card = [Spacer(1,6), hdr_tbl, Spacer(1,6), mid_row]
+        # KeepTogether: scheda compatta (≈ 2 per pagina)
+        card = [Spacer(1,4), hdr_tbl, Spacer(1,4), mid_row]
         if bar_buf:
-            card += [Spacer(1,4),
+            card += [Spacer(1,3),
                      Paragraph("<b>Performance Annuale (%)</b>", SM),
-                     RLImage(bar_buf, width=14*cm, height=3.2*cm)]
+                     RLImage(bar_buf, width=PW, height=2.4*cm)]
         story.append(KeepTogether(card))
 
-        # Separatore tra fondi
-        if idx < len(d_sorted)-1:
+        # Separatore sottile tra schede
+        if idx < len(d_sorted) - 1:
             story.append(HRFlowable(width="100%", thickness=0.5,
                                     color=rl_colors.HexColor("#CBD5E1"),
-                                    spaceBefore=8, spaceAfter=8))
+                                    spaceBefore=4, spaceAfter=4))
 
     # ── FOOTER ─────────────────────────────────────────────
-    story.append(PageBreak())
-    story.append(HRFlowable(width="100%",thickness=0.5,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=8))
+    story.append(Spacer(1, 10))
+    story.append(HRFlowable(width="100%",thickness=0.5,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=6))
     story.append(Paragraph(
         "Documento generato automaticamente a scopo illustrativo. I dati di performance provengono da FIDA FondiDoc "
         "(fondidoc.it). I pesi indicati sono riferiti al portafoglio modello e non costituiscono offerta o consulenza "
@@ -2515,6 +2630,467 @@ def free_portfolio_ui(data):
 
 
 # ════════════════════════════════════════════════════════════
+# GLOBAL PERSPECTIVES — PDF parsing & SUGGERITO portfolio
+# ════════════════════════════════════════════════════════════
+
+def _resolve_nome_for_fd(nome_pdf: str, fund_data: dict) -> str:
+    """Map a PDF-format name (e.g. "AZ Allocation - Balanced Plus") to the
+    actual key present in fund_data (usually an Excel-abbreviated form like
+    "AZ F.1 All. Balanced Plus A Cap EUR").  Uses the same normalisation logic
+    as UNP lookup.  Falls back to nome_pdf if no match is found."""
+    if not fund_data or nome_pdf in fund_data:
+        return nome_pdf
+    norm = _normalize_for_unp(nome_pdf)
+    norm = _FUND_ALIASES.get(norm, norm)
+    best_key, best_len = None, 0
+    for key in fund_data:
+        k_norm = _normalize_for_unp(key)
+        k_norm = _FUND_ALIASES.get(k_norm, k_norm)
+        if k_norm == norm:
+            return key                               # exact normalised match
+        if (k_norm in norm or norm in k_norm) and len(k_norm) > best_len:
+            best_key, best_len = key, len(k_norm)
+    return best_key if best_key else nome_pdf
+
+
+def parse_global_perspectives(pdf_bytes: bytes):
+    """Parse a *Global Perspectives* quarterly PDF and return the three
+    Azimut View scenario portfolios (Base, Bear, Bull), excluding private-
+    market funds (ELTIF, RAIF, Demos, …).
+
+    Returns
+    -------
+    dict | None
+        ``{
+            "Base": {
+                "info": "Equity 32% · Bond 38% · Private Markets 30%",
+                "funds": [
+                    {"nome": "AZ Allocation - Balanced Plus",
+                     "gruppo": "ALLOCATION",
+                     "categoria": "Bilanciati/Flessibili",
+                     "az_pct": 0.50, "obb_pct": 0.50, "weight": 0.045},
+                    ...
+                ],
+                "subcat_weights": {"alloc_balanced": 25, ...},
+            },
+            "Bear": {...},
+            "Bull": {...},
+        }``
+    or ``None`` if the PDF could not be recognised.
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        return None
+    import io as _io
+
+    # ── 1. Extract text page by page ──────────────────────────────────────────
+    try:
+        pages = []
+        with pdfplumber.open(_io.BytesIO(pdf_bytes)) as pdf:
+            for pg in pdf.pages:
+                t = pg.extract_text()
+                if t:
+                    pages.append(t)
+    except Exception:
+        return None
+    if not pages:
+        return None
+    full = "\n".join(pages)
+
+    # ── 2. Locate scenario section boundaries ─────────────────────────────────
+    _SC_PATS: dict = {
+        "Base": [r"AZIMUT\s+VIEW\s+SCENARIO\s+BASE", r"Scenario\s+Base"],
+        "Bear": [r"AZIMUT\s+VIEW\s+SCENARIO\s+BEAR", r"Scenario\s+Bear"],
+        "Bull": [r"AZIMUT\s+VIEW\s+SCENARIO\s+BULL", r"Scenario\s+Bull"],
+    }
+    positions: dict = {}
+    for sc, pats in _SC_PATS.items():
+        for pat in pats:
+            m = re.search(pat, full, re.IGNORECASE)
+            if m:
+                positions[sc] = m.start()
+                break
+    if len(positions) < 3:
+        return None
+
+    sorted_sc = sorted(positions, key=lambda k: positions[k])
+    sections: dict = {}
+    for i, sc in enumerate(sorted_sc):
+        start = positions[sc]
+        end   = positions[sorted_sc[i + 1]] if i + 1 < len(sorted_sc) else len(full)
+        sections[sc] = full[start:end]
+
+    # ── 3. Sub-category meta ──────────────────────────────────────────────────
+    _SUBCAT_LABELS: list = [
+        ("alloc_balanced",  r"Allocation\s*[-–]\s*Balanced"),
+        ("alloc_flexible",  r"Allocation\s*[-–]\s*Flex"),
+        ("bond_aggregate",  r"Bond\s*[-–]\s*Aggregate"),
+        ("bond_thematic",   r"Bond\s*[-–]\s*Thematic"),
+        ("bond_em",         r"Bond\s*[-–]\s*Paesi\s+emergenti"),
+        ("bond_target",     r"Bond\s*[-–]\s*Target"),
+        ("equity_thematic", r"Equity\s*[-–]\s*Thematic"),
+        ("equity_dev",      r"Equity\s*[-–]\s*Paesi\s+sviluppati"),
+        ("equity_em",       r"Equity\s*[-–]\s*Paesi\s+emergenti"),
+    ]
+    _SUBCAT_GROUP = {
+        "alloc_balanced": "ALLOCATION",   "alloc_flexible": "ALLOCATION",
+        "bond_aggregate": "BOND",         "bond_thematic":  "BOND",
+        "bond_em":        "BOND",         "bond_target":    "BOND",
+        "equity_thematic":"AZIONARI (LONG)",
+        "equity_dev":     "AZIONARI (LONG)", "equity_em": "AZIONARI (LONG)",
+    }
+    _SUBCAT_CAT = {
+        "alloc_balanced":  "Bilanciati/Flessibili",
+        "alloc_flexible":  "Bilanciati/Flessibili",
+        "bond_aggregate":  "Obbligazionari", "bond_thematic": "Obbligazionari",
+        "bond_em":         "Obbligazionari", "bond_target":   "Obbligazionari",
+        "equity_thematic": "Azionari",
+        "equity_dev":      "Azionari",       "equity_em":     "Azionari",
+    }
+    # Private-market keywords → skip these fund lines
+    _PRIV_KW = frozenset([
+        "raif", "eltif", "demos ", "yhox", "direct investments",
+        "hybrid growth", "automobile", "infrastrutture", "real assets",
+        "digitech fund", "young group", "alicrowd", "hipstr", " p103",
+        "italia 500", "globALinvest", "borletti", "broadlight", "highpost",
+        "roundshield", "pensinsula", "ophelia", "gp stakes", "kennedy lewis",
+        "digital assets", "bcp asia", "valsabbina", "d-orbit",
+        "escalator 1", "escalator 2",
+    ])
+
+    def _is_priv(name: str) -> bool:
+        n = name.lower()
+        return any(k in n for k in _PRIV_KW)
+
+    # ── 4. Parse each scenario ────────────────────────────────────────────────
+    result: dict = {}
+
+    for sc_name, sect in sections.items():
+        # ── 4a. Sub-category weights from pie-chart text ──────────────────────
+        fc_m  = re.search(r"Fondi\s+consigliati", sect, re.IGNORECASE)
+        pie   = sect[:fc_m.start()] if fc_m else sect
+        sw: dict = {}
+        for key, lbl_pat in _SUBCAT_LABELS:
+            for m in re.finditer(lbl_pat, pie, re.IGNORECASE):
+                # Search for "N%" within ±200 chars of the label match
+                win  = pie[max(0, m.start() - 200): m.end() + 50]
+                nums = re.findall(r'(\d{1,2})\s*%', win)
+                for n in nums:
+                    v = int(n)
+                    if 1 <= v <= 50:
+                        sw[key] = v
+                        break
+                if key in sw:
+                    break
+
+        # ── 4b. Parse "Fondi consigliati" section ─────────────────────────────
+        if not fc_m:
+            continue
+        fc_txt = sect[fc_m.start():]
+
+        cur_group:  str | None = None
+        cur_subcat: str | None = None
+        fund_subcat: dict = {}      # fund_name → subcat_key
+
+        for line in fc_txt.split("\n"):
+            l = line.strip()
+            if not l:
+                continue
+            # — Group headers —
+            if   re.match(r'^ALLOCATION$',    l, re.I): cur_group = "allocation";  cur_subcat = None
+            elif re.match(r'^BOND$',          l, re.I): cur_group = "bond";         cur_subcat = None
+            elif re.match(r'^EQUITY$',        l, re.I): cur_group = "equity";       cur_subcat = None
+            elif re.match(r'^PRIVATE\s',      l, re.I): cur_group = "private";      cur_subcat = None
+            # — Sub-category headers —
+            elif re.match(r'^BALANCED$',      l, re.I): cur_subcat = "alloc_balanced"
+            elif re.match(r'^FLEXIBLE$',      l, re.I): cur_subcat = "alloc_flexible"
+            elif re.match(r'^AGGREGATE',      l, re.I): cur_subcat = "bond_aggregate"
+            elif re.match(r'^THEMATIC$',      l, re.I):
+                cur_subcat = "bond_thematic" if cur_group == "bond" else "equity_thematic"
+            elif re.match(r'^TARGET',         l, re.I): cur_subcat = "bond_target"
+            elif re.match(r'^PAESI\s+EMERGENTI$', l, re.I):
+                cur_subcat = "bond_em" if cur_group == "bond" else "equity_em"
+            elif re.match(r'^PAESI\s+SVILUPPATI$', l, re.I): cur_subcat = "equity_dev"
+            elif re.match(r'^EMERGENTI$',     l, re.I):
+                cur_subcat = "bond_em" if cur_group == "bond" else "equity_em"
+            elif re.match(r'^SVILUPPATI$',    l, re.I): cur_subcat = "equity_dev"
+            # — Fund lines (split on each "AZ Fund 1 -" to handle 2-column layout) —
+            elif re.search(r'AZ\s+Fund\s+1\s*[-–]', l, re.I):
+                for _part in re.split(r'(?=AZ\s+Fund\s+1\s*[-–])', l, flags=re.I):
+                    _part = _part.strip()
+                    _m = re.match(r'AZ\s+Fund\s+1\s*[-–]\s*(AZ\s+\S.+)', _part, re.I)
+                    if _m and cur_subcat and cur_group != "private":
+                        # Truncate at any additional "AZ Fund 1" still present
+                        raw_nm = re.split(
+                            r'\s+AZ\s+Fund\s+1\s*[-–]', _m.group(1), flags=re.I
+                        )[0].strip().rstrip("*").strip()
+                        if raw_nm and not _is_priv(raw_nm):
+                            fund_subcat[raw_nm] = cur_subcat
+
+        # ── 4c. Compute equal-weight per sub-category ─────────────────────────
+        subcat_funds: dict = {}
+        for fname, sc_key in fund_subcat.items():
+            subcat_funds.setdefault(sc_key, []).append(fname)
+
+        total_liq = sum(sw.get(k, 0) for k in subcat_funds)
+        if total_liq == 0:
+            total_liq = sum(sw.values()) or 70
+
+        records: list = []
+        for sc_key, funds in subcat_funds.items():
+            w_sc = sw.get(sc_key, 0)
+            if not funds:
+                continue
+            w_per = ((w_sc / len(funds)) / total_liq) if w_sc else (1.0 / max(len(fund_subcat), 1))
+            grp = _SUBCAT_GROUP.get(sc_key, "ALLOCATION")
+            cat = _SUBCAT_CAT.get(sc_key, "Altro")
+            az  = DEFAULT_AZ.get(get_macro(cat), 0.5)
+            for fname in funds:
+                records.append({
+                    "nome":     fname,
+                    "gruppo":   grp,
+                    "categoria": cat,
+                    "az_pct":   az,
+                    "obb_pct":  1.0 - az,
+                    "weight":   w_per,
+                    "subcat":   sc_key,
+                })
+
+        # ── 4d. Info string from summary paragraph ────────────────────────────
+        info_m = re.search(
+            r'azioni\s+(\d+)%.*?obbligazioni\s+(\d+)%.*?private\s+markets\s+(\d+)%',
+            sect, re.IGNORECASE | re.DOTALL)
+        info = (f"Equity {info_m.group(1)}% · Bond {info_m.group(2)}%"
+                f" · Private Markets {info_m.group(3)}%") if info_m else ""
+
+        result[sc_name] = {
+            "info":           info,
+            "funds":          records,
+            "subcat_weights": sw,
+        }
+
+    return result if result else None
+
+
+# ── Module-level badge helpers (used in suggerito_portfolio_ui) ──────────────
+_FIDA_BG_GP  = {5:"#166534", 4:"#15803d", 3:"#16a34a", 2:"#64748B", 1:"#94A3B8"}
+_MS_BG_GP    = {5:"#78350F", 4:"#92400E", 3:"#B45309"}
+_MS_COL_GP   = {5:"#78350F", 4:"#92400E", 3:"#B45309", 2:"#475569", 1:"#94A3B8"}
+
+def _fida_badge_gp(r) -> str:
+    try:    v = int(r)
+    except (TypeError, ValueError): return "<span style='color:#94A3B8;'>—</span>"
+    bg = _FIDA_BG_GP.get(v)
+    return (f"<span style='background:{bg};color:#fff;padding:2px 8px;"
+            f"border-radius:4px;font-weight:700;font-size:.8rem;'>{v}</span>"
+            if bg else f"<span style='color:#64748B;font-weight:700;font-size:.8rem;'>{v}</span>")
+
+def _ms_badge_gp(ms_r) -> str:
+    try:    v = int(ms_r)
+    except (TypeError, ValueError): return "<span style='color:#94A3B8;'>—</span>"
+    filled = "★" * v
+    bg = _MS_BG_GP.get(v)
+    if bg:
+        return (f"<span style='background:{bg};color:#fff;padding:2px 8px;"
+                f"border-radius:4px;font-weight:700;font-size:.8rem;'>{filled}</span>")
+    _col = _MS_COL_GP.get(v, "#64748B")
+    return (f"<span style='color:{_col};font-weight:700;"
+            f"font-size:.8rem;'>{filled}</span>")
+
+# Sub-category display names (Italian labels)
+_SUBCAT_DISPLAY = {
+    "alloc_balanced":  "Allocation – Balanced",
+    "alloc_flexible":  "Allocation – Flexible",
+    "bond_aggregate":  "Bond – Aggregate / Gov",
+    "bond_thematic":   "Bond – Thematic",
+    "bond_em":         "Bond – Paesi Emergenti",
+    "bond_target":     "Bond – Target Maturity",
+    "equity_thematic": "Equity – Thematic",
+    "equity_dev":      "Equity – Paesi Sviluppati",
+    "equity_em":       "Equity – Paesi Emergenti",
+}
+
+
+def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
+                           fund_data: dict, ms_data: dict,
+                           extra_urls: dict | None = None):
+    """Interactive portfolio builder for a SUGGERITO scenario.
+
+    Shows macro-category headers with the scenario-suggested weight, then
+    lists the recommended funds with FIDArating + Morningstar badges and a
+    free peso-% input for each.  Returns a ready DataFrame when weights sum
+    to 100 %, or None while the user is still editing.
+    """
+    funds = gp_scenario.get("funds", [])
+    if not funds:
+        return None
+
+    sw = gp_scenario.get("subcat_weights", {})
+
+    # Group funds by subcategory, preserving parse order
+    subcat_funds: dict = {}
+    for f in funds:
+        subcat_funds.setdefault(f["subcat"], []).append(f)
+
+    # Per-scenario session-state key so weights reset when switching scenarios
+    ss_key = f"_sg_w_{sc_name}"
+    if ss_key not in st.session_state:
+        # Initialise with equal-weight defaults from the scenario
+        st.session_state[ss_key] = {
+            f["nome"]: round(f["weight"] * 100, 1) for f in funds
+        }
+    ww: dict = st.session_state[ss_key]
+
+    # ── Page header ───────────────────────────────────────────────────────────
+    st.markdown('<p class="sec-title">Costruisci il Portafoglio Suggerito</p>',
+                unsafe_allow_html=True)
+    st.caption(
+        "I pesi mostrati sono distribuiti equamente all'interno di ogni "
+        "sottocategoria.  Modifica liberamente i valori e l'analisi si "
+        "aggiorna automaticamente quando la somma raggiunge 100 %."
+    )
+
+    # ── Column headers (only once, above all subcategories) ───────────────────
+    _h1, _h2, _h3, _h4 = st.columns([4.5, 1.2, 1.2, 1.4])
+    _h1.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>Fondo</span>",
+                 unsafe_allow_html=True)
+    _h2.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>FIDArating</span>",
+                 unsafe_allow_html=True)
+    _h3.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>Morningstar</span>",
+                 unsafe_allow_html=True)
+    _h4.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>Peso %</span>",
+                 unsafe_allow_html=True)
+    st.markdown("<hr style='margin:.15rem 0 .3rem 0;border-color:#e2e8f0;'>",
+                unsafe_allow_html=True)
+
+    # ── Per-subcategory sections ──────────────────────────────────────────────
+    for sc_key, sc_funds in subcat_funds.items():
+        w_sc   = sw.get(sc_key, 0)
+        sc_lbl = _SUBCAT_DISPLAY.get(sc_key, sc_key)
+
+        # — Subcategory header bar —
+        st.markdown(
+            f"<div style='background:linear-gradient(90deg,#0D1B2A,#162e52);"
+            f"color:#fff;padding:.45rem 1rem;border-radius:6px;margin-top:.7rem;"
+            f"display:flex;align-items:center;gap:.8rem;'>"
+            f"<span style='font-weight:700;font-size:.88rem;flex:1;'>{sc_lbl}</span>"
+            f"<span style='background:#C9A84C;color:#0D1B2A;padding:2px 9px;"
+            f"border-radius:4px;font-size:.73rem;font-weight:700;white-space:nowrap;'>"
+            f"Peso suggerito: {w_sc}%</span></div>",
+            unsafe_allow_html=True)
+
+        # — Fund rows —
+        for f in sc_funds:
+            fname    = f["nome"]
+            resolved = _resolve_nome_for_fd(fname, fund_data)
+
+            # Ratings from cache
+            fd_ov  = (fund_data or {}).get(resolved, {}).get("overview", {})
+            fida_r = str(fd_ov.get("fida_rating") or "").strip() or "—"
+            ms_r   = (ms_data or {}).get(resolved, {}).get("ms_rating")
+
+            # Display name: strip "AZ [Family] - " prefix
+            short = re.sub(r'^AZ\s+(?:Allocation|Bond|Equity)\s*[-–]\s*',
+                           '', fname, flags=re.I).strip()
+
+            url_sg = (
+                (fund_data or {}).get(resolved, {}).get("url", "")
+                or (fund_data or {}).get(fname, {}).get("url", "")
+                or (extra_urls or {}).get(resolved, "")
+                or (extra_urls or {}).get(fname, "")
+            )
+            name_html = (
+                f'<a href="{url_sg}" target="_blank" rel="noopener noreferrer" '
+                f'style="color:#1B4FBB;text-decoration:underline;'
+                f'text-underline-offset:2px;font-size:.84rem;font-weight:500;">'
+                f'{short}</a>'
+                if url_sg else
+                f'<span style="font-size:.84rem;font-weight:500;color:#1e293b;">{short}</span>'
+            )
+            c1, c2, c3, c4 = st.columns([4.5, 1.2, 1.2, 1.4])
+            with c1:
+                st.markdown(
+                    f"<div style='padding:.55rem 0 .3rem 0;'>{name_html}</div>",
+                    unsafe_allow_html=True)
+            with c2:
+                st.markdown(
+                    f"<div style='padding:.5rem 0 .25rem 0;'>"
+                    f"{_fida_badge_gp(fida_r)}</div>",
+                    unsafe_allow_html=True)
+            with c3:
+                st.markdown(
+                    f"<div style='padding:.5rem 0 .25rem 0;'>"
+                    f"{_ms_badge_gp(ms_r)}</div>",
+                    unsafe_allow_html=True)
+            with c4:
+                default_w = float(ww.get(fname, round(f["weight"] * 100, 1)))
+                new_w = st.number_input(
+                    "w", min_value=0.0, max_value=100.0,
+                    value=default_w, step=0.5,
+                    key=f"sg_{sc_name}_{fname[:35]}",
+                    label_visibility="collapsed",
+                )
+                ww[fname] = new_w
+
+        st.markdown("<hr style='margin:.25rem 0 0 0;border-color:#f1f5f9;'>",
+                    unsafe_allow_html=True)
+
+    # ── Total weight indicator ────────────────────────────────────────────────
+    total_w = sum(ww.get(f["nome"], 0.0) for f in funds)
+    diff    = abs(total_w - 100.0)
+    st.markdown("<br>", unsafe_allow_html=True)
+    if diff < 0.15:
+        st.markdown(
+            f'<div class="w-ok">✅ Somma pesi: <b>{total_w:.1f}%</b>'
+            f' — Portafoglio pronto!</div>', unsafe_allow_html=True)
+    else:
+        left = 100.0 - total_w
+        st.markdown(
+            f'<div class="w-warn">⚠️ Somma pesi: <b>{total_w:.1f}%</b>'
+            f' ({"mancano" if left>0 else "eccedono"} {abs(left):.1f}%)</div>',
+            unsafe_allow_html=True)
+
+    if diff > 1.0:
+        return None   # analysis only when weights are balanced
+
+    # ── Build DataFrame ───────────────────────────────────────────────────────
+    records: list = []
+    for f in funds:
+        peso = ww.get(f["nome"], 0.0)
+        if peso <= 0:
+            continue
+        nome = _resolve_nome_for_fd(f["nome"], fund_data)
+        records.append({
+            "nome":      nome,
+            "categoria": f["categoria"],
+            "gruppo":    f["gruppo"],
+            "macro_cat": get_macro(f["categoria"]),
+            "az_pct":    f["az_pct"],
+            "obb_pct":   f["obb_pct"],
+            "r_weight":  peso / 100.0,
+            "w_cons":    peso / 100.0,
+            "w_equil":   peso / 100.0,
+            "w_accr":    peso / 100.0,
+        })
+    if not records:
+        return None
+    df = pd.DataFrame(records)
+    for wc in ("w_cons", "w_equil", "w_accr"):
+        t = df[wc].sum()
+        if t > 0:
+            df[wc] /= t
+    df["macro_cat"] = df["categoria"].apply(get_macro)
+    df = assign_colors(df)
+    st.markdown("<br>", unsafe_allow_html=True)
+    return df
+
+
+# ════════════════════════════════════════════════════════════
 # MAIN APP
 # ════════════════════════════════════════════════════════════
 
@@ -2528,8 +3104,13 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p{color:#c0cfe0 !important;font-size:.9rem !important;}
 [data-testid="stSidebar"] .stSelectbox>div>div{background:#132035 !important;border:1px solid #243d5a !important;color:#dde6f0 !important;border-radius:6px !important;}
 [data-testid="stSidebar"] .stSelectbox svg{fill:#C9A84C !important;width:22px !important;height:22px !important;opacity:1 !important;}
-[data-testid="stSidebar"] .stFileUploader>div{background:#132035 !important;border:1px dashed #2a4a6a !important;border-radius:8px !important;}
-[data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.8rem !important;}
+[data-testid="stSidebar"] .stFileUploader>div{background:#132035 !important;border:1px dashed #2a4a6a !important;border-radius:8px !important;padding:.35rem .6rem !important;}
+[data-testid="stSidebar"] .stFileUploader section{padding:.2rem 0 !important;min-height:unset !important;}
+[data-testid="stSidebar"] .stFileUploader [data-testid="stFileUploaderDropzone"]{padding:.3rem .5rem !important;min-height:unset !important;}
+[data-testid="stSidebar"] .stFileUploader [data-testid="stFileUploaderDropzoneInstructions"]{display:none !important;}
+[data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.75rem !important;line-height:1.3 !important;}
+[data-testid="stSidebar"] .stFileUploader{margin-bottom:.2rem !important;}
+[data-testid="stSidebar"] hr{margin:.3rem 0 !important;border-color:#1a3050 !important;}
 [data-testid="stSidebar"] ::-webkit-scrollbar{width:6px;}
 [data-testid="stSidebar"] ::-webkit-scrollbar-track{background:#06101e;}
 [data-testid="stSidebar"] ::-webkit-scrollbar-thumb{background:#C9A84C;border-radius:3px;}
@@ -2567,7 +3148,10 @@ def main():
     with st.sidebar:
         st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.2 — factbook Excel cache</div></div>""", unsafe_allow_html=True)
         st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
-        uploaded   = st.file_uploader("FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
+
+        # ── Tutti gli uploader in blocco ──────────────────────────────────────
+        uploaded = st.file_uploader(
+            "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
         uploaded_fb = st.file_uploader(
             "FACTBOOK PDF (prima estrazione)",
             type=["pdf"],
@@ -2581,63 +3165,153 @@ def main():
             help="Carica il file Excel scaricato dopo la prima estrazione del "
                  "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
         )
-        # ── FondiDoc data loader ─────────────────────────────────────────────
-        st.markdown("---")
-        _fd_now = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
-        if _fd_now:
-            st.markdown(
-                f"<div style='background:#0d2b1a;border:1px solid #166534;"
-                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-                f"color:#86efac;margin-bottom:.5rem;line-height:1.5;'>"
-                f"✅ <b>Dati FondiDoc</b> — {len(_fd_now)} fondi caricati</div>",
-                unsafe_allow_html=True)
-        if uploaded:
-            if not _fd_now:
-                st.markdown(
-                    "<div style='background:#431407;border:1px solid #C9A84C;"
-                    "border-radius:8px;padding:.6rem .9rem;font-size:.74rem;"
-                    "color:#fde68a;margin-bottom:.55rem;line-height:1.6;'>"
-                    "⚠️ <b>Azione consigliata</b><br>"
-                    "Clicca <b>Scarica Dati FondiDoc</b> per popolare le tabelle "
-                    "a schermo con Cat.&nbsp;FIDA, FIDArating, rendimenti e "
-                    "metriche di rischio.</div>",
-                    unsafe_allow_html=True)
-            if st.button("📥  Scarica Dati FondiDoc",
-                         use_container_width=True,
-                         help="Scarica Cat. FIDA, FIDArating e rendimenti "
-                              "per tutti i fondi dei portafogli"):
-                st.session_state["_fetch_fd_requested"] = True
-        else:
-            st.caption("⬆️ Carica prima il file Excel")
+        uploaded_gp = st.file_uploader(
+            "GLOBAL PERSPECTIVES PDF",
+            type=["pdf"],
+            help="Carica il PDF Global Perspectives trimestrale per attivare "
+                 "la modalità SUGGERITO con i 3 scenari (Base / Bear / Bull). "
+                 "Il file viene re-parsato solo quando cambia.",
+        )
 
-        # ── FondiOnline — Morningstar rating ─────────────────────────────────
-        st.markdown("---")
+        # ── Parsing GP (solo quando cambia file) ─────────────────────────────
+        if uploaded_gp is not None:
+            if st.session_state.get("_gp_filename") != uploaded_gp.name:
+                with st.spinner("📄 Parsing Global Perspectives…"):
+                    _gp_parsed = parse_global_perspectives(uploaded_gp.read())
+                if _gp_parsed:
+                    st.session_state["_gp_data"]    = _gp_parsed
+                    st.session_state["_gp_filename"] = uploaded_gp.name
+                else:
+                    st.session_state.pop("_gp_data", None)
+                    st.warning("⚠️ PDF non riconosciuto — verifica che sia un "
+                               "Global Perspectives Azimut.")
+        else:
+            if st.session_state.get("_gp_filename"):
+                st.session_state.pop("_gp_data",     None)
+                st.session_state.pop("_gp_filename",  None)
+
+        # ── Card stato dati ───────────────────────────────────────────────────
+        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
+        _fd_now = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
         _ms_now = st.session_state.get("_ms_data") or load_ms_cache()
         _ms_with_rating = sum(1 for v in _ms_now.values() if v.get("ms_rating"))
-        if _ms_with_rating:
-            st.markdown(
-                f"<div style='background:#1c1a08;border:1px solid #854d0e;"
-                f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-                f"color:#fde68a;margin-bottom:.5rem;line-height:1.5;'>"
-                f"⭐ <b>Morningstar</b> — {_ms_with_rating} rating caricati</div>",
-                unsafe_allow_html=True)
-        if uploaded:
-            if st.button("⭐  Scarica Rating Morningstar",
-                         use_container_width=True,
-                         help="Recupera il rating Morningstar (stelle 1–5) "
-                              "da FondiOnline per tutti i fondi."):
-                st.session_state["_fetch_ms_requested"] = True
-        else:
-            st.caption("⬆️ Carica prima il file Excel")
+        _gp_loaded_now  = bool(st.session_state.get("_gp_data"))
 
-        st.markdown("---")
-        ptf_choice = st.radio("TIPO PORTAFOGLIO", ["📋  PTF FULL","⚡  PTF SHORT","🎨  LIBERO"])
-        st.markdown("---")
-        profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0)
+        _fd_line = (f"✅ <b>FondiDoc</b> — {len(_fd_now)} fondi"
+                    if _fd_now else "⚠️ <b>FondiDoc</b> — non scaricato")
+        _ms_line = (f"⭐ <b>Morningstar</b> — {_ms_with_rating} rating"
+                    if _ms_with_rating else "⚠️ <b>Morningstar</b> — non scaricato")
+        _gp_status_lines = ""
+        _gp_miss = 0
+        _n_gp    = 0
+        if _gp_loaded_now:
+            _gp_ok  = st.session_state["_gp_data"]
+            _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values())
+            _fd_chk = _fd_now
+            _gp_miss = len(set(
+                f["nome"]
+                for sc in _gp_ok.values()
+                for f in sc.get("funds", [])
+                if not (
+                    _fd_chk.get(_resolve_nome_for_fd(f["nome"], _fd_chk), {}).get("url", "")
+                    or _fd_chk.get(f["nome"], {}).get("url", "")
+                )
+            ))
+            _gp_status_lines = (
+                f"<br>🌐 <b>Global Perspectives</b> — {_n_gp} fondi"
+                + (f" · ⚠️ {_gp_miss} senza dati" if _gp_miss else " · ✅ tutti aggiornati")
+            )
+
+        _all_ok = bool(_fd_now and _ms_with_rating
+                       and (_gp_miss == 0 if _gp_loaded_now else True))
+        _card_bg  = "#0d2b1a" if _all_ok else "#1a1a08"
+        _card_brd = "#166534" if _all_ok else "#854d0e"
+        _card_clr = "#86efac" if _all_ok else "#fde68a"
+        st.markdown(
+            f"<div style='background:{_card_bg};border:1px solid {_card_brd};"
+            f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+            f"color:{_card_clr};margin-bottom:.4rem;line-height:1.8;'>"
+            f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
+            unsafe_allow_html=True)
+
+        # ── Unico tasto Aggiorna Dati ─────────────────────────────────────────
+        _can_update  = bool(uploaded or _gp_loaded_now)
+        _is_fetching = any(st.session_state.get(k) for k in (
+            "_fetch_fd_requested", "_fetch_ms_requested", "_fetch_gp_requested"))
+
+        if _is_fetching:
+            # Tasto "in corso" — arancio pulsante, non cliccabile
+            st.markdown(
+                "<div style='background:linear-gradient(135deg,#92400E,#B45309);"
+                "color:#fff;padding:.6rem 1rem;border-radius:8px;font-size:.88rem;"
+                "font-weight:600;text-align:center;letter-spacing:.02em;"
+                "animation:pulse 1.2s ease-in-out infinite;opacity:.92;'>"
+                "⏳  Aggiornamento in corso…</div>"
+                "<style>@keyframes pulse{"
+                "0%{opacity:.92}50%{opacity:.55}100%{opacity:.92}}</style>",
+                unsafe_allow_html=True)
+        elif _can_update:
+            if st.button("📥  Aggiorna Dati",
+                         use_container_width=True,
+                         help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
+                              "Morningstar e — se il GP è caricato — dati fondi GP."):
+                if uploaded:
+                    st.session_state["_fetch_fd_requested"] = True
+                    st.session_state["_fetch_ms_requested"] = True
+                if _gp_loaded_now:
+                    st.session_state["_fetch_gp_requested"] = True
+                st.rerun()  # mostra subito lo stato "in corso" prima che parta lo scarico
+        else:
+            st.caption("⬆️ Carica il file Excel o il PDF Global Perspectives")
+
+        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
+        _gp_loaded    = bool(st.session_state.get("_gp_data"))
+        _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO"]
+        if _gp_loaded:
+            _ptf_options.append("🌐  SUGGERITO")
+        ptf_choice = st.radio("TIPO PORTAFOGLIO", _ptf_options,
+                              key="_ptf_choice_radio")
+        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
+        profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0,
+                                  key="_profile_select")
         if "LIBERO" not in ptf_choice and "free_ptf" in st.session_state:
             del st.session_state["free_ptf"]
+        # ── Scenario sub-selector (SUGGERITO only) ────────────────────────────
+        if "SUGGERITO" in ptf_choice:
+            _gp_keys = list(st.session_state.get("_gp_data", {}).keys())
+            _SC_LABELS = {
+                "Base": "⚖️  Scenario Base",
+                "Bear": "🐻  Scenario Bear",
+                "Bull": "🐂  Scenario Bull",
+            }
+            _sc_opts = [_SC_LABELS.get(k, k) for k in _gp_keys]
+            if _sc_opts:
+                _sc_sel = st.radio("SCENARIO", _sc_opts, key="_gp_sc_radio")
+                st.session_state["_gp_sc_key"] = next(
+                    (k for k, v in _SC_LABELS.items() if v == _sc_sel),
+                    _gp_keys[0])
+                # Show scenario info
+                _sc_info = st.session_state["_gp_data"].get(
+                    st.session_state["_gp_sc_key"], {}).get("info", "")
+                if _sc_info:
+                    st.caption(f"📊 {_sc_info}")
 
     ptf_label = ptf_choice.split("  ",1)[1] if "  " in ptf_choice else ptf_choice
+    _is_suggerito = "SUGGERITO" in ptf_choice
+    if _is_suggerito:
+        _sc_key_hdr = st.session_state.get("_gp_sc_key", "Base")
+        ptf_label   = f"SUGGERITO — Scenario {_sc_key_hdr}"
+
+    # ── Auto-fetch GP links quando si entra in SUGGERITO con fondi mancanti ──
+    # Usa una firma (n_fondi_gp|dim_cache) per non ritentare se già fatto
+    _is_already_fetching = any(st.session_state.get(k) for k in (
+        "_fetch_fd_requested", "_fetch_ms_requested", "_fetch_gp_requested"))
+    if _is_suggerito and _gp_loaded_now and _gp_miss > 0 and not _is_already_fetching:
+        _auto_sig = f"{_n_gp}|{len(_fd_now)}"
+        if st.session_state.get("_gp_auto_fetch_sig") != _auto_sig:
+            st.session_state["_gp_auto_fetch_sig"] = _auto_sig
+            st.session_state["_fetch_gp_requested"] = True
+            st.rerun()
 
     # ── Invalidate cached PDF when portfolio type or profile changes ──────────
     _ptf_key = f"{ptf_choice}|{profile}"
@@ -2648,49 +3322,81 @@ def main():
 
     st.markdown(f"""<div class="az-header"><div class="az-eyebrow">AZIMUT INVESTMENTS · AAS EMILIA ROMAGNA MARCHE UMBRIA</div><div class="az-rule"></div><div class="az-title">{ptf_label}</div><div class="az-meta">{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()} &nbsp;·&nbsp; {datetime.date.today().strftime('%d %B %Y')}</div></div>""",unsafe_allow_html=True)
 
-    if uploaded is None:
+    if uploaded is None and not _is_suggerito:
         st.info("⬅️ **Carica il file Excel** nella barra laterale per iniziare.")
         return
 
-    with st.spinner("⏳ Caricamento dati…"):
-        file_bytes = uploaded.read()
-        raw = parse_excel(file_bytes)
+    if uploaded is not None:
+        with st.spinner("⏳ Caricamento dati…"):
+            file_bytes = uploaded.read()
+            raw = parse_excel(file_bytes)
+    else:
+        raw = {}
 
-    # ── Sidebar-triggered FondiDoc fetch ──────────────────────────────────────
-    if st.session_state.pop("_fetch_fd_requested", False):
-        _fida_urls_all = raw.get("fida_urls", {})
-        _sheets = [raw[s] for s in ("PTF FULL", "PTF SHORT")
-                   if s in raw and not raw[s].empty]
-        _df_all = (pd.concat(_sheets, ignore_index=True)
-                   .drop_duplicates(subset=["nome"]) if _sheets else pd.DataFrame())
-        if not _df_all.empty:
-            _pb_fd = st.progress(0, text="Scarico dati FondiDoc…")
-            def _upd_fd(v): _pb_fd.progress(v, text=f"FondiDoc: {int(v*100)}%…")
-            _fd_new = fetch_all_fund_data(_df_all, _fida_urls_all, _upd_fd)
-            _pb_fd.empty()
-            save_fund_cache(_fd_new)
-            st.session_state["_scomp_fd"] = _fd_new
-            st.rerun()
-        else:
-            st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
+    # ── Sidebar-triggered FondiDoc / MS fetch (only when Excel is loaded) ───────
+    if uploaded is not None:
+        if st.session_state.pop("_fetch_fd_requested", False):
+            _fida_urls_all = raw.get("fida_urls", {})
+            _sheets = [raw[s] for s in ("PTF FULL", "PTF SHORT")
+                       if s in raw and not raw[s].empty]
+            _df_all = (pd.concat(_sheets, ignore_index=True)
+                       .drop_duplicates(subset=["nome"]) if _sheets else pd.DataFrame())
+            if not _df_all.empty:
+                _pb_fd = st.progress(0, text="Scarico dati FondiDoc…")
+                def _upd_fd(v): _pb_fd.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+                _fd_new = fetch_all_fund_data(_df_all, _fida_urls_all, _upd_fd)
+                _pb_fd.empty()
+                save_fund_cache(_fd_new)
+                st.session_state["_scomp_fd"] = _fd_new
+                st.rerun()
+            else:
+                st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
 
-    # ── Sidebar-triggered Morningstar (FondiOnline) fetch ─────────────────────
-    if st.session_state.pop("_fetch_ms_requested", False):
-        _fida_df   = raw.get("FIDA", pd.DataFrame())
-        _sheets_ms = [raw[s] for s in ("PTF FULL", "PTF SHORT")
-                      if s in raw and not raw[s].empty]
-        _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
-                  .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
-        if not _df_ms.empty:
-            with st.spinner("⭐ Scarico rating Morningstar da FondiOnline…"):
-                _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
-            save_ms_cache(_ms_new)
-            st.session_state["_ms_data"] = _ms_new
-            _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
-            st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
+        if st.session_state.pop("_fetch_ms_requested", False):
+            _fida_df   = raw.get("FIDA", pd.DataFrame())
+            _sheets_ms = [raw[s] for s in ("PTF FULL", "PTF SHORT")
+                          if s in raw and not raw[s].empty]
+            _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
+                      .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
+            if not _df_ms.empty:
+                with st.spinner("⭐ Scarico rating Morningstar da FondiOnline…"):
+                    _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
+                save_ms_cache(_ms_new)
+                st.session_state["_ms_data"] = _ms_new
+                _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
+                st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
+                st.rerun()
+            else:
+                st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
+    else:
+        # Drain any stale fetch flags so they don't fire when Excel is later loaded
+        st.session_state.pop("_fetch_fd_requested", None)
+        st.session_state.pop("_fetch_ms_requested", None)
+
+    # ── GP fund FondiDoc lookup (runs with or without Excel) ─────────────────
+    if st.session_state.pop("_fetch_gp_requested", False):
+        _gp_src  = st.session_state.get("_gp_data", {})
+        _fd_base = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
+        if _gp_src:
+            _pb_gp = st.progress(0, text="Cerco fondi GP su FondiDoc…")
+            def _upd_gp(v):
+                _pb_gp.progress(v, text=f"Ricerca fondi GP: {int(v*100)}%…")
+            _quick = raw.get("fida_urls", {}) if uploaded is not None else {}
+            _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp, quick_urls=_quick)
+            _pb_gp.empty()
+            if _gp_new:
+                # Merge into existing cache and save
+                _fd_merged = {**_fd_base, **_gp_new}
+                save_fund_cache(_fd_merged)
+                st.session_state["_scomp_fd"] = _fd_merged
+                st.success(
+                    f"✅ Trovati dati FondiDoc per "
+                    f"{len(_gp_new)}/{len(_gp_new)} fondi GP")
+            else:
+                st.warning(
+                    "⚠️ Nessun dato trovato su FondiDoc per i fondi GP. "
+                    "Potrebbe essere un problema di rete o di nomi.")
             st.rerun()
-        else:
-            st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
 
     # ── Factbook data ──────────────────────────────────────────────────────────
     # Priority:
@@ -2744,7 +3450,23 @@ def main():
         else:
             st.warning("⚠️ Excel Factbook vuoto — uso dati precedenti")
 
-    if "LIBERO" in ptf_choice:
+    if _is_suggerito:
+        _gp_data_main = st.session_state.get("_gp_data", {})
+        _sc_key_main  = st.session_state.get("_gp_sc_key", "Base")
+        _sc_data_main = _gp_data_main.get(_sc_key_main)
+        if not _sc_data_main:
+            st.warning("📄 Carica il PDF **Global Perspectives** nella barra "
+                       "laterale per vedere i portafogli suggeriti.")
+            return
+        _fd_for_gp = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
+        _ms_for_gp = st.session_state.get("_ms_data") or load_ms_cache()
+        _fida_urls_gp = raw.get("fida_urls", {}) if uploaded is not None else {}
+        df = suggerito_portfolio_ui(_sc_key_main, _sc_data_main,
+                                    _fd_for_gp, _ms_for_gp,
+                                    extra_urls=_fida_urls_gp)
+        if df is None or df.empty:
+            return  # weights not balanced yet — builder is shown, analysis waits
+    elif "LIBERO" in ptf_choice:
         df = free_portfolio_ui(raw)
     else:
         key = "PTF FULL" if "FULL" in ptf_choice else "PTF SHORT"
@@ -3222,50 +3944,81 @@ def main():
             f"<span style='color:#3b82f6;'>{_src_note}</span></div></div>",
             unsafe_allow_html=True)
 
-    fida_df = raw.get("FIDA", pd.DataFrame())
+    fida_df  = raw.get("FIDA", pd.DataFrame())
+    _is_free = "LIBERO" in ptf_choice
+
+    # ── Cache key: invalidate when portfolio/profile/fund-data changes ──────
+    _pdf_cache_key = (f"{_ptf_key}|{len(df_act)}|{len(_fd_live)}"
+                      + (f"|{hash(tuple(sorted(df_act['nome'].tolist())))}"
+                         if _is_free else ""))
+
+    # ── Auto-generate PDF for stable portfolios (FULL/SHORT/SUGGERITO) ──────
+    # For LIBERO the weights change on every interaction, so we keep the button.
+    if not _is_free and st.session_state.get("_pdf_cache_key") != _pdf_cache_key:
+        _fname_auto = (f"Azimut_{ptf_label.replace(' ','_').replace('—','')}"
+                       f"_{profile}_{datetime.date.today().strftime('%Y%m%d')}.pdf")
+        with st.spinner("⚡ Genero PDF…"):
+            try:
+                _pdf_auto = generate_pdf(
+                    df_act, wcol, profile, ptf_label, _fd_live,
+                    fida_df=fida_df, factbook_data=factbook_data,
+                    cache_date=cache_date)
+                st.session_state["_pdf_bytes_ready"]  = _pdf_auto
+                st.session_state["_pdf_fname_ready"]  = _fname_auto
+                st.session_state["_pdf_lbl"]          = (
+                    f"{len(_fd_live)} schede da FondiDoc" if _fd_live
+                    else "dati base (lancia Aggiorna Dati per arricchire)")
+                st.session_state["_pdf_cache_key"]    = _pdf_cache_key
+            except Exception as _pe:
+                st.error(f"Errore generazione PDF: {_pe}")
 
     with col_btn:
-        if st.session_state.get("_pdf_bytes_ready"):
-            # PDF già generato per questo portafoglio/profilo: mostra solo download
+        if st.session_state.get("_pdf_bytes_ready") and not _is_free:
+            # One-click download for stable portfolios
             st.download_button(
-                "📥   Scarica Report PDF",
+                "📥  Scarica Report PDF",
                 data=st.session_state["_pdf_bytes_ready"],
                 file_name=st.session_state.get("_pdf_fname_ready", "report.pdf"),
                 mime="application/pdf",
                 use_container_width=True,
+                type="primary",
             )
-            st.success(f"✅ PDF pronto — {st.session_state.get('_pdf_lbl','')}")
-            st.caption("Cambia portafoglio, profilo o fondi per rigenerare.")
-        if not st.session_state.get("_pdf_bytes_ready") and \
-                st.button("⚡  Genera PDF", use_container_width=True, type="primary"):
-            # Clear any stale PDF from a previous run
-            for _k in ("_pdf_bytes_ready", "_pdf_fname_ready", "_pdf_lbl"):
-                st.session_state.pop(_k, None)
-
-            pb = st.progress(0, text="Scarico dati FondiDoc…")
-            def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
-            fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
-            pb.progress(1.0, text="✅ Genero PDF…")
-            save_fund_cache(fund_data)
-            # Store fund data so the Scomposizione table gets populated
-            # on the immediate rerun triggered below
-            st.session_state["_scomp_fd"] = fund_data
-            try:
-                pdf_bytes = generate_pdf(
-                    df_act, wcol, profile, ptf_label, fund_data,
-                    fida_df=fida_df, factbook_data=factbook_data,
-                    cache_date=cache_date)
-                fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
-                         f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
-                st.session_state["_pdf_bytes_ready"] = pdf_bytes
-                st.session_state["_pdf_fname_ready"] = fname
-                st.session_state["_pdf_lbl"] = f"{len(fund_data)} schede da FondiDoc"
-            except Exception as _pe:
-                st.error(f"Errore PDF: {_pe}")
-            pb.empty()
-            # Force immediate rerun so the Scomposizione table and download
-            # button both reflect the freshly fetched FondiDoc data
-            st.rerun()
+            st.caption(f"✅ {st.session_state.get('_pdf_lbl','PDF pronto')}")
+        else:
+            # LIBERO: manual generate (portfolio changes at every interaction)
+            if st.session_state.get("_pdf_bytes_ready") and _is_free:
+                st.download_button(
+                    "📥  Scarica Report PDF",
+                    data=st.session_state["_pdf_bytes_ready"],
+                    file_name=st.session_state.get("_pdf_fname_ready", "report.pdf"),
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+                st.caption("Clicca 'Genera' per aggiornare con i pesi attuali.")
+            if st.button("⚡  Genera PDF", use_container_width=True, type="primary"):
+                for _k in ("_pdf_bytes_ready", "_pdf_fname_ready", "_pdf_lbl"):
+                    st.session_state.pop(_k, None)
+                pb = st.progress(0, text="Scarico dati FondiDoc…")
+                def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
+                fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
+                pb.progress(1.0, text="✅ Genero PDF…")
+                save_fund_cache(fund_data)
+                st.session_state["_scomp_fd"] = fund_data
+                try:
+                    pdf_bytes = generate_pdf(
+                        df_act, wcol, profile, ptf_label, fund_data,
+                        fida_df=fida_df, factbook_data=factbook_data,
+                        cache_date=cache_date)
+                    fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
+                             f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
+                    st.session_state["_pdf_bytes_ready"]  = pdf_bytes
+                    st.session_state["_pdf_fname_ready"]  = fname
+                    st.session_state["_pdf_lbl"]          = f"{len(fund_data)} schede"
+                    st.session_state["_pdf_cache_key"]    = _pdf_cache_key
+                except Exception as _pe:
+                    st.error(f"Errore PDF: {_pe}")
+                pb.empty()
+                st.rerun()
 
     st.markdown("<br><br>",unsafe_allow_html=True)
 
