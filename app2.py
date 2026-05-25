@@ -3162,6 +3162,8 @@ def main():
         _ms_line = (f"⭐ <b>Morningstar</b> — {_ms_with_rating} rating"
                     if _ms_with_rating else "⚠️ <b>Morningstar</b> — non scaricato")
         _gp_status_lines = ""
+        _gp_miss = 0
+        _n_gp    = 0
         if _gp_loaded_now:
             _gp_ok  = st.session_state["_gp_data"]
             _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values())
@@ -3254,6 +3256,17 @@ def main():
     if _is_suggerito:
         _sc_key_hdr = st.session_state.get("_gp_sc_key", "Base")
         ptf_label   = f"SUGGERITO — Scenario {_sc_key_hdr}"
+
+    # ── Auto-fetch GP links quando si entra in SUGGERITO con fondi mancanti ──
+    # Usa una firma (n_fondi_gp|dim_cache) per non ritentare se già fatto
+    _is_already_fetching = any(st.session_state.get(k) for k in (
+        "_fetch_fd_requested", "_fetch_ms_requested", "_fetch_gp_requested"))
+    if _is_suggerito and _gp_loaded_now and _gp_miss > 0 and not _is_already_fetching:
+        _auto_sig = f"{_n_gp}|{len(_fd_now)}"
+        if st.session_state.get("_gp_auto_fetch_sig") != _auto_sig:
+            st.session_state["_gp_auto_fetch_sig"] = _auto_sig
+            st.session_state["_fetch_gp_requested"] = True
+            st.rerun()
 
     # ── Invalidate cached PDF when portfolio type or profile changes ──────────
     _ptf_key = f"{ptf_choice}|{profile}"
