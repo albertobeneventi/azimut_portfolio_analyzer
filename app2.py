@@ -1770,8 +1770,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # Costruisci le celle della legenda
     leg_items = []
     for _, r in d_leg.iterrows():
-        url    = (fund_data or {}).get(r["nome"], {}).get("url", "")
-        name_s = (r["nome"][:24] + "…") if len(r["nome"]) > 24 else r["nome"]
+        _rn = r["nome"]
+        # 1) override manuale  2) cache diretta  3) fuzzy (strip "AZ Fam - ")
+        _fd = fund_data or {}
+        url = MANUAL_URL_OVERRIDES.get(_rn, "") or _fd.get(_rn, {}).get("url", "")
+        if not url:
+            _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', _rn, flags=re.I).strip().lower()
+            if _sk:
+                for _fk, _fv in _fd.items():
+                    if isinstance(_fv, dict) and _sk in _fk.lower() and _fv.get("url"):
+                        url = _fv["url"]
+                        break
+        name_s = (_rn[:24] + "…") if len(_rn) > 24 else _rn
         pct_s  = f"{r[wcol]*100:.1f}%"
         if url:
             lbl = Paragraph(
