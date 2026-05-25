@@ -2700,13 +2700,18 @@ def parse_global_perspectives(pdf_bytes: bytes):
             elif re.match(r'^EMERGENTI$',     l, re.I):
                 cur_subcat = "bond_em" if cur_group == "bond" else "equity_em"
             elif re.match(r'^SVILUPPATI$',    l, re.I): cur_subcat = "equity_dev"
-            # — Fund lines —
+            # — Fund lines (split on each "AZ Fund 1 -" to handle 2-column layout) —
             elif re.search(r'AZ\s+Fund\s+1\s*[-–]', l, re.I):
-                m = re.search(r'AZ\s+Fund\s+1\s*[-–]\s*(AZ\s+\S.+)', l, re.I)
-                if m and cur_subcat and cur_group != "private":
-                    raw_nm = m.group(1).strip().rstrip("*").strip()
-                    if raw_nm and not _is_priv(raw_nm):
-                        fund_subcat[raw_nm] = cur_subcat
+                for _part in re.split(r'(?=AZ\s+Fund\s+1\s*[-–])', l, flags=re.I):
+                    _part = _part.strip()
+                    _m = re.match(r'AZ\s+Fund\s+1\s*[-–]\s*(AZ\s+\S.+)', _part, re.I)
+                    if _m and cur_subcat and cur_group != "private":
+                        # Truncate at any additional "AZ Fund 1" still present
+                        raw_nm = re.split(
+                            r'\s+AZ\s+Fund\s+1\s*[-–]', _m.group(1), flags=re.I
+                        )[0].strip().rstrip("*").strip()
+                        if raw_nm and not _is_priv(raw_nm):
+                            fund_subcat[raw_nm] = cur_subcat
 
         # ── 4c. Compute equal-weight per sub-category ─────────────────────────
         subcat_funds: dict = {}
@@ -2753,18 +2758,182 @@ def parse_global_perspectives(pdf_bytes: bytes):
     return result if result else None
 
 
-def build_suggerito_df(scenario: dict, fund_data: dict):
-    """Build a portfolio DataFrame from one SUGGERITO scenario dict.
+# ── Module-level badge helpers (used in suggerito_portfolio_ui) ──────────────
+_FIDA_BG_GP  = {5:"#166534", 4:"#15803d", 3:"#16a34a", 2:"#64748B", 1:"#94A3B8"}
+_MS_BG_GP    = {5:"#78350F", 4:"#92400E", 3:"#B45309"}
+_MS_COL_GP   = {5:"#78350F", 4:"#92400E", 3:"#B45309", 2:"#475569", 1:"#94A3B8"}
 
-    Fund names from the PDF (full form) are resolved against *fund_data* keys
-    (Excel-abbreviated form) so that existing ``.get(row["nome"])`` cache
-    lookups work correctly even in SUGGERITO mode.
+def _fida_badge_gp(r) -> str:
+    try:    v = int(r)
+    except (TypeError, ValueError): return "<span style='color:#94A3B8;'>—</span>"
+    bg = _FIDA_BG_GP.get(v)
+    return (f"<span style='background:{bg};color:#fff;padding:2px 8px;"
+            f"border-radius:4px;font-weight:700;font-size:.8rem;'>{v}</span>"
+            if bg else f"<span style='color:#64748B;font-weight:700;font-size:.8rem;'>{v}</span>")
+
+def _ms_badge_gp(ms_r) -> str:
+    try:    v = int(ms_r)
+    except (TypeError, ValueError): return "<span style='color:#94A3B8;'>—</span>"
+    filled = "★" * v
+    bg = _MS_BG_GP.get(v)
+    if bg:
+        return (f"<span style='background:{bg};color:#fff;padding:2px 8px;"
+                f"border-radius:4px;font-weight:700;font-size:.8rem;'>{filled}</span>")
+    return (f"<span style='color:{_MS_COL_GP.get(v,\"#64748B\")};font-weight:700;"
+            f"font-size:.8rem;'>{filled}</span>")
+
+# Sub-category display names (Italian labels)
+_SUBCAT_DISPLAY = {
+    "alloc_balanced":  "Allocation – Balanced",
+    "alloc_flexible":  "Allocation – Flexible",
+    "bond_aggregate":  "Bond – Aggregate / Gov",
+    "bond_thematic":   "Bond – Thematic",
+    "bond_em":         "Bond – Paesi Emergenti",
+    "bond_target":     "Bond – Target Maturity",
+    "equity_thematic": "Equity – Thematic",
+    "equity_dev":      "Equity – Paesi Sviluppati",
+    "equity_em":       "Equity – Paesi Emergenti",
+}
+
+
+def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
+                           fund_data: dict, ms_data: dict):
+    """Interactive portfolio builder for a SUGGERITO scenario.
+
+    Shows macro-category headers with the scenario-suggested weight, then
+    lists the recommended funds with FIDArating + Morningstar badges and a
+    free peso-% input for each.  Returns a ready DataFrame when weights sum
+    to 100 %, or None while the user is still editing.
     """
-    funds = scenario.get("funds", [])
+    funds = gp_scenario.get("funds", [])
     if not funds:
         return None
+
+    sw = gp_scenario.get("subcat_weights", {})
+
+    # Group funds by subcategory, preserving parse order
+    subcat_funds: dict = {}
+    for f in funds:
+        subcat_funds.setdefault(f["subcat"], []).append(f)
+
+    # Per-scenario session-state key so weights reset when switching scenarios
+    ss_key = f"_sg_w_{sc_name}"
+    if ss_key not in st.session_state:
+        # Initialise with equal-weight defaults from the scenario
+        st.session_state[ss_key] = {
+            f["nome"]: round(f["weight"] * 100, 1) for f in funds
+        }
+    ww: dict = st.session_state[ss_key]
+
+    # ── Page header ───────────────────────────────────────────────────────────
+    st.markdown('<p class="sec-title">Costruisci il Portafoglio Suggerito</p>',
+                unsafe_allow_html=True)
+    st.caption(
+        "I pesi mostrati sono distribuiti equamente all'interno di ogni "
+        "sottocategoria.  Modifica liberamente i valori e l'analisi si "
+        "aggiorna automaticamente quando la somma raggiunge 100 %."
+    )
+
+    # ── Column headers (only once, above all subcategories) ───────────────────
+    _h1, _h2, _h3, _h4 = st.columns([4.5, 1.2, 1.2, 1.4])
+    _h1.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>Fondo</span>",
+                 unsafe_allow_html=True)
+    _h2.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>FIDArating</span>",
+                 unsafe_allow_html=True)
+    _h3.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>Morningstar</span>",
+                 unsafe_allow_html=True)
+    _h4.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>Peso %</span>",
+                 unsafe_allow_html=True)
+    st.markdown("<hr style='margin:.15rem 0 .3rem 0;border-color:#e2e8f0;'>",
+                unsafe_allow_html=True)
+
+    # ── Per-subcategory sections ──────────────────────────────────────────────
+    for sc_key, sc_funds in subcat_funds.items():
+        w_sc   = sw.get(sc_key, 0)
+        sc_lbl = _SUBCAT_DISPLAY.get(sc_key, sc_key)
+
+        # — Subcategory header bar —
+        st.markdown(
+            f"<div style='background:linear-gradient(90deg,#0D1B2A,#162e52);"
+            f"color:#fff;padding:.45rem 1rem;border-radius:6px;margin-top:.7rem;"
+            f"display:flex;align-items:center;gap:.8rem;'>"
+            f"<span style='font-weight:700;font-size:.88rem;flex:1;'>{sc_lbl}</span>"
+            f"<span style='background:#C9A84C;color:#0D1B2A;padding:2px 9px;"
+            f"border-radius:4px;font-size:.73rem;font-weight:700;white-space:nowrap;'>"
+            f"Peso suggerito: {w_sc}%</span></div>",
+            unsafe_allow_html=True)
+
+        # — Fund rows —
+        for f in sc_funds:
+            fname    = f["nome"]
+            resolved = _resolve_nome_for_fd(fname, fund_data)
+
+            # Ratings from cache
+            fd_ov  = (fund_data or {}).get(resolved, {}).get("overview", {})
+            fida_r = str(fd_ov.get("fida_rating") or "").strip() or "—"
+            ms_r   = (ms_data or {}).get(resolved, {}).get("ms_rating")
+
+            # Display name: strip "AZ [Family] - " prefix
+            short = re.sub(r'^AZ\s+(?:Allocation|Bond|Equity)\s*[-–]\s*',
+                           '', fname, flags=re.I).strip()
+
+            c1, c2, c3, c4 = st.columns([4.5, 1.2, 1.2, 1.4])
+            with c1:
+                st.markdown(
+                    f"<div style='font-size:.84rem;font-weight:500;color:#1e293b;"
+                    f"padding:.55rem 0 .3rem 0;'>{short}</div>",
+                    unsafe_allow_html=True)
+            with c2:
+                st.markdown(
+                    f"<div style='padding:.5rem 0 .25rem 0;'>"
+                    f"{_fida_badge_gp(fida_r)}</div>",
+                    unsafe_allow_html=True)
+            with c3:
+                st.markdown(
+                    f"<div style='padding:.5rem 0 .25rem 0;'>"
+                    f"{_ms_badge_gp(ms_r)}</div>",
+                    unsafe_allow_html=True)
+            with c4:
+                default_w = float(ww.get(fname, round(f["weight"] * 100, 1)))
+                new_w = st.number_input(
+                    "w", min_value=0.0, max_value=100.0,
+                    value=default_w, step=0.5,
+                    key=f"sg_{sc_name}_{fname[:35]}",
+                    label_visibility="collapsed",
+                )
+                ww[fname] = new_w
+
+        st.markdown("<hr style='margin:.25rem 0 0 0;border-color:#f1f5f9;'>",
+                    unsafe_allow_html=True)
+
+    # ── Total weight indicator ────────────────────────────────────────────────
+    total_w = sum(ww.get(f["nome"], 0.0) for f in funds)
+    diff    = abs(total_w - 100.0)
+    st.markdown("<br>", unsafe_allow_html=True)
+    if diff < 0.15:
+        st.markdown(
+            f'<div class="w-ok">✅ Somma pesi: <b>{total_w:.1f}%</b>'
+            f' — Portafoglio pronto!</div>', unsafe_allow_html=True)
+    else:
+        left = 100.0 - total_w
+        st.markdown(
+            f'<div class="w-warn">⚠️ Somma pesi: <b>{total_w:.1f}%</b>'
+            f' ({"mancano" if left>0 else "eccedono"} {abs(left):.1f}%)</div>',
+            unsafe_allow_html=True)
+
+    if diff > 1.0:
+        return None   # analysis only when weights are balanced
+
+    # ── Build DataFrame ───────────────────────────────────────────────────────
     records: list = []
     for f in funds:
+        peso = ww.get(f["nome"], 0.0)
+        if peso <= 0:
+            continue
         nome = _resolve_nome_for_fd(f["nome"], fund_data)
         records.append({
             "nome":      nome,
@@ -2773,10 +2942,10 @@ def build_suggerito_df(scenario: dict, fund_data: dict):
             "macro_cat": get_macro(f["categoria"]),
             "az_pct":    f["az_pct"],
             "obb_pct":   f["obb_pct"],
-            "r_weight":  f["weight"],
-            "w_cons":    f["weight"],
-            "w_equil":   f["weight"],
-            "w_accr":    f["weight"],
+            "r_weight":  peso / 100.0,
+            "w_cons":    peso / 100.0,
+            "w_equil":   peso / 100.0,
+            "w_accr":    peso / 100.0,
         })
     if not records:
         return None
@@ -2787,6 +2956,7 @@ def build_suggerito_df(scenario: dict, fund_data: dict):
             df[wc] /= t
     df["macro_cat"] = df["categoria"].apply(get_macro)
     df = assign_colors(df)
+    st.markdown("<br>", unsafe_allow_html=True)
     return df
 
 
@@ -3104,11 +3274,11 @@ def main():
                        "laterale per vedere i portafogli suggeriti.")
             return
         _fd_for_gp = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
-        df = build_suggerito_df(_sc_data_main, _fd_for_gp)
+        _ms_for_gp = st.session_state.get("_ms_data") or load_ms_cache()
+        df = suggerito_portfolio_ui(_sc_key_main, _sc_data_main,
+                                    _fd_for_gp, _ms_for_gp)
         if df is None or df.empty:
-            st.warning("⚠️ Nessun fondo trovato nel scenario selezionato — "
-                       "verifica il PDF caricato.")
-            return
+            return  # weights not balanced yet — builder is shown, analysis waits
     elif "LIBERO" in ptf_choice:
         df = free_portfolio_ui(raw)
     else:
