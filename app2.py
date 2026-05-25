@@ -1268,6 +1268,96 @@ except Exception:
     pass  # run uncached if decorator fails
 
 
+def _fondidoc_search_url(query: str) -> str | None:
+    """Cerca un fondo su FondiDoc per nome o ISIN.
+
+    Interroga la pagina di ricerca inglese e restituisce il primo URL
+    Index trovato, o None se non trovato / errore di rete.
+    """
+    try:
+        import urllib.parse
+        q = urllib.parse.quote(query)
+        r = requests.get(
+            f"https://www.fondidoc.it/en/Search?q={q}",
+            headers=FONDIDOC_HEADERS,
+            timeout=8,
+            allow_redirects=True,
+        )
+        if r.status_code != 200:
+            return None
+        soup = BeautifulSoup(r.text, "lxml")
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            # Fund detail pages live under /d/Index/ or /d/Ana/
+            if "/d/Index/" in href or "/d/Ana/" in href:
+                href = href.replace("/d/Ana/", "/d/Index/")
+                if href.startswith("http"):
+                    return href
+                return "https://www.fondidoc.it" + href
+    except Exception:
+        pass
+    return None
+
+
+def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
+                           progress_cb=None) -> dict:
+    """Cerca su FondiDoc i fondi del GP che non sono già in cache.
+
+    Per ogni fondo mancante tenta prima con il nome PDF normalizzato,
+    poi con il nome risolto (Excel abbreviato).
+    Restituisce {nome_risolto: fund_data_dict} da aggiungere alla cache.
+    """
+    # Raccoglie tutti i nomi GP unici (PDF → risolto)
+    missing: dict = {}   # resolved_name → pdf_name
+    for sc_data in gp_data.values():
+        for f in sc_data.get("funds", []):
+            pdf_name = f["nome"]
+            res_name = _resolve_nome_for_fd(pdf_name, existing_cache)
+            if res_name not in existing_cache:
+                # Prova entrambi i nomi come query di ricerca
+                missing[res_name] = pdf_name
+
+    if not missing:
+        return {}
+
+    results: dict = {}
+    total = len(missing)
+    done  = 0
+
+    def _try_fetch(res_name: str, pdf_name: str):
+        # Query 1: nome abbreviato Excel (più preciso)
+        url = _fondidoc_search_url(res_name)
+        # Query 2: nome PDF se la prima fallisce
+        if not url and pdf_name != res_name:
+            url = _fondidoc_search_url(pdf_name)
+        if url:
+            try:
+                data = fetch_fund_data(url)
+                return res_name, data
+            except Exception:
+                pass
+        return res_name, {}
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {
+            pool.submit(_try_fetch, rn, pn): rn
+            for rn, pn in missing.items()
+        }
+        for future in as_completed(futures):
+            rn = futures[future]
+            try:
+                key, data = future.result()
+                if data:
+                    results[key] = data
+            except Exception:
+                pass
+            done += 1
+            if progress_cb:
+                progress_cb(done / total)
+
+    return results
+
+
 def fetch_all_fund_data(df: pd.DataFrame, fida_urls: dict,
                          progress_cb=None) -> dict:
     """Parallel fetch for all portfolio funds."""
@@ -3095,6 +3185,31 @@ def main():
                     f"✅ <b>Global Perspectives</b> — {_n_gp} fondi "
                     f"({', '.join(_gp_ok.keys())})</div>",
                     unsafe_allow_html=True)
+
+        # Bottone per scaricare dati FondiDoc dei fondi GP non ancora in cache
+        if st.session_state.get("_gp_data"):
+            _fd_check = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
+            _gp_all_funds = [
+                f["nome"]
+                for sc in st.session_state["_gp_data"].values()
+                for f in sc.get("funds", [])
+            ]
+            _gp_missing = [
+                n for n in _gp_all_funds
+                if _resolve_nome_for_fd(n, _fd_check) not in _fd_check
+            ]
+            if _gp_missing:
+                st.markdown(
+                    f"<div style='background:#1a1a08;border:1px solid #854d0e;"
+                    f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+                    f"color:#fde68a;margin-bottom:.5rem;line-height:1.5;'>"
+                    f"⚠️ <b>{len(set(_gp_missing))} fondi GP</b> senza dati FondiDoc</div>",
+                    unsafe_allow_html=True)
+                if st.button("🔍  Cerca Dati Fondi GP",
+                             use_container_width=True,
+                             help="Cerca su FondiDoc i fondi del Global Perspectives "
+                                  "non ancora presenti in cache (FIDArating, rendimenti…)"):
+                    st.session_state["_fetch_gp_requested"] = True
         else:
             # If file removed, clear cached data
             if st.session_state.get("_gp_filename"):
@@ -3196,6 +3311,30 @@ def main():
         # Drain any stale fetch flags so they don't fire when Excel is later loaded
         st.session_state.pop("_fetch_fd_requested", None)
         st.session_state.pop("_fetch_ms_requested", None)
+
+    # ── GP fund FondiDoc lookup (runs with or without Excel) ─────────────────
+    if st.session_state.pop("_fetch_gp_requested", False):
+        _gp_src  = st.session_state.get("_gp_data", {})
+        _fd_base = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
+        if _gp_src:
+            _pb_gp = st.progress(0, text="Cerco fondi GP su FondiDoc…")
+            def _upd_gp(v):
+                _pb_gp.progress(v, text=f"Ricerca fondi GP: {int(v*100)}%…")
+            _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp)
+            _pb_gp.empty()
+            if _gp_new:
+                # Merge into existing cache and save
+                _fd_merged = {**_fd_base, **_gp_new}
+                save_fund_cache(_fd_merged)
+                st.session_state["_scomp_fd"] = _fd_merged
+                st.success(
+                    f"✅ Trovati dati FondiDoc per "
+                    f"{len(_gp_new)}/{len(_gp_new)} fondi GP")
+            else:
+                st.warning(
+                    "⚠️ Nessun dato trovato su FondiDoc per i fondi GP. "
+                    "Potrebbe essere un problema di rete o di nomi.")
+            st.rerun()
 
     # ── Factbook data ──────────────────────────────────────────────────────────
     # Priority:
