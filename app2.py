@@ -2430,8 +2430,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                                     spaceBefore=4, spaceAfter=4))
 
     # ── FOOTER ─────────────────────────────────────────────
-    story.append(PageBreak())
-    story.append(HRFlowable(width="100%",thickness=0.5,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=8))
+    story.append(Spacer(1, 10))
+    story.append(HRFlowable(width="100%",thickness=0.5,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=6))
     story.append(Paragraph(
         "Documento generato automaticamente a scopo illustrativo. I dati di performance provengono da FIDA FondiDoc "
         "(fondidoc.it). I pesi indicati sono riferiti al portafoglio modello e non costituiscono offerta o consulenza "
