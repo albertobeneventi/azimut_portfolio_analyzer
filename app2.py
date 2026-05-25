@@ -3638,7 +3638,20 @@ def main():
     n_fondi = len(df_act)
     w_az    = (df_act[wcol]*df_act["az_pct"]).sum()*100
     w_obb   = (df_act[wcol]*df_act["obb_pct"]).sum()*100
-    srri    = max(1,min(7,round(w_az/100*6+1)))
+
+    # SUGGERITO: il DEFAULT_AZ per categoria (92% az, 50% bilanciati, 6% bond)
+    # dà stime grossolane (es. 73%). Il PDF GP riporta direttamente la quota
+    # equity/bond dello scenario → usala se disponibile.
+    if _is_suggerito:
+        _sc_info_kpi = (st.session_state.get("_gp_data") or {}).get(
+            st.session_state.get("_gp_sc_key", "Base"), {}).get("info", "")
+        _m_eq_kpi = re.search(r'Equity\s+(\d+)', _sc_info_kpi)
+        _m_bd_kpi = re.search(r'Bond\s+(\d+)',   _sc_info_kpi)
+        if _m_eq_kpi and _m_bd_kpi:
+            w_az  = float(_m_eq_kpi.group(1))
+            w_obb = float(_m_bd_kpi.group(1))
+
+    srri = max(1, min(7, round(w_az/100*6+1)))
 
     _SRRI_LABELS = {
         1: "Rischio Molto Basso",
