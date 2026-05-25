@@ -3557,7 +3557,7 @@ def main():
             _pb_gp = st.progress(0, text="Cerco fondi GP su FondiDoc…")
             def _upd_gp(v):
                 _pb_gp.progress(v, text=f"Ricerca fondi GP: {int(v*100)}%…")
-            _quick = raw.get("fida_urls", {}) if uploaded is not None else {}
+            _quick = raw.get("fida_urls") or dict(MANUAL_URL_OVERRIDES)
             _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp, quick_urls=_quick)
             _pb_gp.empty()
             if _gp_new:
@@ -3652,7 +3652,7 @@ def main():
             return
         _fd_for_gp = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
         _ms_for_gp = st.session_state.get("_ms_data") or load_ms_cache()
-        _fida_urls_gp = raw.get("fida_urls", {}) if uploaded is not None else {}
+        _fida_urls_gp = raw.get("fida_urls") or dict(MANUAL_URL_OVERRIDES)
         df = suggerito_portfolio_ui(_sc_key_main, _sc_data_main,
                                     _fd_for_gp, _ms_for_gp,
                                     extra_urls=_fida_urls_gp)
@@ -3925,7 +3925,7 @@ def main():
     _ptf_row_label = f"◆ PORTAFOGLIO {ptf_label.upper()}"
 
     # URL lookup: Excel hyperlinks first, FondiDoc cache as enriched fallback
-    _fida_urls_raw = raw.get("fida_urls", {})
+    _fida_urls_raw = raw.get("fida_urls") or dict(MANUAL_URL_OVERRIDES)
 
     def _fund_url(nome: str) -> str:
         """Return the FondiDoc URL for a fund, or '' if not available.
