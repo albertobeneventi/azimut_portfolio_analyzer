@@ -3848,9 +3848,25 @@ def main():
     _fida_urls_raw = raw.get("fida_urls", {})
 
     def _fund_url(nome: str) -> str:
-        """Return the FondiDoc URL for a fund, or '' if not available."""
-        return (_fd_live.get(nome, {}).get("url", "")
-                or _fida_urls_raw.get(nome, ""))
+        """Return the FondiDoc URL for a fund, or '' if not available.
+        Prova prima la ricerca diretta per chiave, poi fuzzy (nome breve)
+        per gestire i casi in cui la chiave cache differisce dal nome GP.
+        """
+        url = (_fd_live.get(nome, {}).get("url", "")
+               or _fida_urls_raw.get(nome, ""))
+        if url:
+            return url
+        # Ricerca fuzzy: strip "AZ [Famiglia] - " e cerca la sottostringa
+        # (identica alla logica del builder in suggerito_portfolio_ui)
+        _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', nome, flags=re.I).strip().lower()
+        if _sk:
+            for _fk, _fv in _fd_live.items():
+                if isinstance(_fv, dict) and _sk in _fk.lower() and _fv.get("url"):
+                    return _fv["url"]
+            for _fk, _eu in _fida_urls_raw.items():
+                if _sk in _fk.lower() and _eu:
+                    return _eu
+        return ""
 
     def _fund_link(nome: str) -> str:
         """Return fund name as HTML — hyperlinked if URL is available."""
