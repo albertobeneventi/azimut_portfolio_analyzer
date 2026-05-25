@@ -3247,11 +3247,16 @@ def main():
                 + (f" · ⚠️ {_gp_miss} senza dati" if _gp_miss else " · ✅ tutti aggiornati")
             )
 
-        _all_ok = bool(_fd_now and _ms_with_rating
-                       and (_gp_miss == 0 if _gp_loaded_now else True))
-        _card_bg  = "#0d2b1a" if _all_ok else "#1a1a08"
-        _card_brd = "#166534" if _all_ok else "#854d0e"
-        _card_clr = "#86efac" if _all_ok else "#fde68a"
+        _all_ok   = bool(_fd_now and _ms_with_rating
+                        and (_gp_miss == 0 if _gp_loaded_now else True))
+        _any_data = bool(_fd_now or _ms_with_rating)
+        # card colore: verde / giallo / rosso scuro
+        if _all_ok:
+            _card_bg, _card_brd, _card_clr = "#0d2b1a", "#166534", "#86efac"
+        elif _any_data:
+            _card_bg, _card_brd, _card_clr = "#1a1a08", "#854d0e", "#fde68a"
+        else:
+            _card_bg, _card_brd, _card_clr = "#1f0808", "#991b1b", "#fca5a5"
         st.markdown(
             f"<div style='background:{_card_bg};border:1px solid {_card_brd};"
             f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
@@ -3270,12 +3275,34 @@ def main():
                 "<div style='background:linear-gradient(135deg,#92400E,#B45309);"
                 "color:#fff;padding:.6rem 1rem;border-radius:8px;font-size:.88rem;"
                 "font-weight:600;text-align:center;letter-spacing:.02em;"
-                "animation:pulse 1.2s ease-in-out infinite;opacity:.92;'>"
+                "animation:_aggiorna_pulse 1.2s ease-in-out infinite;opacity:.92;'>"
                 "⏳  Aggiornamento in corso…</div>"
-                "<style>@keyframes pulse{"
+                "<style>@keyframes _aggiorna_pulse{"
                 "0%{opacity:.92}50%{opacity:.55}100%{opacity:.92}}</style>",
                 unsafe_allow_html=True)
         elif _can_update:
+            # Colore tasto: rosso lampeggiante / giallo / verde
+            if _all_ok:
+                _btn_bg   = "linear-gradient(135deg,#14532d,#16A34A)"
+                _btn_anim = ""
+            elif _any_data:
+                _btn_bg   = "linear-gradient(135deg,#78350f,#D97706)"
+                _btn_anim = ""
+            else:
+                _btn_bg   = "linear-gradient(135deg,#7f1d1d,#DC2626)"
+                _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite;"
+            st.markdown(
+                f"<style>"
+                f"section[data-testid='stSidebar'] .stButton>button{{"
+                f"background:{_btn_bg} !important;"
+                f"color:#fff !important;border:none !important;"
+                f"font-weight:600 !important;{_btn_anim}}}"
+                f"section[data-testid='stSidebar'] .stButton>button:hover{{"
+                f"filter:brightness(1.15) !important;}}"
+                f"@keyframes _aggiorna_blink{{"
+                f"0%,100%{{opacity:1}}50%{{opacity:.4}}}}"
+                f"</style>",
+                unsafe_allow_html=True)
             if st.button("📥  Aggiorna Dati",
                          use_container_width=True,
                          help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
