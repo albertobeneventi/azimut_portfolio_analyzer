@@ -2135,41 +2135,64 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _ptf_unp_str = _ptf_iunp_str = "N/D"
 
     unp_hdr_row = [Paragraph(f"<b>{t}</b>", HDR) for t in
-                   ["Fondo", "Peso", "%UNP", "%IUNP36"]]
+                   ["Fondo", "Peso", "%UNP", "%IUNP36", "FIDArating", "Morningstar"]]
     unp_ptf_row = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph("<b>100%</b>", WH),
         Paragraph(f"<b>{_ptf_unp_str}</b>",  WH),
         Paragraph(f"<b>{_ptf_iunp_str}</b>", WH),
+        Paragraph("", WH),
+        Paragraph("", WH),
     ]
     unp_fund_rows = []
+    _unp_fida_vals: list = []
+    _unp_ms_vals:   list = []
     for _, _row in d_sorted.iterrows():
-        _u, _iu = _fund_unp[_row["nome"]]
+        _u, _iu   = _fund_unp[_row["nome"]]
+        _fd_ov_u  = (fund_data or {}).get(_row["nome"], {}).get("overview", {})
+        _fida_u   = str(_fd_ov_u.get("fida_rating") or "—").strip()
+        _ms_u     = _ms_pdf.get(_row["nome"], {}).get("ms_rating")
+        _unp_fida_vals.append(_fida_u)
+        _unp_ms_vals.append(str(_ms_u).strip() if _ms_u is not None else "—")
         unp_fund_rows.append([
-            Paragraph(_row["nome"][:55], SM),
+            Paragraph(_row["nome"][:50], SM),
             Paragraph(f"{_row[wcol]*100:.1f}%", SM),
             Paragraph(f"{_u:.2f}%"  if _u  is not None else "—", SM),
             Paragraph(f"{_iu:.2f}%" if _iu is not None else "—", SM),
+            _fida_para(_fida_u),
+            _ms_para(_ms_u),
         ])
+
+    # Per-cell background for FIDArating (col 4) and Morningstar (col 5)
+    _unp_bg_cmds: list = []
+    for _fi, _fv in enumerate(_unp_fida_vals):
+        _bh = _FIDA_BG_HEX.get(_fv)
+        if _bh:
+            _unp_bg_cmds.append(("BACKGROUND", (4, _fi+2), (4, _fi+2), rl_colors.HexColor(_bh)))
+    for _mi, _mv in enumerate(_unp_ms_vals):
+        _bh = _MS_BG_HEX.get(_mv)
+        if _bh:
+            _unp_bg_cmds.append(("BACKGROUND", (5, _mi+2), (5, _mi+2), rl_colors.HexColor(_bh)))
 
     unp_tbl = Table(
         [unp_hdr_row, unp_ptf_row] + unp_fund_rows,
-        colWidths=[8.5*cm, 2.0*cm, 3.25*cm, 3.25*cm],
+        colWidths=[5.0*cm, 1.5*cm, 2.0*cm, 2.0*cm, 2.0*cm, 4.5*cm],
         repeatRows=1,
     )
     unp_tbl.setStyle(TableStyle([
-        ("BACKGROUND",  (0,0), (-1,0),  rl_colors.HexColor("#0D1B2A")),
-        ("TEXTCOLOR",   (0,0), (-1,0),  rl_colors.white),
-        ("FONTNAME",    (0,0), (-1,0),  "Helvetica-Bold"),
-        ("BACKGROUND",  (0,1), (-1,1),  rl_colors.HexColor("#1B4332")),
-        ("LINEBELOW",   (0,1), (-1,1),  2, rl_colors.HexColor("#C9A84C")),
-        ("FONTSIZE",    (0,0), (-1,-1), 8),
-        ("PADDING",     (0,0), (-1,-1), 5),
+        ("BACKGROUND",     (0,0), (-1,0),  rl_colors.HexColor("#0D1B2A")),
+        ("TEXTCOLOR",      (0,0), (-1,0),  rl_colors.white),
+        ("FONTNAME",       (0,0), (-1,0),  "Helvetica-Bold"),
+        ("BACKGROUND",     (0,1), (-1,1),  rl_colors.HexColor("#1B4332")),
+        ("LINEBELOW",      (0,1), (-1,1),  2, rl_colors.HexColor("#C9A84C")),
+        ("FONTSIZE",       (0,0), (-1,-1), 8),
+        ("PADDING",        (0,0), (-1,-1), 5),
         ("ROWBACKGROUNDS", (0,2), (-1,-1),
          [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
-        ("LINEBELOW",   (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-        ("ALIGN",       (1,0), (-1,-1), "CENTER"),
-        ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
+        ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+        ("ALIGN",          (1,0), (-1,-1), "CENTER"),
+        ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
+        *_unp_bg_cmds,
     ]))
 
     NOTE_U = S("NTU", fontName="Helvetica-Oblique", fontSize=6.5,
@@ -3126,18 +3149,38 @@ def main():
                 _u_wtd  += _uu  * _wu
                 _iu_wtd += _iuu * _wu
                 _u_covw += _wu
+            # FIDArating badge
+            _fd_ov_u  = _fd_live.get(_nu, {}).get("overview", {})
+            _fida_u   = _fd_ov_u.get("fida_rating") or "—"
+            try:
+                _fri_u  = int(_fida_u)
+                _fcol_u = _FIDA_COL.get(_fri_u, "#64748B")
+                _fbg_u  = _FIDA_BG.get(_fri_u)
+            except (ValueError, TypeError):
+                _fcol_u, _fbg_u = "#64748B", None
+            _fida_cell_u = (
+                f"<span style='background:{_fbg_u};color:#fff;padding:2px 8px;"
+                f"border-radius:4px;font-weight:700;'>{_fida_u}</span>"
+                if _fbg_u else
+                f"<span style='color:{_fcol_u};font-weight:700;'>{_fida_u}</span>"
+            )
+            # Morningstar badge
+            _ms_r_u    = _ms_live.get(_nu, {}).get("ms_rating")
+            _ms_cell_u = _ms_badge_html(_ms_r_u)
             _u_funds.append([
                 _fund_link(_nu),
                 f"{_wu*100:.1f}%",
                 f"{_uu:.2f}%"  if _uu  is not None else "—",
                 f"{_iuu:.2f}%" if _iuu is not None else "—",
+                _fida_cell_u,
+                _ms_cell_u,
             ])
         _ptf_unp  = f"{_u_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
         _ptf_iunp = f"{_iu_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
         st.markdown(
             _html_table(
-                ["Fondo", "Peso", "%UNP", "%IUNP36"],
-                [_ptf_row_label, "100%", _ptf_unp, _ptf_iunp],
+                ["Fondo", "Peso", "%UNP", "%IUNP36", "FIDArating", "Morningstar"],
+                [_ptf_row_label, "100%", _ptf_unp, _ptf_iunp, "", ""],
                 _u_funds,
             ),
             unsafe_allow_html=True)
