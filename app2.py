@@ -1608,22 +1608,29 @@ def _mpl_annual_bar(annual_perf: dict, fund_name: str) -> io.BytesIO | None:
             years.append(y); vals.append(num)
         except: pass
     if not years: return None
-    fig, ax = plt.subplots(figsize=(6,2.2))
-    colors = ["#2D9D78" if v>=0 else "#E05252" for v in vals]
+    fig, ax = plt.subplots(figsize=(6, 2.2))
+    colors = ["#2D9D78" if v >= 0 else "#E05252" for v in vals]
     bars = ax.bar(years, vals, color=colors, edgecolor="white", linewidth=0.8, width=0.6)
     ax.axhline(0, color="#94A3B8", linewidth=0.8, linestyle="-")
-    for bar,val in zip(bars,vals):
-        ax.text(bar.get_x()+bar.get_width()/2,
-                bar.get_height()+(0.3 if val>=0 else -0.9),
+    for bar, val in zip(bars, vals):
+        ax.text(bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + (0.3 if val >= 0 else -0.9),
                 f"{val:+.1f}%", ha="center", va="bottom", fontsize=7, fontweight="bold",
-                color="#2D9D78" if val>=0 else "#E05252")
+                color="#2D9D78" if val >= 0 else "#E05252")
+    # Limiti y espliciti — impedisce che bbox_inches="tight" espanda il PNG
+    # a dimensioni abnormi (es. 3251pt) su server Linux headless
+    _yabs = max(abs(v) for v in vals) if vals else 10
+    ax.set_ylim(-_yabs * 1.45, _yabs * 1.45)
     ax.set_ylabel("%", fontsize=8, color="#64748B")
-    ax.tick_params(axis="both",labelsize=8,colors="#475569")
-    ax.spines[["top","right","left"]].set_visible(False)
+    ax.tick_params(axis="both", labelsize=8, colors="#475569")
+    ax.spines[["top", "right", "left"]].set_visible(False)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
-    ax.grid(axis="y",alpha=0.3,linestyle="--")
-    fig.patch.set_facecolor("#FFFFFF"); plt.tight_layout(pad=0.5)
-    buf=io.BytesIO(); fig.savefig(buf,format="png",dpi=130,bbox_inches="tight",facecolor="white")
+    ax.grid(axis="y", alpha=0.3, linestyle="--")
+    fig.patch.set_facecolor("#FFFFFF")
+    plt.tight_layout(pad=0.5)
+    buf = io.BytesIO()
+    # NO bbox_inches="tight": mantiene figsize esatto (6×2.2 in → 780×286 px a 130dpi)
+    fig.savefig(buf, format="png", dpi=130, facecolor="white")
     plt.close(fig); buf.seek(0); return buf
 
 
