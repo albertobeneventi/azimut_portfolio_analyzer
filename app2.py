@@ -3109,7 +3109,10 @@ def main():
     with st.sidebar:
         st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.2 — factbook Excel cache</div></div>""", unsafe_allow_html=True)
         st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
-        uploaded   = st.file_uploader("FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
+
+        # ── Tutti gli uploader in blocco ──────────────────────────────────────
+        uploaded = st.file_uploader(
+            "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
         uploaded_fb = st.file_uploader(
             "FACTBOOK PDF (prima estrazione)",
             type=["pdf"],
@@ -3123,40 +3126,6 @@ def main():
             help="Carica il file Excel scaricato dopo la prima estrazione del "
                  "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
         )
-        # ── FondiDoc + Morningstar — unico tasto ─────────────────────────────
-        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
-        _fd_now = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
-        _ms_now = st.session_state.get("_ms_data") or load_ms_cache()
-        _ms_with_rating = sum(1 for v in _ms_now.values() if v.get("ms_rating"))
-
-        # Card stato dati
-        _fd_line = (f"✅ <b>FondiDoc</b> — {len(_fd_now)} fondi"
-                    if _fd_now else "⚠️ <b>FondiDoc</b> — non ancora scaricato")
-        _ms_line = (f"⭐ <b>Morningstar</b> — {_ms_with_rating} rating"
-                    if _ms_with_rating else "⚠️ <b>Morningstar</b> — non ancora scaricato")
-        _card_bg  = "#0d2b1a" if (_fd_now and _ms_with_rating) else "#1a1a08"
-        _card_brd = "#166534" if (_fd_now and _ms_with_rating) else "#854d0e"
-        _card_clr = "#86efac" if (_fd_now and _ms_with_rating) else "#fde68a"
-        st.markdown(
-            f"<div style='background:{_card_bg};border:1px solid {_card_brd};"
-            f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-            f"color:{_card_clr};margin-bottom:.5rem;line-height:1.8;'>"
-            f"{_fd_line}<br>{_ms_line}</div>",
-            unsafe_allow_html=True)
-
-        if uploaded:
-            if st.button("📥  Aggiorna Dati (FondiDoc + Morningstar)",
-                         use_container_width=True,
-                         help="Scarica in sequenza: Cat. FIDA, FIDArating, "
-                              "rendimenti e metriche di rischio da FondiDoc, "
-                              "poi i rating Morningstar da FondiOnline."):
-                st.session_state["_fetch_fd_requested"] = True
-                st.session_state["_fetch_ms_requested"] = True
-        else:
-            st.caption("⬆️ Carica prima il file Excel")
-
-        # ── Global Perspectives PDF ──────────────────────────────────────────────
-        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         uploaded_gp = st.file_uploader(
             "GLOBAL PERSPECTIVES PDF",
             type=["pdf"],
@@ -3164,62 +3133,77 @@ def main():
                  "la modalità SUGGERITO con i 3 scenari (Base / Bear / Bull). "
                  "Il file viene re-parsato solo quando cambia.",
         )
+
+        # ── Parsing GP (solo quando cambia file) ─────────────────────────────
         if uploaded_gp is not None:
-            # Re-parse only when a new file is uploaded (name change = new edition)
             if st.session_state.get("_gp_filename") != uploaded_gp.name:
                 with st.spinner("📄 Parsing Global Perspectives…"):
                     _gp_parsed = parse_global_perspectives(uploaded_gp.read())
                 if _gp_parsed:
-                    st.session_state["_gp_data"]     = _gp_parsed
-                    st.session_state["_gp_filename"]  = uploaded_gp.name
-                    _n_gp = sum(len(v["funds"]) for v in _gp_parsed.values())
-                    st.success(
-                        f"✅ GP — {_n_gp} fondi · "
-                        f"{', '.join(_gp_parsed.keys())}")
+                    st.session_state["_gp_data"]    = _gp_parsed
+                    st.session_state["_gp_filename"] = uploaded_gp.name
                 else:
                     st.session_state.pop("_gp_data", None)
                     st.warning("⚠️ PDF non riconosciuto — verifica che sia un "
                                "Global Perspectives Azimut.")
-            elif st.session_state.get("_gp_data"):
-                _gp_ok = st.session_state["_gp_data"]
-                _n_gp  = sum(len(v["funds"]) for v in _gp_ok.values())
-                st.markdown(
-                    f"<div style='background:#0d2b1a;border:1px solid #166534;"
-                    f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-                    f"color:#86efac;margin-bottom:.5rem;line-height:1.5;'>"
-                    f"✅ <b>Global Perspectives</b> — {_n_gp} fondi "
-                    f"({', '.join(_gp_ok.keys())})</div>",
-                    unsafe_allow_html=True)
-
-        # Bottone per scaricare dati FondiDoc dei fondi GP non ancora in cache
-        if st.session_state.get("_gp_data"):
-            _fd_check = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
-            _gp_all_funds = [
-                f["nome"]
-                for sc in st.session_state["_gp_data"].values()
-                for f in sc.get("funds", [])
-            ]
-            _gp_missing = [
-                n for n in _gp_all_funds
-                if _resolve_nome_for_fd(n, _fd_check) not in _fd_check
-            ]
-            if _gp_missing:
-                st.markdown(
-                    f"<div style='background:#1a1a08;border:1px solid #854d0e;"
-                    f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
-                    f"color:#fde68a;margin-bottom:.5rem;line-height:1.5;'>"
-                    f"⚠️ <b>{len(set(_gp_missing))} fondi GP</b> senza dati FondiDoc</div>",
-                    unsafe_allow_html=True)
-                if st.button("🔍  Cerca Dati Fondi GP",
-                             use_container_width=True,
-                             help="Cerca su FondiDoc i fondi del Global Perspectives "
-                                  "non ancora presenti in cache (FIDArating, rendimenti…)"):
-                    st.session_state["_fetch_gp_requested"] = True
         else:
-            # If file removed, clear cached data
             if st.session_state.get("_gp_filename"):
                 st.session_state.pop("_gp_data",     None)
                 st.session_state.pop("_gp_filename",  None)
+
+        # ── Card stato dati ───────────────────────────────────────────────────
+        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
+        _fd_now = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
+        _ms_now = st.session_state.get("_ms_data") or load_ms_cache()
+        _ms_with_rating = sum(1 for v in _ms_now.values() if v.get("ms_rating"))
+        _gp_loaded_now  = bool(st.session_state.get("_gp_data"))
+
+        _fd_line = (f"✅ <b>FondiDoc</b> — {len(_fd_now)} fondi"
+                    if _fd_now else "⚠️ <b>FondiDoc</b> — non scaricato")
+        _ms_line = (f"⭐ <b>Morningstar</b> — {_ms_with_rating} rating"
+                    if _ms_with_rating else "⚠️ <b>Morningstar</b> — non scaricato")
+        _gp_status_lines = ""
+        if _gp_loaded_now:
+            _gp_ok  = st.session_state["_gp_data"]
+            _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values())
+            _fd_chk = _fd_now
+            _gp_miss = len(set(
+                f["nome"]
+                for sc in _gp_ok.values()
+                for f in sc.get("funds", [])
+                if _resolve_nome_for_fd(f["nome"], _fd_chk) not in _fd_chk
+            ))
+            _gp_status_lines = (
+                f"<br>🌐 <b>Global Perspectives</b> — {_n_gp} fondi"
+                + (f" · ⚠️ {_gp_miss} senza dati" if _gp_miss else " · ✅ tutti aggiornati")
+            )
+
+        _all_ok = bool(_fd_now and _ms_with_rating
+                       and (_gp_miss == 0 if _gp_loaded_now else True))
+        _card_bg  = "#0d2b1a" if _all_ok else "#1a1a08"
+        _card_brd = "#166534" if _all_ok else "#854d0e"
+        _card_clr = "#86efac" if _all_ok else "#fde68a"
+        st.markdown(
+            f"<div style='background:{_card_bg};border:1px solid {_card_brd};"
+            f"border-radius:8px;padding:.5rem .85rem;font-size:.73rem;"
+            f"color:{_card_clr};margin-bottom:.4rem;line-height:1.8;'>"
+            f"{_fd_line}<br>{_ms_line}{_gp_status_lines}</div>",
+            unsafe_allow_html=True)
+
+        # ── Unico tasto Aggiorna Dati ─────────────────────────────────────────
+        _can_update = bool(uploaded or _gp_loaded_now)
+        if _can_update:
+            if st.button("📥  Aggiorna Dati",
+                         use_container_width=True,
+                         help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
+                              "Morningstar e — se il GP è caricato — dati fondi GP."):
+                if uploaded:
+                    st.session_state["_fetch_fd_requested"] = True
+                    st.session_state["_fetch_ms_requested"] = True
+                if _gp_loaded_now:
+                    st.session_state["_fetch_gp_requested"] = True
+        else:
+            st.caption("⬆️ Carica il file Excel o il PDF Global Perspectives")
 
         st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         _gp_loaded    = bool(st.session_state.get("_gp_data"))
