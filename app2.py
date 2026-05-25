@@ -3215,6 +3215,7 @@ def main():
                     st.session_state["_fetch_ms_requested"] = True
                 if _gp_loaded_now:
                     st.session_state["_fetch_gp_requested"] = True
+                st.rerun()  # mostra subito lo stato "in corso" prima che parta lo scarico
         else:
             st.caption("⬆️ Carica il file Excel o il PDF Global Perspectives")
 
