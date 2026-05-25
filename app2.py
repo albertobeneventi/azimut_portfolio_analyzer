@@ -1613,8 +1613,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
-                            leftMargin=2*cm, rightMargin=2*cm,
-                            topMargin=2.2*cm, bottomMargin=2.2*cm)
+                            leftMargin=1.5*cm, rightMargin=1.5*cm,
+                            topMargin=1.5*cm, bottomMargin=1.5*cm)
 
     ss = getSampleStyleSheet()
     def S(name,**kw): return ParagraphStyle(name,parent=ss["Normal"],**kw)
@@ -1636,6 +1636,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story = []
     d_act = df[df[wcol]>0.001].copy()
     n_fondi = len(d_act)
+    PW = 18 * cm   # printable width (A4 21cm - 2×1.5cm margins)
 
     # ISIN da foglio FIDA (fallback per fondi senza URL FondiDoc)
     isin_map = {}
@@ -1646,7 +1647,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     w_obb = (d_act[wcol]*d_act["obb_pct"]).sum()*100
 
     # ── ACCENT BAR ──────────────────────────────────────────
-    story.append(Table([[""]], colWidths=[17*cm], rowHeights=[10],
+    story.append(Table([[""]], colWidths=[PW], rowHeights=[10],
         style=TableStyle([
             ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#0D1B2A")),
             ("LINEBELOW",(0,0),(-1,-1),3,rl_colors.HexColor("#C9A84C")),
@@ -1672,8 +1673,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         [[kpi_cell(str(n_fondi),"Fondi"),kpi_cell(f"{w_az:.1f}%","Quota Azionaria"),
           kpi_cell(f"{w_obb:.1f}%","Quota Obbligazionaria"),
           kpi_cell(datetime.date.today().strftime("%m/%Y"),"Data Report")]],
-        colWidths=[4.25*cm]*4,
-        rowHeights=[2.2*cm],
+        colWidths=[PW/4]*4,
+        rowHeights=[1.9*cm],
     )
     kpi.setStyle(TableStyle([
         ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
@@ -1689,94 +1690,98 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=6, spaceAfter=5)
     story.append(Paragraph("Allocazione del Portafoglio", SC_PIE))
 
-    PIE_W = 7.5 * cm
-    LEG_W = 17 * cm - PIE_W   # 9.5 cm
+    PIE_W  = 6.5 * cm          # torta fondi
+    LEG_W  = PW - PIE_W        # 11.5 cm per la legenda
+    DOT_W  = 0.32 * cm
+    # Ogni colonna di legenda (2 colonne affiancate)
+    GAP_W  = 0.4 * cm          # gap tra le due colonne
+    LC_W   = (LEG_W - DOT_W * 2 - GAP_W) / 2  # larghezza label per colonna
 
-    LG = S("LG", fontName="Helvetica", fontSize=10,
-           textColor=rl_colors.HexColor("#1E293B"), leading=15)
+    LG = S("LG", fontName="Helvetica", fontSize=8,
+           textColor=rl_colors.HexColor("#1E293B"), leading=11)
 
     def _dot(hex_color):
-        t = Table([[""]], colWidths=[0.28*cm], rowHeights=[0.28*cm])
+        t = Table([[""]], colWidths=[DOT_W], rowHeights=[DOT_W])
         t.setStyle(TableStyle([
             ("BACKGROUND", (0,0), (-1,-1), rl_colors.HexColor(hex_color)),
         ]))
         return t
 
-    # — Grafico 1: fondi con hyperlink (torta + didascalia interattiva affiancate) —
+    # — Grafico 1: fondi con hyperlink (torta + legenda a 2 colonne affiancate) —
     pie_buf = _mpl_portfolio_pie(d_act, wcol, profile)
     pie_img = RLImage(pie_buf, width=PIE_W, height=PIE_W)
     d_leg   = d_act[d_act[wcol] > 0.005].sort_values(wcol, ascending=False)
-    leg_rows = []
+
+    # Costruisci le celle della legenda
+    leg_items = []
     for _, r in d_leg.iterrows():
         url    = (fund_data or {}).get(r["nome"], {}).get("url", "")
-        name_s = (r["nome"][:38] + "…") if len(r["nome"]) > 38 else r["nome"]
+        name_s = (r["nome"][:24] + "…") if len(r["nome"]) > 24 else r["nome"]
         pct_s  = f"{r[wcol]*100:.1f}%"
         if url:
             lbl = Paragraph(
                 f'<link href="{url}"><font color="#1B4FBB"><u>{name_s}</u></font></link>'
-                f'  <b>{pct_s}</b>', LG)
+                f' <b>{pct_s}</b>', LG)
         else:
-            lbl = Paragraph(f'{name_s}  <b>{pct_s}</b>', LG)
-        leg_rows.append([_dot(r["color"]), lbl])
-    leg_tbl = Table(leg_rows, colWidths=[0.45*cm, LEG_W - 0.45*cm])
+            lbl = Paragraph(f'{name_s} <b>{pct_s}</b>', LG)
+        leg_items.append((_dot(r["color"]), lbl))
+
+    # Disponi su 2 colonne: pari a sinistra, dispari a destra
+    leg_rows_2c = []
+    for i in range(0, len(leg_items), 2):
+        d1, l1 = leg_items[i]
+        if i + 1 < len(leg_items):
+            d2, l2 = leg_items[i + 1]
+        else:
+            d2, l2 = Spacer(DOT_W, DOT_W), Paragraph("", LG)
+        leg_rows_2c.append([d1, l1, d2, l2])
+
+    leg_tbl = Table(leg_rows_2c,
+                    colWidths=[DOT_W, LC_W, DOT_W + GAP_W, LC_W])
     leg_tbl.setStyle(TableStyle([
-        ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
-        ("TOPPADDING",     (0,0), (-1,-1), 3),
-        ("BOTTOMPADDING",  (0,0), (-1,-1), 3),
-        ("LEFTPADDING",    (1,0), (1,-1),  6),
-        ("LEFTPADDING",    (0,0), (0,-1),  0),
-        ("RIGHTPADDING",   (0,0), (-1,-1), 4),
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",    (0,0), (-1,-1), 2),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+        ("LEFTPADDING",   (1,0), (1,-1),  4),
+        ("LEFTPADDING",   (3,0), (3,-1),  4),
+        ("LEFTPADDING",   (0,0), (0,-1),  0),
+        ("LEFTPADDING",   (2,0), (2,-1),  GAP_W),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 2),
     ]))
     combo1 = Table([[pie_img, leg_tbl]], colWidths=[PIE_W, LEG_W])
     combo1.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(combo1)
 
-    # — Grafico 2: asset allocation — torta centrata sotto la prima,
-    #   righe illustrative Azionario/Obbligazionario sotto la torta —
+    # — Grafico 2: asset allocation — piccola, affiancata alla legenda (sotto la torta) —
+    PIE_W2 = 5.0 * cm
     macro_buf = _mpl_macro_pie(d_act, wcol)
+    macro_block = []
     if macro_buf:
-        story.append(Spacer(1, 8))
-        macro_img = RLImage(macro_buf, width=PIE_W, height=PIE_W)
+        macro_img = RLImage(macro_buf, width=PIE_W2, height=PIE_W2)
         w_az_v  = (d_act[wcol] * d_act["az_pct"]).sum()
         w_obb_v = (d_act[wcol] * d_act["obb_pct"]).sum()
-
-        # Torta centrata orizzontalmente sulla pagina
-        pie2_tbl = Table([[macro_img]], colWidths=[17 * cm])
-        pie2_tbl.setStyle(TableStyle([
-            ("ALIGN",         (0,0), (-1,-1), "CENTER"),
-            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 0),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
-            ("LEFTPADDING",   (0,0), (-1,-1), 0),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 0),
-        ]))
-        story.append(pie2_tbl)
-
-        # Righe illustrative sotto la torta, centrate
-        story.append(Spacer(1, 6))
         macro_leg_rows = [
             [_dot("#1B4FBB"), Paragraph(f'Azionario  <b>{w_az_v*100:.1f}%</b>', LG)],
             [_dot("#2D9D78"), Paragraph(f'Obbligazionario  <b>{w_obb_v*100:.1f}%</b>', LG)],
         ]
-        macro_leg_inner = Table(macro_leg_rows, colWidths=[0.45*cm, 5.5*cm])
+        macro_leg_inner = Table(macro_leg_rows, colWidths=[DOT_W, 5*cm])
         macro_leg_inner.setStyle(TableStyle([
             ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 5),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
-            ("LEFTPADDING",   (1,0), (1,-1),  6),
+            ("TOPPADDING",    (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ("LEFTPADDING",   (1,0), (1,-1),  5),
             ("LEFTPADDING",   (0,0), (0,-1),  0),
         ]))
-        macro_leg_wrapper = Table([[macro_leg_inner]], colWidths=[17 * cm])
-        macro_leg_wrapper.setStyle(TableStyle([
-            ("ALIGN",         (0,0), (-1,-1), "CENTER"),
-            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 0),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 0),
-            ("LEFTPADDING",   (0,0), (-1,-1), 0),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+        # Torta macro + legenda affiancate, allineate sinistra
+        macro_row = Table([[macro_img, macro_leg_inner]],
+                          colWidths=[PIE_W2, PW - PIE_W2])
+        macro_row.setStyle(TableStyle([
+            ("VALIGN",  (0,0), (-1,-1), "MIDDLE"),
+            ("PADDING", (0,0), (-1,-1), 0),
         ]))
-        story.append(macro_leg_wrapper)
+        macro_block = [Spacer(1, 6), macro_row]
 
+    # Tutto il blocco grafici in KeepTogether → rimane sulla stessa pagina
+    story.append(KeepTogether([combo1] + macro_block))
     story.append(PageBreak())
 
     # ════════════════════════════════════════════════════════
@@ -1904,7 +1909,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ])
 
     perf_tbl = Table(perf_rows,
-        colWidths=[5.2*cm,1.4*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
+        colWidths=[6.2*cm,1.4*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
         repeatRows=1)
     ts_perf = [
         ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),  # header
@@ -1969,7 +1974,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ])
 
     risk_tbl = Table(risk_rows,
-        colWidths=[5.2*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
+        colWidths=[6.2*cm,1.4*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm,1.5*cm],
         repeatRows=1)
     ts_risk = [
         ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),
@@ -2165,8 +2170,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
-        # Slightly reduced cols to fit new Morningstar column (total ~17.1 cm)
-        colWidths=[3.8*cm, 1.1*cm, 1.3*cm, 1.5*cm, 1.4*cm, 1.8*cm, 2.6*cm, 1.5*cm, 2.1*cm],
+        colWidths=[4.5*cm, 1.1*cm, 1.3*cm, 1.5*cm, 1.4*cm, 1.8*cm, 2.8*cm, 1.5*cm, 2.1*cm],
         repeatRows=1,
     )
     alloc_tbl.setStyle(TableStyle([
@@ -2266,7 +2270,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     unp_tbl = Table(
         [unp_hdr_row, unp_ptf_row] + unp_fund_rows,
-        colWidths=[5.0*cm, 1.5*cm, 2.0*cm, 2.0*cm, 2.0*cm, 4.5*cm],
+        colWidths=[6.0*cm, 1.5*cm, 2.0*cm, 2.0*cm, 2.0*cm, 4.5*cm],
         repeatRows=1,
     )
     unp_tbl.setStyle(TableStyle([
@@ -2310,11 +2314,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Paragraph("Schede Analitiche dei Fondi", T))
     story.append(Paragraph(
         f"Profilo {profile.title()}  ·  Fonte: FIDA FondiDoc  ·  {datetime.date.today().strftime('%d %B %Y')}", SU))
-    story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=6))
+    story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=4))
     story.append(Paragraph(
         '🔍 <link href="https://www.morningstar.it/it/funds/SecuritySearchResults.aspx">'
         '<u>Motore di ricerca Morningstar</u></link>', LK))
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 6))
 
     for idx, (_, row) in enumerate(d_sorted.iterrows()):
         fd  = (fund_data or {}).get(row["nome"], {})
@@ -2323,15 +2327,10 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
         def gv(k,src=ana,fallback="N/D"): return src.get(k,fallback)
 
-        # Fund header block
         srri_str = f"SRRI {gv('srri',ov,'—')}/7" if gv('srri',ov) != "N/D" else ""
         nav_str  = f"NAV {gv('nav')} € ({gv('last_update')})" if gv('nav') != "N/D" else ""
         rating_s = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("N/D","—") else ""
-
-        # ── Intestazione fondo (3 righe × 1 colonna) ─────────
         meta_extra = "  ·  ".join(x for x in [srri_str, rating_s, nav_str] if x)
-
-        # ISIN: estratto dall'URL FondiDoc oppure dal foglio FIDA
         isin = fd.get("isin", "") or isin_map.get(row["nome"], "")
         isin_str = f"  ·  ISIN: <b>{isin}</b>" if isin else ""
 
@@ -2340,20 +2339,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             [Paragraph(f"Peso: <b>{row[wcol]*100:.1f}%</b>  ·  {row['categoria']}{isin_str}", FK)],
             [Paragraph(meta_extra or "—", FK)],
         ]
-
-        hdr_tbl = Table(hdr_rows, colWidths=[17*cm])
+        hdr_tbl = Table(hdr_rows, colWidths=[PW])
         hdr_tbl.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,-1), rl_colors.HexColor("#F0F4F9")),
-            ("LEFTPADDING",(0,0),(-1,-1), 10),
-            ("RIGHTPADDING",(0,0),(-1,-1), 10),
-            ("TOPPADDING",(0,0),(-1,0), 10),
-            ("BOTTOMPADDING",(0,-1),(-1,-1), 10),
-            ("TOPPADDING",(0,1),(-1,-1), 2),
-            ("BOTTOMPADDING",(0,0),(-1,-2), 2),
+            ("LEFTPADDING",(0,0),(-1,-1), 8),
+            ("RIGHTPADDING",(0,0),(-1,-1), 8),
+            ("TOPPADDING",(0,0),(-1,0), 6),
+            ("BOTTOMPADDING",(0,-1),(-1,-1), 6),
+            ("TOPPADDING",(0,1),(-1,-1), 1),
+            ("BOTTOMPADDING",(0,0),(-1,-2), 1),
             ("LINEBELOW",(0,-1),(-1,-1), 2, rl_colors.HexColor("#C9A84C")),
         ]))
 
-        # ── Tabella rendimenti fondo ──────────────────────────
         def pval(v):
             try:
                 num = float(v.replace("%","").replace(",","."))
@@ -2375,19 +2372,21 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             [Paragraph("Sortino",SM),
              Paragraph("—",SM), Paragraph(gv("sortino_1y"),SM), Paragraph("—",SM), Paragraph("—",SM)],
         ]
-        perf_tbl2 = Table(perf_data, colWidths=[2.4*cm,1.5*cm,1.8*cm,1.8*cm,1.8*cm])
+        # Larghezze colonne scheda: metriche + dettagli affiancati
+        PERF_C = [2.5*cm, 1.5*cm, 1.8*cm, 1.8*cm, 1.8*cm]   # totale 9.4 cm
+        DET_W  = PW - sum(PERF_C) - 0.6*cm                    # ~8.0 cm
+        perf_tbl2 = Table(perf_data, colWidths=PERF_C)
         perf_tbl2.setStyle(TableStyle([
             ("BACKGROUND",(0,0),(-1,0), rl_colors.HexColor("#0D1B2A")),
             ("TEXTCOLOR",(0,0),(-1,0),  rl_colors.white),
             ("FONTNAME",(0,0),(-1,0),   "Helvetica-Bold"),
-            ("FONTSIZE",(0,0),(-1,-1),  7.5),
-            ("PADDING",(0,0),(-1,-1),   4),
+            ("FONTSIZE",(0,0),(-1,-1),  7),
+            ("PADDING",(0,0),(-1,-1),   3),
             ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
             ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
             ("ALIGN",(1,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
         ]))
 
-        # ── Dettagli fondo ───────────────────────────────────
         det_data = [
             [Paragraph("<b>Dettagli Fondo</b>", BD)],
             [Paragraph(f"Data avvio: {gv('start_date',ov,'—')}", SM)],
@@ -2397,38 +2396,38 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             [Paragraph(f"Sottoscrizione: {gv('sub_fee',ov,'—')}", SM)],
             [Paragraph(f"<b>FIDArating:</b> {gv('fida_rating',ov,'—')}  |  Score: {gv('fida_score',ov,'—')}", SM)],
         ]
-        det_tbl = Table([[d[0]] for d in det_data], colWidths=[7.3*cm])
+        det_tbl = Table([[d[0]] for d in det_data], colWidths=[DET_W])
         det_tbl.setStyle(TableStyle([
-            ("PADDING",(0,0),(-1,-1), 3),
-            ("TOPPADDING",(0,0),(-1,0), 6),
+            ("PADDING",(0,0),(-1,-1), 2),
+            ("TOPPADDING",(0,0),(-1,0), 5),
             ("LINEBELOW",(0,0),(0,0), 0.8, rl_colors.HexColor("#C9A84C")),
             ("BACKGROUND",(0,0),(0,-1), rl_colors.HexColor("#F8FAFC")),
         ]))
 
-        mid_row = Table([[perf_tbl2, det_tbl]], colWidths=[9.7*cm, 7.3*cm])
+        mid_row = Table([[perf_tbl2, det_tbl]],
+                        colWidths=[sum(PERF_C), DET_W + 0.6*cm])
         mid_row.setStyle(TableStyle([
             ("VALIGN",(0,0),(-1,-1), "TOP"),
             ("PADDING",(0,0),(-1,-1), 0),
-            ("LEFTPADDING",(1,0),(1,-1), 10),
+            ("LEFTPADDING",(1,0),(1,-1), 8),
         ]))
 
-        # ── Grafico rendimenti annuali ───────────────────────
         annual  = ana.get("annual_perf")
         bar_buf = _mpl_annual_bar(annual, row["nome"]) if annual else None
 
-        # ── KeepTogether: tutta la scheda su stessa pagina ───
-        card = [Spacer(1,6), hdr_tbl, Spacer(1,6), mid_row]
+        # KeepTogether: scheda compatta (≈ 2 per pagina)
+        card = [Spacer(1,4), hdr_tbl, Spacer(1,4), mid_row]
         if bar_buf:
-            card += [Spacer(1,4),
+            card += [Spacer(1,3),
                      Paragraph("<b>Performance Annuale (%)</b>", SM),
-                     RLImage(bar_buf, width=14*cm, height=3.2*cm)]
+                     RLImage(bar_buf, width=PW, height=2.4*cm)]
         story.append(KeepTogether(card))
 
-        # Separatore tra fondi
-        if idx < len(d_sorted)-1:
+        # Separatore sottile tra schede
+        if idx < len(d_sorted) - 1:
             story.append(HRFlowable(width="100%", thickness=0.5,
                                     color=rl_colors.HexColor("#CBD5E1"),
-                                    spaceBefore=8, spaceAfter=8))
+                                    spaceBefore=4, spaceAfter=4))
 
     # ── FOOTER ─────────────────────────────────────────────
     story.append(PageBreak())
