@@ -1642,25 +1642,24 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                             leftMargin=1.5*cm, rightMargin=1.5*cm,
                             topMargin=1.5*cm, bottomMargin=1.5*cm)
 
-    # ── Helper: immagine a dimensioni fisse ──────────────────────────────────
-    # RLImage.wrap() chiama _restrictSize() ad ogni chiamata, sovra-scrivendo
-    # drawWidth/drawHeight con le dimensioni naturali dell'immagine. Su server
-    # Linux matplotlib può produrre PNG molto alti (es. 3251pt) a causa di
-    # bbox_inches="tight". Questa sottoclasse forza dimensioni esatte.
-    class _FixedImage(RLImage):
-        _fw: float = 0.0
-        _fh: float = 0.0
-        def wrap(self, aW, aH):
-            self.drawWidth  = self._fw
-            self.drawHeight = self._fh
-            return self._fw, self._fh
-
+    # ── Helper: immagine a dimensioni esatte ─────────────────────────────────
+    # Su server Linux, matplotlib con bbox_inches="tight" può produrre PNG con
+    # altezze abnormi (es. 3251pt). Ridimensioniamo con PIL a esattamente
+    # fw×fh PIXEL prima di passare a RLImage (senza width/height args).
+    # A 72dpi (default ReportLab) 1 pixel = 1 punto → drawWidth/drawHeight
+    # saranno esattamente fw×fh senza nessun calcolo _restrictSize.
     def _img(buf_or_path, fw, fh):
-        """Crea un'immagine con dimensioni esatte in punti."""
-        i = _FixedImage(buf_or_path)
-        i._fw = fw; i._fh = fh
-        i.drawWidth = fw; i.drawHeight = fh
-        return i
+        from PIL import Image as _PIL
+        if hasattr(buf_or_path, 'seek'):
+            buf_or_path.seek(0)
+        _p = _PIL.open(buf_or_path).convert('RGBA')
+        _w = max(1, round(fw))
+        _h = max(1, round(fh))
+        _p = _p.resize((_w, _h), _PIL.LANCZOS)
+        _b = io.BytesIO()
+        _p.save(_b, format='PNG')
+        _b.seek(0)
+        return RLImage(_b)          # dimensioni naturali = _w × _h pt ✓
 
     ss = getSampleStyleSheet()
     def S(name,**kw): return ParagraphStyle(name,parent=ss["Normal"],**kw)
