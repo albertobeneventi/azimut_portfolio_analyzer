@@ -1308,13 +1308,17 @@ def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
     Restituisce {nome_risolto: fund_data_dict} da aggiungere alla cache.
     """
     # Raccoglie tutti i nomi GP unici (PDF → risolto)
+    # Include fondi assenti dal cache E fondi in cache ma senza URL
     missing: dict = {}   # resolved_name → pdf_name
     for sc_data in gp_data.values():
         for f in sc_data.get("funds", []):
             pdf_name = f["nome"]
             res_name = _resolve_nome_for_fd(pdf_name, existing_cache)
-            if res_name not in existing_cache:
-                # Prova entrambi i nomi come query di ricerca
+            has_url = (
+                existing_cache.get(res_name, {}).get("url", "")
+                or existing_cache.get(pdf_name, {}).get("url", "")
+            )
+            if not has_url:
                 missing[res_name] = pdf_name
 
     if not missing:
@@ -2971,11 +2975,22 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
             short = re.sub(r'^AZ\s+(?:Allocation|Bond|Equity)\s*[-–]\s*',
                            '', fname, flags=re.I).strip()
 
+            url_sg = (
+                (fund_data or {}).get(resolved, {}).get("url", "")
+                or (fund_data or {}).get(fname, {}).get("url", "")
+            )
+            name_html = (
+                f'<a href="{url_sg}" target="_blank" rel="noopener noreferrer" '
+                f'style="color:#1B4FBB;text-decoration:underline;'
+                f'text-underline-offset:2px;font-size:.84rem;font-weight:500;">'
+                f'{short}</a>'
+                if url_sg else
+                f'<span style="font-size:.84rem;font-weight:500;color:#1e293b;">{short}</span>'
+            )
             c1, c2, c3, c4 = st.columns([4.5, 1.2, 1.2, 1.4])
             with c1:
                 st.markdown(
-                    f"<div style='font-size:.84rem;font-weight:500;color:#1e293b;"
-                    f"padding:.55rem 0 .3rem 0;'>{short}</div>",
+                    f"<div style='padding:.55rem 0 .3rem 0;'>{name_html}</div>",
                     unsafe_allow_html=True)
             with c2:
                 st.markdown(
@@ -3172,7 +3187,10 @@ def main():
                 f["nome"]
                 for sc in _gp_ok.values()
                 for f in sc.get("funds", [])
-                if _resolve_nome_for_fd(f["nome"], _fd_chk) not in _fd_chk
+                if not (
+                    _fd_chk.get(_resolve_nome_for_fd(f["nome"], _fd_chk), {}).get("url", "")
+                    or _fd_chk.get(f["nome"], {}).get("url", "")
+                )
             ))
             _gp_status_lines = (
                 f"<br>🌐 <b>Global Perspectives</b> — {_n_gp} fondi"
