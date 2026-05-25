@@ -2595,6 +2595,10 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stSidebar"] .stSelectbox svg{fill:#C9A84C !important;width:22px !important;height:22px !important;opacity:1 !important;}
 [data-testid="stSidebar"] .stFileUploader>div{background:#132035 !important;border:1px dashed #2a4a6a !important;border-radius:8px !important;}
 [data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.8rem !important;}
+[data-testid="stSidebar"] ::-webkit-scrollbar{width:6px;}
+[data-testid="stSidebar"] ::-webkit-scrollbar-track{background:#06101e;}
+[data-testid="stSidebar"] ::-webkit-scrollbar-thumb{background:#C9A84C;border-radius:3px;}
+[data-testid="stSidebar"] ::-webkit-scrollbar-thumb:hover{background:#d4b87a;}
 .main{background:#f6f8fb !important;}.block-container{padding-top:1.8rem !important;max-width:1300px;}
 .az-header{background:linear-gradient(130deg,#081420 0%,#0f2644 50%,#162e52 100%);border-radius:16px;padding:2rem 2.5rem;margin-bottom:1.8rem;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.15);}
 .az-header::after{content:'';position:absolute;bottom:-60px;right:-40px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,76,.18) 0%,transparent 70%);}
@@ -2626,10 +2630,8 @@ def main():
     st.markdown(_APP_CSS, unsafe_allow_html=True)
     _ms_with_rating = 0   # default; updated inside sidebar block below
     with st.sidebar:
-        st.markdown("""<div style='padding:1.4rem 0 .8rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:10px;'></div></div>""", unsafe_allow_html=True)
-        st.markdown("---")
-        st.caption("v2.2 — factbook Excel cache")
-        st.markdown("---")
+        st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.2 — factbook Excel cache</div></div>""", unsafe_allow_html=True)
+        st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
         uploaded   = st.file_uploader("FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
         uploaded_fb = st.file_uploader(
             "FACTBOOK PDF (prima estrazione)",
