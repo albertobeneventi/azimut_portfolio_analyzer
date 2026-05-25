@@ -1642,6 +1642,26 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                             leftMargin=1.5*cm, rightMargin=1.5*cm,
                             topMargin=1.5*cm, bottomMargin=1.5*cm)
 
+    # ── Helper: immagine a dimensioni fisse ──────────────────────────────────
+    # RLImage.wrap() chiama _restrictSize() ad ogni chiamata, sovra-scrivendo
+    # drawWidth/drawHeight con le dimensioni naturali dell'immagine. Su server
+    # Linux matplotlib può produrre PNG molto alti (es. 3251pt) a causa di
+    # bbox_inches="tight". Questa sottoclasse forza dimensioni esatte.
+    class _FixedImage(RLImage):
+        _fw: float = 0.0
+        _fh: float = 0.0
+        def wrap(self, aW, aH):
+            self.drawWidth  = self._fw
+            self.drawHeight = self._fh
+            return self._fw, self._fh
+
+    def _img(buf_or_path, fw, fh):
+        """Crea un'immagine con dimensioni esatte in punti."""
+        i = _FixedImage(buf_or_path)
+        i._fw = fw; i._fh = fh
+        i.drawWidth = fw; i.drawHeight = fh
+        return i
+
     ss = getSampleStyleSheet()
     def S(name,**kw): return ParagraphStyle(name,parent=ss["Normal"],**kw)
 
@@ -1735,7 +1755,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     # — Grafico 1: fondi con hyperlink (torta + legenda a 2 colonne affiancate) —
     pie_buf = _mpl_portfolio_pie(d_act, wcol, profile)
-    pie_img = RLImage(pie_buf); pie_img.drawWidth = PIE_W; pie_img.drawHeight = PIE_W
+    pie_img = _img(pie_buf, PIE_W, PIE_W)
     d_leg   = d_act[d_act[wcol] > 0.005].sort_values(wcol, ascending=False)
 
     # Costruisci le celle della legenda
@@ -1793,7 +1813,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     macro_buf = _mpl_macro_pie(d_act, wcol)
     macro_block = []
     if macro_buf:
-        macro_img = RLImage(macro_buf); macro_img.drawWidth = PIE_W2; macro_img.drawHeight = PIE_W2
+        macro_img = _img(macro_buf, PIE_W2, PIE_W2)
         w_az_v  = (d_act[wcol] * d_act["az_pct"]).sum()
         w_obb_v = (d_act[wcol] * d_act["obb_pct"]).sum()
         LEG2_TXT = 6.5 * cm
@@ -2470,15 +2490,9 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         # KeepTogether: scheda compatta (≈ 2 per pagina)
         card = [Spacer(1,4), hdr_tbl, Spacer(1,4), mid_row]
         if bar_buf:
-            # Imposta drawWidth/drawHeight direttamente per evitare che
-            # _restrictSize() di ReportLab scala proporzionalmente l'immagine
-            # (su server Linux bbox_inches="tight" può produrre PNG altissimi)
-            _bar_img = RLImage(bar_buf)
-            _bar_img.drawWidth  = PW
-            _bar_img.drawHeight = 2.4 * cm
             card += [Spacer(1,3),
                      Paragraph("<b>Performance Annuale (%)</b>", SM),
-                     _bar_img]
+                     _img(bar_buf, PW, 2.4 * cm)]
         story.append(KeepTogether(card))
 
         # Separatore sottile tra schede
