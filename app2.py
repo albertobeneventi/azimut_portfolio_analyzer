@@ -1777,34 +1777,53 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     combo1 = Table([[pie_img, leg_tbl]], colWidths=[PIE_W, LEG_W])
     combo1.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
 
-    # — Grafico 2: asset allocation — piccola, affiancata alla legenda (sotto la torta) —
-    PIE_W2 = 5.0 * cm
+    # — Grafico 2: asset allocation — torta grande, centrata, legenda spaziosa —
+    PIE_W2   = 8.0 * cm
+    DOT_W2   = 0.45 * cm
+    LG2 = S("LG2", fontName="Helvetica", fontSize=11,
+            textColor=rl_colors.HexColor("#1E293B"), leading=17)
+
+    def _dot2(hex_color):
+        t = Table([[""]], colWidths=[DOT_W2], rowHeights=[DOT_W2])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), rl_colors.HexColor(hex_color)),
+        ]))
+        return t
+
     macro_buf = _mpl_macro_pie(d_act, wcol)
     macro_block = []
     if macro_buf:
         macro_img = RLImage(macro_buf, width=PIE_W2, height=PIE_W2)
         w_az_v  = (d_act[wcol] * d_act["az_pct"]).sum()
         w_obb_v = (d_act[wcol] * d_act["obb_pct"]).sum()
+        LEG2_TXT = 6.5 * cm
         macro_leg_rows = [
-            [_dot("#1B4FBB"), Paragraph(f'Azionario  <b>{w_az_v*100:.1f}%</b>', LG)],
-            [_dot("#2D9D78"), Paragraph(f'Obbligazionario  <b>{w_obb_v*100:.1f}%</b>', LG)],
+            [_dot2("#1B4FBB"), Paragraph(f'Azionario  <b>{w_az_v*100:.1f}%</b>', LG2)],
+            [_dot2("#2D9D78"), Paragraph(f'Obbligazionario  <b>{w_obb_v*100:.1f}%</b>', LG2)],
         ]
-        macro_leg_inner = Table(macro_leg_rows, colWidths=[DOT_W, 5*cm])
+        macro_leg_inner = Table(macro_leg_rows, colWidths=[DOT_W2 + 0.15*cm, LEG2_TXT])
         macro_leg_inner.setStyle(TableStyle([
             ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 4),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-            ("LEFTPADDING",   (1,0), (1,-1),  5),
-            ("LEFTPADDING",   (0,0), (0,-1),  0),
+            ("TOPPADDING",    (0,0), (-1,-1), 10),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 10),
+            ("LEFTPADDING",   (1,0), (1,-1),  10),
+            ("LEFTPADDING",   (0,0), (0,-1),   0),
         ]))
-        # Torta macro + legenda affiancate, allineate sinistra
-        macro_row = Table([[macro_img, macro_leg_inner]],
-                          colWidths=[PIE_W2, PW - PIE_W2])
+        # Torta + legenda centrate nella pagina (padding sinistro = spazio rimanente / 2)
+        BLOCK_W  = PIE_W2 + DOT_W2 + 0.15*cm + LEG2_TXT   # ~15.1 cm
+        PAD_LEFT = max((PW - BLOCK_W) / 2, 0)
+        macro_row = Table(
+            [[macro_img, macro_leg_inner]],
+            colWidths=[PIE_W2, PW - PIE_W2],
+        )
         macro_row.setStyle(TableStyle([
-            ("VALIGN",  (0,0), (-1,-1), "MIDDLE"),
-            ("PADDING", (0,0), (-1,-1), 0),
+            ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+            ("LEFTPADDING",  (0,0), (0,0),   PAD_LEFT),
+            ("RIGHTPADDING", (0,0), (-1,-1),  0),
+            ("TOPPADDING",   (0,0), (-1,-1),  0),
+            ("BOTTOMPADDING",(0,0), (-1,-1),  0),
         ]))
-        macro_block = [Spacer(1, 6), macro_row]
+        macro_block = [Spacer(1, 18), macro_row]
 
     # Tutto il blocco grafici in KeepTogether → rimane sulla stessa pagina
     story.append(KeepTogether([combo1] + macro_block))
