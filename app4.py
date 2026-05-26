@@ -3567,6 +3567,8 @@ def main():
                 if _gp_parsed:
                     st.session_state["_gp_data"]    = _gp_parsed
                     st.session_state["_gp_filename"] = uploaded_gp.name
+                    # Nuovo PDF → il fetch FondiDoc va rifatto
+                    st.session_state.pop("_gp_fetch_done", None)
                     # Salva su disco per le sessioni future
                     save_gp_cache(_gp_parsed, uploaded_gp.name)
                 else:
@@ -3763,15 +3765,16 @@ def main():
         ptf_label   = f"SUGGERITO — Scenario {_sc_key_hdr}"
 
     # ── Auto-fetch GP links quando si entra in SUGGERITO con fondi mancanti ──
-    # Usa una firma (n_fondi_gp|dim_cache) per non ritentare se già fatto
+    # Scatta solo la prima volta (o dopo un nuovo PDF). Dopo qualsiasi fetch
+    # (auto o manuale) _gp_fetch_done=True impedisce rifetch su cambio scenario.
     _is_already_fetching = any(st.session_state.get(k) for k in (
         "_fetch_fd_requested", "_fetch_ms_requested", "_fetch_gp_requested"))
-    if _is_suggerito and _gp_loaded_now and _gp_miss > 0 and not _is_already_fetching:
-        _auto_sig = f"{_n_gp}|{_gp_miss}"
-        if st.session_state.get("_gp_auto_fetch_sig") != _auto_sig:
-            st.session_state["_gp_auto_fetch_sig"] = _auto_sig
-            st.session_state["_fetch_gp_requested"] = True
-            st.rerun()
+    if (_is_suggerito and _gp_loaded_now and _gp_miss > 0
+            and not _is_already_fetching
+            and not st.session_state.get("_gp_fetch_done")):
+        st.session_state["_gp_fetch_done"] = True
+        st.session_state["_fetch_gp_requested"] = True
+        st.rerun()
 
     # ── Invalidate cached PDF when portfolio type or profile changes ──────────
     _ptf_key = f"{ptf_choice}|{profile}"
@@ -3905,6 +3908,8 @@ def main():
                 st.warning(
                     "⚠️ Nessun dato trovato su FondiDoc per i fondi GP. "
                     "Potrebbe essere un problema di rete o di nomi.")
+            # Fetch completato: non ripetere finché non arriva un nuovo PDF
+            st.session_state["_gp_fetch_done"] = True
             st.rerun()
 
     # ── Factbook data ──────────────────────────────────────────────────────────
