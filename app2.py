@@ -3539,9 +3539,10 @@ def main():
         if _status_parts:
             st.caption("  ·  ".join(_status_parts))
 
-        # ── Uploader a scomparsa ──────────────────────────────────────────────
-        with st.expander("⬆️  CARICA / AGGIORNA FILE", expanded=False):
-            # Excel
+        # ── Toggle upload (checkbox) ──────────────────────────────────────────
+        _show_upload = st.checkbox("⬆️  CARICA / AGGIORNA FILE",
+                                   value=False, key="_show_upload_toggle")
+        if _show_upload:
             if _xl_cache_date:
                 _xl_hint = f"💾 Cache: {_xl_cache_date} · carica per aggiornare"
             else:
@@ -3552,7 +3553,6 @@ def main():
                 help=_xl_hint,
                 key="up_excel",
             )
-            # Factbook PDF
             uploaded_fb = st.file_uploader(
                 "FACTBOOK PDF (prima estrazione)",
                 type=["pdf"],
@@ -3561,7 +3561,6 @@ def main():
                      "e ricaricalo la prossima volta: è più veloce.",
                 key="up_fb_pdf",
             )
-            # Factbook Excel
             uploaded_fb_xl = st.file_uploader(
                 "DATI FACTBOOK (Excel, dopo prima estrazione)",
                 type=["xlsx","xls"],
@@ -3569,7 +3568,6 @@ def main():
                      "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
                 key="up_fb_xl",
             )
-            # Global Perspectives
             if _gp_cache_date:
                 _gp_hint = f"💾 Cache: {_gp_cache_date} · carica per aggiornare"
             else:
@@ -3580,6 +3578,11 @@ def main():
                 help=_gp_hint,
                 key="up_gp_pdf",
             )
+        else:
+            uploaded = None
+            uploaded_fb = None
+            uploaded_fb_xl = None
+            uploaded_gp = None
 
         # ── Parsing GP (solo quando cambia file) ─────────────────────────────
         if uploaded_gp is not None:
