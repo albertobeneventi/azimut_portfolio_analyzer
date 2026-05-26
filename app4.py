@@ -3511,6 +3511,9 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 
 def main():
     st.markdown(_APP_CSS, unsafe_allow_html=True)
+    # Prima apertura della sessione → invita ad aggiornare i dati
+    if "_session_needs_update" not in st.session_state:
+        st.session_state["_session_needs_update"] = True
     _ms_with_rating = 0   # default; updated inside sidebar block below
     with st.sidebar:
         st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
@@ -3620,8 +3623,22 @@ def main():
         _all_ok   = bool(_fd_now and _ms_with_rating
                         and (_gp_miss == 0 if _gp_loaded_now else True))
         _any_data = bool(_fd_now or _ms_with_rating)
-        # card colore: verde / giallo / rosso scuro lampeggiante
-        if _all_ok:
+        _needs_upd = st.session_state.get("_session_needs_update", False)
+
+        # card colore: ambra lampeggiante all'apertura / verde / giallo / rosso
+        if _needs_upd and _any_data:
+            # Dati in cache ma sessione fresca → invita ad aggiornare
+            _card_bg, _card_brd, _card_clr = "#1a1200", "#b45309", "#fde68a"
+            _card_extra_style = (
+                "border-width:2px;"
+                "box-shadow:0 0 10px 2px #d9770688;"
+                "animation:_card_amber 1.4s ease-in-out infinite;")
+            _card_anim_css = (
+                "<style>@keyframes _card_amber{"
+                "0%,100%{opacity:1;box-shadow:0 0 8px 2px #d9770688}"
+                "50%{opacity:.6;box-shadow:0 0 18px 6px #d97706cc}}"
+                "</style>")
+        elif _all_ok:
             _card_bg, _card_brd, _card_clr = "#0d2b1a", "#166534", "#86efac"
             _card_extra_style = ""
             _card_anim_css    = ""
@@ -3668,8 +3685,16 @@ def main():
                 "0%{opacity:.92}50%{opacity:.55}100%{opacity:.92}}</style>",
                 unsafe_allow_html=True)
         elif _can_update:
-            # Colore tasto: rosso lampeggiante / giallo / verde
-            if _all_ok:
+            # Colore tasto: ambra lampeggiante (apertura) / verde / giallo / rosso
+            if _needs_upd and _any_data:
+                _btn_bg   = "linear-gradient(135deg,#92400e,#D97706)"
+                _btn_anim = "animation:_aggiorna_blink 1.4s ease-in-out infinite;"
+                _btn_shadow_kf = (
+                    "@keyframes _aggiorna_blink{"
+                    "0%,100%{opacity:1;box-shadow:0 0 8px 3px #d9770666}"
+                    "50%{opacity:.5;box-shadow:0 0 18px 6px #d97706bb}}"
+                )
+            elif _all_ok:
                 _btn_bg   = "linear-gradient(135deg,#14532d,#16A34A)"
                 _btn_anim = ""
                 _btn_shadow_kf = ""
@@ -3706,6 +3731,7 @@ def main():
                          use_container_width=True,
                          help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
                               "Morningstar e — se il GP è caricato — dati fondi GP."):
+                st.session_state["_session_needs_update"] = False
                 if _has_excel:
                     st.session_state["_fetch_fd_requested"] = True
                     st.session_state["_fetch_ms_requested"] = True
