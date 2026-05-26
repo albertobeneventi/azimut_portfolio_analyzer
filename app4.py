@@ -76,6 +76,15 @@ MANUAL_URL_OVERRIDES = {
     # AZ Bond - Convertible Bond: pagina FondiDoc (classe A HU Cap EUR Hdg)
     "AZ Bond - Convertible Bond":
         "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg",
+    # AZ Equity - Global Infrastructure: classe A Cap EUR
+    "AZ Equity - Global Infrastructure":
+        "https://www.fondidoc.it/d/Index/GIU_5366/LU1621767737_az-f1-eq-gl-infrastructure-a-az-fund-cap-eur",
+    # AZ Bond - CoCo Bonds (EUR-hedged): classe A-HU Cap EUR Hdg
+    "AZ Bond - CoCo Bonds (EUR-hedged)":
+        "https://www.fondidoc.it/d/Index/FDFM4346/LU2622195936_az-f1-bd-coco-bonds-a-az-fund-cap-eur-hdg",
+    # AZ Bond - CoCo Bonds (senza hedging — nome alternativo nei portafogli)
+    "AZ Bond - CoCo Bonds":
+        "https://www.fondidoc.it/d/Index/FIDFM857/LU2622195423_az-f1-bd-coco-bonds-a-az-fund-cap-eur",
 }
 
 # ── GITHUB REPO PERSISTENCE ──────────────────────────────────────────────────
