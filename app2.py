@@ -1,5 +1,5 @@
 # ============================================================
-# AZIMUT PORTFOLIO ANALYZER v2.0 — app.py
+# AZIMUT PORTFOLIO ANALYZER v2.0 — app2.py
 # Aggiornamento: Schede fondi + Rendimenti da FondiDoc FIDA
 # ============================================================
 
