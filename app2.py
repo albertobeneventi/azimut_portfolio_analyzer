@@ -3287,7 +3287,8 @@ _APP_CSS = """
 html,body,[class*="css"]{font-family:'DM Sans',sans-serif;}
 h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stSidebar"]{background:linear-gradient(170deg,#06101e 0%,#0d1f3c 55%,#0a1628 100%);border-right:1px solid #1a3050;}
-[data-testid="stSidebar"] .stFileUploader label,[data-testid="stSidebar"] .stRadio > label,[data-testid="stSidebar"] .stSelectbox > label{color:#4a6582 !important;font-size:.68rem !important;letter-spacing:.12em !important;text-transform:uppercase !important;font-weight:600 !important;}
+[data-testid="stSidebar"] .stRadio > label,[data-testid="stSidebar"] .stSelectbox > label{color:#4a6582 !important;font-size:.68rem !important;letter-spacing:.12em !important;text-transform:uppercase !important;font-weight:600 !important;}
+[data-testid="stSidebar"] .stFileUploader label{color:#7ab8e8 !important;font-size:.72rem !important;letter-spacing:.08em !important;text-transform:uppercase !important;font-weight:700 !important;}
 [data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p{color:#c0cfe0 !important;font-size:.9rem !important;}
 [data-testid="stSidebar"] .stSelectbox>div>div{background:#132035 !important;border:1px solid #243d5a !important;color:#dde6f0 !important;border-radius:6px !important;}
 [data-testid="stSidebar"] .stSelectbox svg{fill:#C9A84C !important;width:22px !important;height:22px !important;opacity:1 !important;}
@@ -3325,6 +3326,10 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stDownloadButton"]>button:hover{box-shadow:0 6px 24px rgba(27,79,187,.55) !important;transform:translateY(-2px) !important;}
 .w-ok{background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#065f46;}
 .w-warn{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#92400e;}
+[data-testid="stSidebar"] [data-testid="stExpander"]{border:1px solid #245580 !important;border-radius:8px !important;background:rgba(12,38,68,0.6) !important;margin-bottom:4px !important;}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary{color:#7ab8e8 !important;font-size:.76rem !important;font-weight:700 !important;letter-spacing:.08em !important;text-transform:uppercase !important;padding:.55rem .75rem !important;}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover{color:#bfdbfe !important;background:rgba(20,60,100,0.5) !important;border-radius:7px !important;cursor:pointer !important;}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary svg{fill:#7ab8e8 !important;}
 </style>
 """
 
