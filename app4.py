@@ -73,9 +73,9 @@ FONDIDOC_HEADERS = {
 MANUAL_URL_OVERRIDES = {
     "AZ F.1 All. Balanced FoF A Cap EUR":
         "https://www.fondidoc.it/d/Index/AZPOA/LU0346933400_az-f1-allocation-balanced-fof-a-az-fund-cap-eur",
-    # AZ Bond - Convertible Bond: non indicizzato su FondiDoc → pagina ufficiale Azimut
+    # AZ Bond - Convertible Bond: pagina FondiDoc (classe A HU Cap EUR Hdg)
     "AZ Bond - Convertible Bond":
-        "https://www.azimut.it/tutte-le-quote/-/fund/AZ+Fund+1+_+AZ+Bond+_+Convertible+Classe+A+_Acc_/11904",
+        "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg",
 }
 
 # ── FUND DATA CACHE ──────────────────────────────────────────────────────────
@@ -139,6 +139,106 @@ def save_ms_cache(ms_data: dict):
                               encoding="utf-8")
     except Exception:
         pass
+
+
+# ── EXCEL / GP PERSISTENT CACHE ──────────────────────────────────────────────
+# Persiste i dati parsed tra sessioni diverse: zero upload nel normale utilizzo,
+# ricaricamento solo quando ci sono aggiornamenti (mensile Excel, trimestrale GP).
+EXCEL_CACHE_FILE = Path("data/excel_cache.json")
+GP_CACHE_FILE    = Path("data/gp_cache.json")
+
+
+def _df_to_records(df: pd.DataFrame) -> list:
+    """Serializza un DataFrame in una lista di dizionari (JSON-safe)."""
+    if df is None or df.empty:
+        return []
+    return df.where(pd.notna(df), None).to_dict(orient="records")
+
+
+def _records_to_df(records: list) -> pd.DataFrame:
+    """Ricostruisce un DataFrame da una lista di dizionari."""
+    if not records:
+        return pd.DataFrame()
+    return pd.DataFrame(records)
+
+
+def load_excel_cache() -> tuple:
+    """Carica i dati Excel salvati su disco.
+
+    Returns (raw_dict, last_updated_str) oppure (None, "") se assente/corrotto.
+    raw_dict ha la stessa struttura di parse_excel():
+      {"PTF FULL": DataFrame, "PTF SHORT": DataFrame,
+       "FIDA": DataFrame, "fida_urls": dict}
+    """
+    try:
+        if EXCEL_CACHE_FILE.exists() and EXCEL_CACHE_FILE.stat().st_size > 10:
+            payload = json.loads(EXCEL_CACHE_FILE.read_text(encoding="utf-8-sig"))
+            raw: dict = {}
+            for sname in ("PTF FULL", "PTF SHORT"):
+                recs = payload.get(sname, [])
+                if recs:
+                    raw[sname] = _records_to_df(recs)
+            fida_recs = payload.get("FIDA", [])
+            if fida_recs:
+                raw["FIDA"] = _records_to_df(fida_recs)
+            raw["fida_urls"] = payload.get("fida_urls") or {}
+            # Valida: almeno uno dei due sheet deve essere non-vuoto
+            if raw.get("PTF FULL") is not None and not raw["PTF FULL"].empty:
+                return raw, payload.get("last_updated", "")
+    except Exception:
+        pass
+    return None, ""
+
+
+def save_excel_cache(raw: dict):
+    """Salva i dati parsed dell'Excel su data/excel_cache.json."""
+    try:
+        EXCEL_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload: dict = {"last_updated": datetime.date.today().isoformat()}
+        for sname in ("PTF FULL", "PTF SHORT"):
+            df = raw.get(sname)
+            payload[sname] = _df_to_records(df) if df is not None else []
+        fida = raw.get("FIDA")
+        payload["FIDA"] = _df_to_records(fida) if fida is not None else []
+        payload["fida_urls"] = raw.get("fida_urls") or {}
+        EXCEL_CACHE_FILE.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def load_gp_cache() -> tuple:
+    """Carica i dati Global Perspectives salvati su disco.
+
+    Returns (gp_data, filename_str, last_updated_str) oppure (None, "", "").
+    """
+    try:
+        if GP_CACHE_FILE.exists() and GP_CACHE_FILE.stat().st_size > 10:
+            payload = json.loads(GP_CACHE_FILE.read_text(encoding="utf-8-sig"))
+            gp_data = payload.get("gp_data")
+            if gp_data and isinstance(gp_data, dict) and len(gp_data) >= 3:
+                return (gp_data,
+                        payload.get("filename", ""),
+                        payload.get("last_updated", ""))
+    except Exception:
+        pass
+    return None, "", ""
+
+
+def save_gp_cache(gp_data: dict, filename: str = ""):
+    """Salva i dati Global Perspectives su data/gp_cache.json."""
+    try:
+        GP_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "last_updated": datetime.date.today().isoformat(),
+            "filename":     filename,
+            "gp_data":      gp_data,
+        }
+        GP_CACHE_FILE.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
 
 # ── UNP/IUNP CATALOG (Catalogo Prodotti&Servizi Azimut, settembre 2025) ──────
 # Fonte: DETTAGLIO AZ FUND — valori %UNP e %IUNP36
@@ -1770,8 +1870,28 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # Costruisci le celle della legenda
     leg_items = []
     for _, r in d_leg.iterrows():
-        url    = (fund_data or {}).get(r["nome"], {}).get("url", "")
-        name_s = (r["nome"][:24] + "…") if len(r["nome"]) > 24 else r["nome"]
+        _rn = r["nome"]
+        # 1) MANUAL direct  2) MANUAL fuzzy (vince su fida_urls)  3) cache fuzzy
+        _fd = fund_data or {}
+        url = MANUAL_URL_OVERRIDES.get(_rn, "")
+        if not url:
+            _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', _rn, flags=re.I).strip().lower()
+            # 2) MANUAL fuzzy — PRIMA del cache direct/fuzzy
+            if _sk:
+                for _mk, _mu in MANUAL_URL_OVERRIDES.items():
+                    _msk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', _mk, flags=re.I).strip().lower()
+                    if _msk and _msk in _sk and _mu:
+                        url = _mu
+                        break
+            # 3) FondiDoc cache direct e fuzzy
+            if not url:
+                url = _fd.get(_rn, {}).get("url", "")
+            if not url and _sk:
+                for _fk, _fv in _fd.items():
+                    if isinstance(_fv, dict) and _sk in _fk.lower() and _fv.get("url"):
+                        url = _fv["url"]
+                        break
+        name_s = (_rn[:24] + "…") if len(_rn) > 24 else _rn
         pct_s  = f"{r[wcol]*100:.1f}%"
         if url:
             lbl = Paragraph(
@@ -3270,12 +3390,24 @@ def main():
     st.markdown(_APP_CSS, unsafe_allow_html=True)
     _ms_with_rating = 0   # default; updated inside sidebar block below
     with st.sidebar:
-        st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.2 — factbook Excel cache</div></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
         st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
 
-        # ── Tutti gli uploader in blocco ──────────────────────────────────────
+        # ── Uploader Excel ────────────────────────────────────────────────────
+        _xl_cache_raw, _xl_cache_date = load_excel_cache()
+        if _xl_cache_date:
+            _xl_hint = (f"💾 Cache: {_xl_cache_date} · carica per aggiornare")
+        else:
+            _xl_hint = "Nessuna cache — carica il file mensile."
         uploaded = st.file_uploader(
-            "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)", type=["xlsx","xls"])
+            "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)",
+            type=["xlsx","xls"],
+            help=_xl_hint,
+        )
+        if _xl_cache_date and uploaded is None:
+            st.caption(f"📂 Excel da cache · {_xl_cache_date}")
+
+        # ── Uploader Factbook ─────────────────────────────────────────────────
         uploaded_fb = st.file_uploader(
             "FACTBOOK PDF (prima estrazione)",
             type=["pdf"],
@@ -3289,13 +3421,20 @@ def main():
             help="Carica il file Excel scaricato dopo la prima estrazione del "
                  "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
         )
+
+        # ── Uploader GP ───────────────────────────────────────────────────────
+        _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
+        if _gp_cache_date:
+            _gp_hint = (f"💾 Cache: {_gp_cache_date} · carica per aggiornare")
+        else:
+            _gp_hint = "Nessuna cache — carica il PDF trimestrale."
         uploaded_gp = st.file_uploader(
             "GLOBAL PERSPECTIVES PDF",
             type=["pdf"],
-            help="Carica il PDF Global Perspectives trimestrale per attivare "
-                 "la modalità SUGGERITO con i 3 scenari (Base / Bear / Bull). "
-                 "Il file viene re-parsato solo quando cambia.",
+            help=_gp_hint,
         )
+        if _gp_cache_date and uploaded_gp is None:
+            st.caption(f"📂 GP da cache · {_gp_cache_date}")
 
         # ── Parsing GP (solo quando cambia file) ─────────────────────────────
         if uploaded_gp is not None:
@@ -3305,12 +3444,19 @@ def main():
                 if _gp_parsed:
                     st.session_state["_gp_data"]    = _gp_parsed
                     st.session_state["_gp_filename"] = uploaded_gp.name
+                    # Salva su disco per le sessioni future
+                    save_gp_cache(_gp_parsed, uploaded_gp.name)
                 else:
                     st.session_state.pop("_gp_data", None)
                     st.warning("⚠️ PDF non riconosciuto — verifica che sia un "
                                "Global Perspectives Azimut.")
         else:
-            if st.session_state.get("_gp_filename"):
+            # Nessun file caricato: usa cache su disco se disponibile
+            if not st.session_state.get("_gp_data") and _gp_cache_data:
+                st.session_state["_gp_data"]    = _gp_cache_data
+                st.session_state["_gp_filename"] = _gp_cache_fname
+            elif st.session_state.get("_gp_filename") and not _gp_cache_data:
+                # Cache rimossa manualmente → pulisci session state
                 st.session_state.pop("_gp_data",     None)
                 st.session_state.pop("_gp_filename",  None)
 
@@ -3379,7 +3525,9 @@ def main():
             unsafe_allow_html=True)
 
         # ── Unico tasto Aggiorna Dati ─────────────────────────────────────────
-        _can_update  = bool(uploaded or _gp_loaded_now)
+        # "can update" = Excel disponibile (upload fresco OPPURE cache su disco) + GP
+        _has_excel   = bool(uploaded or _xl_cache_raw)
+        _can_update  = bool(_has_excel or _gp_loaded_now)
         _is_fetching = any(st.session_state.get(k) for k in (
             "_fetch_fd_requested", "_fetch_ms_requested", "_fetch_gp_requested"))
 
@@ -3433,7 +3581,7 @@ def main():
                          use_container_width=True,
                          help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
                               "Morningstar e — se il GP è caricato — dati fondi GP."):
-                if uploaded:
+                if _has_excel:
                     st.session_state["_fetch_fd_requested"] = True
                     st.session_state["_fetch_ms_requested"] = True
                 if _gp_loaded_now:
@@ -3504,19 +3652,40 @@ def main():
 
     st.markdown(f"""<div class="az-header"><div class="az-eyebrow">AZIMUT INVESTMENTS · AAS EMILIA ROMAGNA MARCHE UMBRIA</div><div class="az-rule"></div><div class="az-title">{ptf_label}</div><div class="az-meta">{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()} &nbsp;·&nbsp; {datetime.date.today().strftime('%d %B %Y')}</div></div>""",unsafe_allow_html=True)
 
-    if uploaded is None and not _is_suggerito:
-        st.info("⬅️ **Carica il file Excel** nella barra laterale per iniziare.")
-        return
-
+    # ── Carica dati Excel (file fresco → salva cache; altrimenti usa cache) ─────
     if uploaded is not None:
         with st.spinner("⏳ Caricamento dati…"):
             file_bytes = uploaded.read()
             raw = parse_excel(file_bytes)
+        _xl_from_cache = False
+    elif _xl_cache_raw is not None:
+        raw = _xl_cache_raw
+        _xl_from_cache = True
     else:
         raw = {}
+        _xl_from_cache = False
+
+    # Assicura che MANUAL_URL_OVERRIDES sovrascriva qualsiasi URL sbagliato in
+    # fida_urls (es. hyperlink Excel o risultato vecchio di st.cache_data).
+    # Fatto PRIMA di save_excel_cache così la cache su disco è già corretta.
+    if raw:
+        _fida_existing = raw.get("fida_urls") or {}
+        raw["fida_urls"] = {**_fida_existing, **MANUAL_URL_OVERRIDES}
+
+    # Salva su disco dopo il patch — la cache conterrà sempre gli URL aggiornati
+    if uploaded is not None and raw:
+        save_excel_cache(raw)
+
+    # Controlla se ci sono dati Excel disponibili (upload o cache)
+    _has_raw = bool(raw.get("PTF FULL") is not None
+                    and not raw.get("PTF FULL", pd.DataFrame()).empty)
+
+    if not _has_raw and not _is_suggerito:
+        st.info("⬅️ **Carica il file Excel** nella barra laterale per iniziare.")
+        return
 
     # ── Sidebar-triggered FondiDoc / MS fetch (only when Excel is loaded) ───────
-    if uploaded is not None:
+    if _has_raw:
         if st.session_state.pop("_fetch_fd_requested", False):
             _fida_urls_all = raw.get("fida_urls", {})
             _sheets = [raw[s] for s in ("PTF FULL", "PTF SHORT")
@@ -3551,7 +3720,7 @@ def main():
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
     else:
-        # Drain any stale fetch flags so they don't fire when Excel is later loaded
+        # Drain any stale fetch flags so they don't fire unexpectedly
         st.session_state.pop("_fetch_fd_requested", None)
         st.session_state.pop("_fetch_ms_requested", None)
 
@@ -3935,16 +4104,36 @@ def main():
 
     def _fund_url(nome: str) -> str:
         """Return the FondiDoc URL for a fund, or '' if not available.
-        Prova prima MANUAL_URL_OVERRIDES, poi cache, poi fuzzy.
+
+        Priorità rigorosa:
+          1. MANUAL_URL_OVERRIDES direct
+          2. MANUAL_URL_OVERRIDES fuzzy   ← vince su TUTTO, anche su fida_urls
+          3. FondiDoc cache direct
+          4. fida_urls direct  (può contenere URL sbagliati dall'Excel)
+          5. FondiDoc cache fuzzy
+          6. fida_urls fuzzy
         """
-        url = (MANUAL_URL_OVERRIDES.get(nome, "")
-               or _fd_live.get(nome, {}).get("url", "")
+        # 1. Match diretto
+        if nome in MANUAL_URL_OVERRIDES:
+            return MANUAL_URL_OVERRIDES[nome]
+
+        # Calcola short key una sola volta
+        _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', nome, flags=re.I).strip().lower()
+
+        # 2. MANUAL fuzzy — PRIMA di qualsiasi altro lookup (incluso fida_urls)
+        if _sk:
+            for _mk, _mu in MANUAL_URL_OVERRIDES.items():
+                _msk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', _mk, flags=re.I).strip().lower()
+                if _msk and _msk in _sk and _mu:
+                    return _mu
+
+        # 3–4. Cache e fida_urls direct
+        url = (_fd_live.get(nome, {}).get("url", "")
                or _fida_urls_raw.get(nome, ""))
         if url:
             return url
-        # Ricerca fuzzy: strip "AZ [Famiglia] - " e cerca la sottostringa
-        # (identica alla logica del builder in suggerito_portfolio_ui)
-        _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', nome, flags=re.I).strip().lower()
+
+        # 5–6. Fuzzy su cache e fida_urls
         if _sk:
             for _fk, _fv in _fd_live.items():
                 if isinstance(_fv, dict) and _sk in _fk.lower() and _fv.get("url"):
