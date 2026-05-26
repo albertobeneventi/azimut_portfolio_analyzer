@@ -865,5 +865,91 @@
         }
       }
     }
+  },
+  "ms_data": {
+    "AZ F.1 All. Balanced Brave A Cap EUR": {
+      "ms_rating": 3,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/bilanciati-flessibili-eur-globali/az-fd1-az-allc-bal-brave-a-eur-acc-lu2148611275.html"
+    },
+    "AZ F.1 All. Balanced FoF A Cap EUR": {
+      "ms_rating": null,
+      "fo_url": null
+    },
+    "AZ F.1 All. Trend A Cap EUR": {
+      "ms_rating": 2,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/bilanciati-aggressivi-eur-globali/az-fd1-az-allc-tr-a-az-c-lu2168564065.html"
+    },
+    "AZ F.1 All. Escalator 2030 A Cap EUR": {
+      "ms_rating": null,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/bilanciati-altro/az-fd-1-az-alloc-escltor-2030-a-eur-acc-lu3081792221.html"
+    },
+    "AZ F.1 All. Flexible Equity A Cap EUR": {
+      "ms_rating": 4,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/bilanciati-flessibili-eur-globali/az-fund-1-az-allc-flex-eq-a-eur-acc-lu2168558927.html"
+    },
+    "AZ F.1 All. Risk Parity Factors A Cap EUR": {
+      "ms_rating": 4,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/bilanciati-flessibili-eur-globali/az-fd1-az-allc-risk-parity-fct-a-az-c-lu2102340044.html"
+    },
+    "AZ F.1 Eq. Best Value A Cap EUR": {
+      "ms_rating": 5,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/azionari-internazionali-small-mid-cap/az-fd1-az-equity-best-value-a-eur-acc-lu2056383347.html"
+    },
+    "AZ F.1 Eq. Escalator A Cap EUR": {
+      "ms_rating": 3,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/bilanciati-flessibili-eur-globali/az-fd1-az-equity-escalator-a-eur-acc-lu1867654516.html"
+    },
+    "AZ F.1 Eq. Emerging Markets Technology A Cap EUR": {
+      "ms_rating": null,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/azionari-settore-tecnologia/az-fd-1-az-eq-em-tech-a-eur-acc-lu3081725973.html"
+    },
+    "AZ F.1 Eq. Global Dividend A Cap EUR": {
+      "ms_rating": null,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/azionari-globali-reddito/az-fd-1-az-eq-glbl-dvdnd-a-eur-acc-lu3081740188.html"
+    },
+    "AZ F.1 Eq. Industrial Revolution 4.0 A Cap EUR": {
+      "ms_rating": null,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/azionari-settore-beni-industriali/az-fd1-az-eq-indstr-revolt-4-0a-azeuracc-lu2622500598.html"
+    },
+    "AZ F.1 All. Potential Income Upside 2030 A Cap EUR": {
+      "ms_rating": null,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/bilanciati-altro/az-fd1-az-allc-ptntl-incupsd2030aazacc-lu2637786422.html"
+    },
+    "AZ F.1 Bd Bond Value A Cap EUR": {
+      "ms_rating": null,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/obbligazionari-flessibili-globali/az-fd-1-az-bd-bond-val-a-eur-acc-lu3081730460.html"
+    },
+    "AZ F.1 Bd Target 2029 A Cap EUR": {
+      "ms_rating": null,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/obbligazionari-a-scadenza/az-fd-1-az-bd-target-2029-a-az-eur-acc-lu2951609937.html"
+    },
+    "AZ F.1 Bd High Income FoF A Cap EUR": {
+      "ms_rating": 4,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/obbligazionari-flessibili-eur/az-fd-1-az-bond-hi-inc-fof-a-az-acc-lu2244841198.html"
+    },
+    "AZ F.1 Bd High Yield A Cap EUR": {
+      "ms_rating": 4,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/obbligazionari-high-yield-globali-eur-hedged/az-fd1-az-bond-hi-yld-a-eur-acc-lu2056382372.html"
+    },
+    "AZ F.1 Bd Hybrids A Cap EUR": {
+      "ms_rating": 3,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/obbligazionari-subordinati-eur/az-fd1-az-bd-hybrids-a-acc-lu2056384311.html"
+    },
+    "AZ F.1 Bd Patriot A Cap EUR": {
+      "ms_rating": 4,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/obbligazionari-diversificati-eur/az-fd1-az-bond-patriot-a-eur-acc-lu0738951036.html"
+    },
+    "AZ F.1 All. Long Term Credit Opportunities A Cap EUR": {
+      "ms_rating": 5,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/bilanciati-prudenti-eur-globali/az-fd-1-az-allc-l-t-cr-opps-a-az-eur-acc-lu2458531147.html"
+    },
+    "AZ F.1 Bd Frontier Markets Debt A-HU Cap EUR Hdg": {
+      "ms_rating": 4,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/obbligazionari-paesi-emergenti-eur/az-fd1-az-bd-frntr-mkts-dbt-a-az-eurhacc-lu2458358681.html"
+    },
+    "AZ F.1 Bd Global Macro Bond A Cap EUR": {
+      "ms_rating": 4,
+      "fo_url": "https://www.fondionline.it/elenco-fondi/obbligazionari-flessibili-globali-eur-hedged/az-fd1-az-bd-glbl-mac-bd-a-eur-acc-lu2085663008.html"
+    }
   }
 }
