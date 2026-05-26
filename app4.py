@@ -3364,8 +3364,9 @@ def main():
         if _cache_parts:
             st.caption("  ·  ".join(_cache_parts))
 
-        # ── Expander uploader — chiuso di default ─────────────────────────────
-        with st.expander("⬆️  Aggiorna file sorgente", expanded=False):
+        # ── Expander uploader — aperto se non c'è nessun cache ───────────────
+        _no_cache = not (_xl_cache_raw or _fb_cache_date or _gp_cache_date)
+        with st.expander("⬆️  Aggiorna file sorgente", expanded=_no_cache):
             # Excel
             _xl_hint = (f"💾 Cache: {_xl_cache_date} · carica per aggiornare"
                         if _xl_cache_date else "Nessuna cache — carica il file mensile.")
@@ -3483,7 +3484,6 @@ def main():
             unsafe_allow_html=True)
 
         # ── Unico tasto Aggiorna Dati ─────────────────────────────────────────
-        # "can update" = Excel disponibile (upload fresco OPPURE cache su disco) + GP
         _has_excel   = bool(uploaded or _xl_cache_raw)
         _can_update  = bool(_has_excel or _gp_loaded_now)
         _is_fetching = any(st.session_state.get(k) for k in (
@@ -3500,8 +3500,8 @@ def main():
                 "<style>@keyframes _aggiorna_pulse{"
                 "0%{opacity:.92}50%{opacity:.55}100%{opacity:.92}}</style>",
                 unsafe_allow_html=True)
-        elif _can_update:
-            # Colore tasto: rosso lampeggiante / giallo / verde
+        else:
+            # Tasto sempre visibile — colore dipende dallo stato dati
             if _all_ok:
                 _btn_bg   = "linear-gradient(135deg,#14532d,#16A34A)"
                 _btn_anim = ""
@@ -3518,7 +3518,6 @@ def main():
                     "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
                     "50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}"
                 )
-            # Selettori multipli per compatibilità con le versioni di Streamlit
             _btn_sel = (
                 "section[data-testid='stSidebar'] div[data-testid='stButton'] > button,"
                 "section[data-testid='stSidebar'] div[data-testid='stBaseButton-secondary'],"
@@ -3539,14 +3538,15 @@ def main():
                          use_container_width=True,
                          help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
                               "Morningstar e — se il GP è caricato — dati fondi GP."):
-                if _has_excel:
-                    st.session_state["_fetch_fd_requested"] = True
-                    st.session_state["_fetch_ms_requested"] = True
-                if _gp_loaded_now:
-                    st.session_state["_fetch_gp_requested"] = True
-                st.rerun()  # mostra subito lo stato "in corso" prima che parta lo scarico
-        else:
-            st.caption("⬆️ Carica il file Excel o il PDF Global Perspectives")
+                if _can_update:
+                    if _has_excel:
+                        st.session_state["_fetch_fd_requested"] = True
+                        st.session_state["_fetch_ms_requested"] = True
+                    if _gp_loaded_now:
+                        st.session_state["_fetch_gp_requested"] = True
+                    st.rerun()
+                else:
+                    st.warning("⬆️ Carica prima il file **FONDI QUALITÀ** (Excel)")
 
         st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         _gp_loaded    = bool(st.session_state.get("_gp_data"))
