@@ -3555,9 +3555,7 @@ def main():
 
         st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         _gp_loaded    = bool(st.session_state.get("_gp_data"))
-        _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO"]
-        if _gp_loaded:
-            _ptf_options.append("🌐  SUGGERITO")
+        _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO", "🌐  SUGGERITO"]
         # Forza index esplicito: evita che st.rerun() resetti la selezione
         _cur_ptf = st.session_state.get("_ptf_choice_radio", _ptf_options[0])
         _ptf_idx = _ptf_options.index(_cur_ptf) if _cur_ptf in _ptf_options else 0
