@@ -3542,7 +3542,7 @@ def main():
             st.caption("  ·  ".join(_status_parts))
 
         # ── Uploader a scomparsa ──────────────────────────────────────────────
-        with st.expander("⬆️  CARICA / AGGIORNA FILE"):
+        with st.expander("⬆️  CARICA / AGGIORNA FILE", expanded=False):
             # Excel
             if _xl_cache_date:
                 _xl_hint = f"💾 Cache: {_xl_cache_date} · carica per aggiornare"
@@ -3552,6 +3552,7 @@ def main():
                 "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)",
                 type=["xlsx","xls"],
                 help=_xl_hint,
+                key="up_excel",
             )
 
             # Factbook PDF
@@ -3561,6 +3562,7 @@ def main():
                 help="Carica il Factbook PDF per estrarre Duration, Rating e Asset "
                      "Allocation. Dopo la prima estrazione scarica il file Excel "
                      "e ricaricalo la prossima volta: è più veloce.",
+                key="up_fb_pdf",
             )
             # Factbook Excel
             uploaded_fb_xl = st.file_uploader(
@@ -3568,6 +3570,7 @@ def main():
                 type=["xlsx","xls"],
                 help="Carica il file Excel scaricato dopo la prima estrazione del "
                      "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
+                key="up_fb_xl",
             )
 
             # Global Perspectives
@@ -3579,6 +3582,7 @@ def main():
                 "GLOBAL PERSPECTIVES PDF",
                 type=["pdf"],
                 help=_gp_hint,
+                key="up_gp_pdf",
             )
 
         # ── Parsing GP (solo quando cambia file) ─────────────────────────────
