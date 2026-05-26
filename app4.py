@@ -3505,6 +3505,8 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stDownloadButton"]>button:hover{box-shadow:0 6px 24px rgba(27,79,187,.55) !important;transform:translateY(-2px) !important;}
 .w-ok{background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#065f46;}
 .w-warn{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#92400e;}
+@keyframes _aggiorna_blink{0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}
+@keyframes _card_amber{0%,100%{opacity:1;box-shadow:0 0 8px 2px #d9770688}50%{opacity:.6;box-shadow:0 0 18px 6px #d97706cc}}
 </style>
 """
 
@@ -3688,40 +3690,37 @@ def main():
             # Colore tasto: rosso lampeggiante (apertura) / verde / giallo / rosso
             if _needs_upd:
                 # App appena aperta → rosso lampeggiante con bordo rosso
-                _btn_bg   = "linear-gradient(135deg,#7f1d1d,#DC2626)"
-                _btn_brd  = "border:2px solid #ef4444 !important;"
-                _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite !important;"
-                _btn_shadow_kf = (
-                    "@keyframes _aggiorna_blink{"
-                    "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
-                    "50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}"
-                )
+                _btn_bg      = "linear-gradient(135deg,#7f1d1d,#DC2626)"
+                _btn_brd     = "border:2px solid #ef4444 !important;"
+                _wrap_anim   = "animation:_aggiorna_blink 1s ease-in-out infinite;"
+                _wrap_radius = "border-radius:8px;overflow:hidden;"
             elif _all_ok:
-                _btn_bg, _btn_brd, _btn_anim, _btn_shadow_kf = (
-                    "linear-gradient(135deg,#14532d,#16A34A)", "", "", "")
+                _btn_bg      = "linear-gradient(135deg,#14532d,#16A34A)"
+                _btn_brd     = ""
+                _wrap_anim   = ""
+                _wrap_radius = ""
             elif _any_data:
-                _btn_bg, _btn_brd, _btn_anim, _btn_shadow_kf = (
-                    "linear-gradient(135deg,#78350f,#D97706)", "", "", "")
+                _btn_bg      = "linear-gradient(135deg,#78350f,#D97706)"
+                _btn_brd     = ""
+                _wrap_anim   = ""
+                _wrap_radius = ""
             else:
-                _btn_bg  = "linear-gradient(135deg,#7f1d1d,#DC2626)"
-                _btn_brd = "border:2px solid #ef4444 !important;"
-                _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite !important;"
-                _btn_shadow_kf = (
-                    "@keyframes _aggiorna_blink{"
-                    "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
-                    "50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}"
-                )
-            # Solo st.button (non file_uploader): div[stButton] > button è specifico
-            _btn_sel = "section[data-testid='stSidebar'] div[data-testid='stButton'] > button"
+                _btn_bg      = "linear-gradient(135deg,#7f1d1d,#DC2626)"
+                _btn_brd     = "border:2px solid #ef4444 !important;"
+                _wrap_anim   = "animation:_aggiorna_blink 1s ease-in-out infinite;"
+                _wrap_radius = "border-radius:8px;overflow:hidden;"
+            # Selettori separati: wrapper (animation) e button (colori)
+            # Il wrapper div[stButton] non ha stili emotion → animation funziona
+            _wrap_sel = "section[data-testid='stSidebar'] div[data-testid='stButton']"
+            _btn_sel  = f"{_wrap_sel} > button"
             st.markdown(
                 f"<style>"
+                f"{_wrap_sel}{{{_wrap_anim}{_wrap_radius}}}"
                 f"{_btn_sel}{{"
                 f"background:{_btn_bg} !important;"
                 f"color:#fff !important;{_btn_brd}"
-                f"font-weight:600 !important;{_btn_anim}}}"
-                f"{_btn_sel}:hover{{"
-                f"filter:brightness(1.18) !important;}}"
-                f"{_btn_shadow_kf}"
+                f"font-weight:600 !important;}}"
+                f"{_btn_sel}:hover{{filter:brightness(1.18) !important;}}"
                 f"</style>",
                 unsafe_allow_html=True)
             if st.button("📥  Aggiorna Dati",
