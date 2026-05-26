@@ -210,7 +210,8 @@ def save_excel_cache(raw: dict):
 def load_gp_cache() -> tuple:
     """Carica i dati Global Perspectives salvati su disco.
 
-    Returns (gp_data, filename_str, last_updated_str) oppure (None, "", "").
+    Returns (gp_data, filename_str, last_updated_str, edition_str)
+    oppure (None, "", "", "").
     """
     try:
         if GP_CACHE_FILE.exists() and GP_CACHE_FILE.stat().st_size > 10:
@@ -219,20 +220,23 @@ def load_gp_cache() -> tuple:
             if gp_data and isinstance(gp_data, dict) and len(gp_data) >= 3:
                 return (gp_data,
                         payload.get("filename", ""),
-                        payload.get("last_updated", ""))
+                        payload.get("last_updated", ""),
+                        payload.get("edition", ""))
     except Exception:
         pass
-    return None, "", ""
+    return None, "", "", ""
 
 
-def save_gp_cache(gp_data: dict, filename: str = ""):
+def save_gp_cache(gp_data: dict, filename: str = "", edition: str = ""):
     """Salva i dati Global Perspectives su data/gp_cache.json."""
     try:
         GP_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "last_updated": datetime.date.today().isoformat(),
             "filename":     filename,
-            "gp_data":      gp_data,
+            "edition":      edition,
+            "gp_data":      {k: v for k, v in gp_data.items()
+                             if not k.startswith("_")},
         }
         GP_CACHE_FILE.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1007,18 +1011,22 @@ def load_factbook_auto() -> dict:
                 data = json.load(fh)
                 if isinstance(data, dict) and data:
                     return {k: v for k, v in data.items()
-                            if not k.startswith("_") and k != "last_updated"}
+                            if not k.startswith("_")
+                            and k not in ("last_updated", "period")}
     except Exception:
         pass
     return {}
 
 
-def save_factbook_local(fb_data: dict):
-    """Salva factbook_dati.json in locale con last_updated."""
+def save_factbook_local(fb_data: dict, period: str = ""):
+    """Salva factbook_dati.json in locale con last_updated e (opzionale) period."""
     try:
         fp = Path(__file__).parent / "data" / "factbook_dati.json"
         fp.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"last_updated": datetime.date.today().isoformat(), **fb_data}
+        payload: dict = {"last_updated": datetime.date.today().isoformat()}
+        if period:
+            payload["period"] = period
+        payload.update(fb_data)
         fp.write_text(json.dumps(payload, ensure_ascii=False, indent=2,
                                  default=str), encoding="utf-8")
     except Exception:
@@ -3012,7 +3020,18 @@ def parse_global_perspectives(pdf_bytes: bytes):
             "subcat_weights": sw,
         }
 
-    return result if result else None
+    if not result:
+        return None
+
+    # ── Estrae edizione dalla prima pagina (es. "N° 2 2026") ─────────────────
+    _ed = ""
+    _m_ed = re.search(r'N[°o]\.?\s*(\d+)\s+(\d{4})', pages[0] if pages else "",
+                      re.IGNORECASE)
+    if _m_ed:
+        _ed = f"N° {_m_ed.group(1)} {_m_ed.group(2)}"
+    result["_edition"] = _ed
+
+    return result
 
 
 # ── Module-level badge helpers (used in suggerito_portfolio_ui) ──────────────
@@ -3319,22 +3338,29 @@ def main():
 
         # ── Carica date cache prima di aprire l'expander ──────────────────────
         _xl_cache_raw, _xl_cache_date = load_excel_cache()
-        _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
+        _gp_cache_data, _gp_cache_fname, _gp_cache_date, _gp_cache_edition = load_gp_cache()
         _fb_cache_date = ""
+        _fb_cache_period = ""
         try:
             _fb_p = Path(__file__).parent / "data" / "factbook_dati.json"
             if _fb_p.exists() and _fb_p.stat().st_size > 5:
                 import json as _json
-                _fb_cache_date = _json.loads(
-                    _fb_p.read_text(encoding="utf-8-sig")).get("last_updated", "")
+                _fb_meta = _json.loads(_fb_p.read_text(encoding="utf-8-sig"))
+                _fb_cache_date   = _fb_meta.get("last_updated", "")
+                _fb_cache_period = _fb_meta.get("period", "")
         except Exception:
             pass
 
         # ── Stato cache in una riga compatta sopra l'expander ────────────────
         _cache_parts = []
-        if _xl_cache_date:   _cache_parts.append(f"📊 Excel {_xl_cache_date}")
-        if _fb_cache_date:   _cache_parts.append(f"📖 Factbook {_fb_cache_date}")
-        if _gp_cache_date:   _cache_parts.append(f"🌐 GP {_gp_cache_date}")
+        if _xl_cache_date:
+            _cache_parts.append(f"📊 Fondi Qualità {_xl_cache_date}")
+        if _fb_cache_date:
+            _fb_label = _fb_cache_period if _fb_cache_period else _fb_cache_date
+            _cache_parts.append(f"📖 Schede Prodotto {_fb_label}")
+        if _gp_cache_date:
+            _gp_label = _gp_cache_edition if _gp_cache_edition else _gp_cache_date
+            _cache_parts.append(f"🌐 Global Perspectives {_gp_label}")
         if _cache_parts:
             st.caption("  ·  ".join(_cache_parts))
 
@@ -3344,23 +3370,25 @@ def main():
             _xl_hint = (f"💾 Cache: {_xl_cache_date} · carica per aggiornare"
                         if _xl_cache_date else "Nessuna cache — carica il file mensile.")
             uploaded = st.file_uploader(
-                "EXCEL PTF (mensile)",
+                "FONDI QUALITÀ",
                 type=["xlsx","xls"],
                 help=_xl_hint,
             )
             # Factbook PDF
-            _fb_hint = (f"💾 Cache: {_fb_cache_date} · carica per aggiornare"
+            _fb_label_full = ("SCHEDE PRODOTTO" + (f" · {_fb_cache_period}" if _fb_cache_period else ""))
+            _fb_hint = (f"💾 Cache: {_fb_cache_period or _fb_cache_date} · carica per aggiornare"
                         if _fb_cache_date else "Nessuna cache — carica il Factbook PDF.")
             uploaded_fb = st.file_uploader(
-                "FACTBOOK PDF (quando aggiornato)",
+                _fb_label_full,
                 type=["pdf"],
                 help=_fb_hint,
             )
             # Global Perspectives PDF
-            _gp_hint = (f"💾 Cache: {_gp_cache_date} · carica per aggiornare"
+            _gp_label_full = ("GLOBAL PERSPECTIVES" + (f" · {_gp_cache_edition}" if _gp_cache_edition else ""))
+            _gp_hint = (f"💾 Cache: {_gp_cache_edition or _gp_cache_date} · carica per aggiornare"
                         if _gp_cache_date else "Nessuna cache — carica il PDF trimestrale.")
             uploaded_gp = st.file_uploader(
-                "GLOBAL PERSPECTIVES PDF (trimestrale)",
+                _gp_label_full,
                 type=["pdf"],
                 help=_gp_hint,
             )
@@ -3373,8 +3401,9 @@ def main():
                 if _gp_parsed:
                     st.session_state["_gp_data"]    = _gp_parsed
                     st.session_state["_gp_filename"] = uploaded_gp.name
-                    # Salva su disco per le sessioni future
-                    save_gp_cache(_gp_parsed, uploaded_gp.name)
+                    # Salva su disco per le sessioni future (con edizione es. "N° 2 2026")
+                    save_gp_cache(_gp_parsed, uploaded_gp.name,
+                                  _gp_parsed.get("_edition", ""))
                 else:
                     st.session_state.pop("_gp_data", None)
                     st.warning("⚠️ PDF non riconosciuto — verifica che sia un "
@@ -3711,14 +3740,28 @@ def main():
 
     if uploaded_fb is not None:
         # First-time (or refresh): parse PDF, auto-save, offer Excel
+        _fb_bytes = uploaded_fb.read()
         with st.spinner("📖 Estraggo dati dal Factbook PDF…"):
-            _new = parse_factbook(uploaded_fb.read())
+            _new = parse_factbook(_fb_bytes)
         if _new:
             factbook_data = _new
             _fb_source = f"PDF ({len(_new)} fondi)"
             st.success(f"✅ Factbook estratto — {len(_new)} fondi trovati")
-            # Salva localmente con last_updated (sempre disponibile)
-            save_factbook_local(_new)
+            # Estrai periodo dalla prima pagina (es. "Marzo 2026")
+            _fb_period = ""
+            try:
+                import pdfplumber as _plb, io as _fbio
+                _MESI = (r'(Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|'
+                         r'Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)')
+                with _plb.open(_fbio.BytesIO(_fb_bytes)) as _fbpdf:
+                    _pg0 = _fbpdf.pages[0].extract_text() or ""
+                _m_per = re.search(_MESI + r'\s+(\d{4})', _pg0, re.IGNORECASE)
+                if _m_per:
+                    _fb_period = f"{_m_per.group(1).capitalize()} {_m_per.group(2)}"
+            except Exception:
+                pass
+            # Salva localmente con last_updated e period (sempre disponibile)
+            save_factbook_local(_new, period=_fb_period)
             # Auto-save to GitHub repo (needs GITHUB_TOKEN secret)
             with st.spinner("💾 Salvo dati nel repository…"):
                 _saved = save_factbook_to_repo(_new)
