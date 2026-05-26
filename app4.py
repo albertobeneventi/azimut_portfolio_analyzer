@@ -3690,7 +3690,7 @@ def main():
                 # App appena aperta → rosso lampeggiante con bordo rosso
                 _btn_bg   = "linear-gradient(135deg,#7f1d1d,#DC2626)"
                 _btn_brd  = "border:2px solid #ef4444 !important;"
-                _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite;"
+                _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite !important;"
                 _btn_shadow_kf = (
                     "@keyframes _aggiorna_blink{"
                     "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
@@ -3705,7 +3705,7 @@ def main():
             else:
                 _btn_bg  = "linear-gradient(135deg,#7f1d1d,#DC2626)"
                 _btn_brd = "border:2px solid #ef4444 !important;"
-                _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite;"
+                _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite !important;"
                 _btn_shadow_kf = (
                     "@keyframes _aggiorna_blink{"
                     "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
@@ -3714,7 +3714,8 @@ def main():
             # Selettori multipli per compatibilità con le versioni di Streamlit
             _btn_sel = (
                 "section[data-testid='stSidebar'] div[data-testid='stButton'] > button,"
-                "section[data-testid='stSidebar'] div[data-testid='stBaseButton-secondary'],"
+                "section[data-testid='stSidebar'] button[data-testid='stBaseButton-secondary'],"
+                "section[data-testid='stSidebar'] button[data-testid='stBaseButton-secondaryFormSubmit'],"
                 "section[data-testid='stSidebar'] .stButton > button"
             )
             st.markdown(
