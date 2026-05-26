@@ -3711,13 +3711,8 @@ def main():
                     "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
                     "50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}"
                 )
-            # Selettori multipli per compatibilità con le versioni di Streamlit
-            _btn_sel = (
-                "section[data-testid='stSidebar'] div[data-testid='stButton'] > button,"
-                "section[data-testid='stSidebar'] button[data-testid='stBaseButton-secondary'],"
-                "section[data-testid='stSidebar'] button[data-testid='stBaseButton-secondaryFormSubmit'],"
-                "section[data-testid='stSidebar'] .stButton > button"
-            )
+            # Solo st.button (non file_uploader): div[stButton] > button è specifico
+            _btn_sel = "section[data-testid='stSidebar'] div[data-testid='stButton'] > button"
             st.markdown(
                 f"<style>"
                 f"{_btn_sel}{{"
