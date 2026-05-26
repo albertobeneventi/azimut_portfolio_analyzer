@@ -3601,12 +3601,19 @@ def main():
         ptf_choice = st.radio("TIPO PORTAFOGLIO", _ptf_options,
                               index=_ptf_idx,
                               key="_ptf_choice_radio")
-        st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
-        profile    = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0,
-                                  key="_profile_select")
+
         if "LIBERO" not in ptf_choice and "free_ptf" in st.session_state:
             del st.session_state["free_ptf"]
-        # ── Scenario sub-selector (SUGGERITO only) ────────────────────────────
+
+        # ── Profilo di rischio — sotto LIBERO (e PTF FULL/SHORT) ─────────────
+        if "SUGGERITO" not in ptf_choice:
+            profile = st.selectbox("PROFILO DI RISCHIO", PROFILES, index=0,
+                                   key="_profile_select")
+        else:
+            # SUGGERITO non usa profilo — mantieni l'ultimo valore selezionato
+            profile = st.session_state.get("_profile_select", PROFILES[0])
+
+        # ── Scenario — sotto SUGGERITO ────────────────────────────────────────
         if "SUGGERITO" in ptf_choice:
             _gp_keys = list(st.session_state.get("_gp_data", {}).keys())
             _SC_LABELS = {
