@@ -1033,52 +1033,76 @@ def save_factbook_local(fb_data: dict, period: str = ""):
         pass
 
 
-def save_factbook_to_repo(fb_data: dict) -> bool:
-    """Commit data/factbook_dati.json to GitHub via the Contents API.
+def _save_json_to_repo(repo_path: str, payload: dict, commit_msg: str) -> bool:
+    """Helper generico: salva un file JSON nel repo GitHub via Contents API.
 
-    Requires a Streamlit secret  GITHUB_TOKEN  with 'contents: write'
-    permission (fine-grained PAT) or  repo  scope (classic PAT).
-
-    Returns True on success, False on any error.
+    Richiede il secret Streamlit  GITHUB_TOKEN  con permesso 'contents: write'.
+    Restituisce True se il commit riesce, False per qualsiasi errore.
     """
-    import json, base64
+    import base64
     try:
         token = st.secrets.get("GITHUB_TOKEN", "")
         if not token:
             return False
-
-        content_str = json.dumps(fb_data, ensure_ascii=False, indent=2,
-                                 default=str)
         content_b64 = base64.b64encode(
-            content_str.encode("utf-8")).decode()
-
+            json.dumps(payload, ensure_ascii=False, indent=2,
+                       default=str).encode("utf-8")).decode()
         headers = {
             "Authorization": f"token {token}",
             "Accept": "application/vnd.github.v3+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
-        url = (f"https://api.github.com/repos/{_FB_REPO}"
-               f"/contents/{_FB_REPO_PATH}")
-
-        # Need existing SHA to update (not create) the file
+        url = f"https://api.github.com/repos/{_FB_REPO}/contents/{repo_path}"
         r_get = requests.get(url, headers=headers,
                              params={"ref": _FB_BRANCH}, timeout=10)
-        sha = (r_get.json().get("sha")
-               if r_get.status_code == 200 else None)
-
-        payload: dict = {
-            "message": (f"auto: aggiorna dati factbook "
-                        f"{datetime.date.today().isoformat()}"),
-            "content": content_b64,
-            "branch": _FB_BRANCH,
-        }
+        sha = r_get.json().get("sha") if r_get.status_code == 200 else None
+        body: dict = {"message": commit_msg, "content": content_b64,
+                      "branch": _FB_BRANCH}
         if sha:
-            payload["sha"] = sha
-
-        r_put = requests.put(url, json=payload, headers=headers, timeout=15)
+            body["sha"] = sha
+        r_put = requests.put(url, json=body, headers=headers, timeout=20)
         return r_put.status_code in (200, 201)
     except Exception:
         return False
+
+
+def save_factbook_to_repo(fb_data: dict, period: str = "") -> bool:
+    """Commit data/factbook_dati.json a GitHub."""
+    payload: dict = {"last_updated": datetime.date.today().isoformat()}
+    if period:
+        payload["period"] = period
+    payload.update(fb_data)
+    return _save_json_to_repo(
+        _FB_REPO_PATH, payload,
+        f"auto: aggiorna factbook_dati.json [{datetime.date.today().isoformat()}]")
+
+
+def save_gp_to_repo(gp_data: dict, edition: str = "") -> bool:
+    """Commit data/gp_cache.json a GitHub."""
+    payload = {
+        "last_updated": datetime.date.today().isoformat(),
+        "filename":     "",
+        "edition":      edition,
+        "gp_data":      {k: v for k, v in gp_data.items()
+                         if not k.startswith("_")},
+    }
+    return _save_json_to_repo(
+        "data/gp_cache.json", payload,
+        f"auto: aggiorna gp_cache.json [{edition or datetime.date.today().isoformat()}]")
+
+
+def save_excel_to_repo(raw: dict) -> bool:
+    """Commit data/excel_cache.json a GitHub."""
+    payload: dict = {"last_updated": datetime.date.today().isoformat()}
+    for sname in ("PTF FULL", "PTF SHORT"):
+        df = raw.get(sname)
+        payload[sname] = _df_to_records(df) if df is not None else []
+    fida = raw.get("FIDA")
+    payload["FIDA"] = _df_to_records(fida) if fida is not None else []
+    payload["fida_urls"] = raw.get("fida_urls") or {}
+    return _save_json_to_repo(
+        "data/excel_cache.json", payload,
+        f"auto: aggiorna excel_cache.json [{datetime.date.today().isoformat()}]")
 
 
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
@@ -3394,9 +3418,12 @@ def main():
                 if _gp_parsed:
                     st.session_state["_gp_data"]    = _gp_parsed
                     st.session_state["_gp_filename"] = uploaded_gp.name
-                    # Salva su disco per le sessioni future (con edizione es. "N° 2 2026")
-                    save_gp_cache(_gp_parsed, uploaded_gp.name,
-                                  _gp_parsed.get("_edition", ""))
+                    _gp_edition = _gp_parsed.get("_edition", "")
+                    # Salva su disco locale
+                    save_gp_cache(_gp_parsed, uploaded_gp.name, _gp_edition)
+                    # Salva nel repo GitHub (persiste tra redeploy)
+                    with st.spinner("💾 Salvo GP nel repository…"):
+                        save_gp_to_repo(_gp_parsed, _gp_edition)
                 else:
                     st.session_state.pop("_gp_data", None)
                     st.warning("⚠️ PDF non riconosciuto — verifica che sia un "
@@ -3627,9 +3654,11 @@ def main():
         _fida_existing = raw.get("fida_urls") or {}
         raw["fida_urls"] = {**_fida_existing, **MANUAL_URL_OVERRIDES}
 
-    # Salva su disco dopo il patch — la cache conterrà sempre gli URL aggiornati
+    # Salva su disco + nel repo GitHub dopo ogni upload
     if uploaded is not None and raw:
         save_excel_cache(raw)
+        with st.spinner("💾 Salvo Excel nel repository…"):
+            save_excel_to_repo(raw)
 
     # Controlla se ci sono dati Excel disponibili (upload o cache)
     _has_raw = bool(raw.get("PTF FULL") is not None
@@ -3752,9 +3781,9 @@ def main():
                 pass
             # Salva localmente con last_updated e period (sempre disponibile)
             save_factbook_local(_new, period=_fb_period)
-            # Auto-save to GitHub repo (needs GITHUB_TOKEN secret)
-            with st.spinner("💾 Salvo dati nel repository…"):
-                _saved = save_factbook_to_repo(_new)
+            # Salva nel repo GitHub (persiste tra redeploy)
+            with st.spinner("💾 Salvo Factbook nel repository…"):
+                _saved = save_factbook_to_repo(_new, period=_fb_period)
             if _saved:
                 st.info(
                     "🔄 Dati salvati nel repository. "
