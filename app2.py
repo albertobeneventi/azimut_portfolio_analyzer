@@ -217,7 +217,10 @@ def load_gp_cache() -> tuple:
         if GP_CACHE_FILE.exists() and GP_CACHE_FILE.stat().st_size > 10:
             payload = json.loads(GP_CACHE_FILE.read_text(encoding="utf-8-sig"))
             gp_data = payload.get("gp_data")
-            if gp_data and isinstance(gp_data, dict) and len(gp_data) >= 3:
+            if (gp_data and isinstance(gp_data, dict) and len(gp_data) >= 3
+                    # Validazione struttura: ogni scenario deve avere "funds" come lista
+                    and all(isinstance(v, dict) and isinstance(v.get("funds"), list)
+                            for v in gp_data.values())):
                 return (gp_data,
                         payload.get("filename", ""),
                         payload.get("last_updated", ""),
@@ -3454,7 +3457,16 @@ def main():
         _n_gp    = 0
         if _gp_loaded_now:
             _gp_ok  = st.session_state["_gp_data"]
-            _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values())
+            # Difensivo: se la struttura è corrotta (valori non-dict), pulisci e ignora
+            if not (isinstance(_gp_ok, dict)
+                    and all(isinstance(v, dict) and isinstance(v.get("funds"), list)
+                            for v in _gp_ok.values())):
+                st.session_state.pop("_gp_data", None)
+                st.session_state.pop("_gp_filename", None)
+                _gp_loaded_now = False
+            else:
+                _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values())
+        if _gp_loaded_now:
             _fd_chk = _fd_now
             _gp_miss = len(set(
                 f["nome"]
