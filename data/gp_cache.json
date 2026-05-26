@@ -1,1 +1,664 @@
-{"last_updated":"","filename":"","edition":"","gp_data":{}}
+{
+  "last_updated": "2026-05-26",
+  "filename": "",
+  "edition": "N° 2 2026",
+  "gp_data": {
+    "Base": {
+      "info": "Equity 32% · Bond 38% · Private Markets 30%",
+      "funds": [
+        {
+          "nome": "AZ Allocation - Balanced FoF",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.05952380952380953,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Balanced Plus",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.05952380952380953,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Flexible Equity",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.05952380952380953,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Long Term Credit",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.05952380952380953,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Potential Income",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.05952380952380953,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Risk Parity Factors",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.05952380952380953,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Balanced Brave",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04285714285714286,
+          "subcat": "alloc_flexible"
+        },
+        {
+          "nome": "AZ Allocation - Trend",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04285714285714286,
+          "subcat": "alloc_flexible"
+        },
+        {
+          "nome": "AZ Bond - Patriot",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.05714285714285714,
+          "subcat": "bond_aggregate"
+        },
+        {
+          "nome": "AZ Bond - Bond Value",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.05142857142857143,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Convertible Bond",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.05142857142857143,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Global Macro Bond",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.05142857142857143,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Hybrids",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.05142857142857143,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Total Return Bond",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.05142857142857143,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Frontier Markets Debt",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.014285714285714285,
+          "subcat": "bond_em"
+        },
+        {
+          "nome": "AZ Equity - Global Emerging FoF",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02857142857142857,
+          "subcat": "equity_em"
+        },
+        {
+          "nome": "AZ Equity - Small Cap Europe FoF",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.014285714285714285,
+          "subcat": "equity_dev"
+        },
+        {
+          "nome": "AZ Equity - Emerging Markets",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02653061224489796,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Future Opportunities",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02653061224489796,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Global Dividend",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02653061224489796,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Global Growth",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02653061224489796,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Global Value FoF",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02653061224489796,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Industrial Revolution 4.0",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02653061224489796,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - World Minimum Volatility",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02653061224489796,
+          "subcat": "equity_thematic"
+        }
+      ],
+      "subcat_weights": {
+        "alloc_balanced": 25,
+        "alloc_flexible": 6,
+        "bond_aggregate": 4,
+        "bond_thematic": 18,
+        "bond_em": 1,
+        "equity_thematic": 13,
+        "equity_dev": 1,
+        "equity_em": 2
+      }
+    },
+    "Bear": {
+      "info": "Equity 22% · Bond 48% · Private Markets 30%",
+      "funds": [
+        {
+          "nome": "AZ Allocation - Balanced FoF",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04285714285714286,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Balanced Plus",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04285714285714286,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Long Term Credit",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04285714285714286,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Global Balanced",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04285714285714286,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Risk Parity Factors",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04285714285714286,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Balanced Brave",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04285714285714286,
+          "subcat": "alloc_flexible"
+        },
+        {
+          "nome": "AZ Allocation - Trend",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04285714285714286,
+          "subcat": "alloc_flexible"
+        },
+        {
+          "nome": "AZ Bond - Aggregate Bond Euro",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.05714285714285714,
+          "subcat": "bond_aggregate"
+        },
+        {
+          "nome": "AZ Bond - Income Dynamic",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.05714285714285714,
+          "subcat": "bond_aggregate"
+        },
+        {
+          "nome": "AZ Bond - Patriot",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.05714285714285714,
+          "subcat": "bond_aggregate"
+        },
+        {
+          "nome": "AZ Bond - Bond Value",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.07857142857142857,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Global Macro Bond",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.07857142857142857,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Hybrids",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.07857142857142857,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Total Return Bond",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.07857142857142857,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Target 2029 USD",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.04285714285714286,
+          "subcat": "bond_target"
+        },
+        {
+          "nome": "AZ Equity - Global Emerging FoF",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02857142857142857,
+          "subcat": "equity_em"
+        },
+        {
+          "nome": "AZ Equity - Global FoF",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02857142857142857,
+          "subcat": "equity_dev"
+        },
+        {
+          "nome": "AZ Equity - Global Dividend",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.022857142857142857,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Global Growth",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.022857142857142857,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Global Healthcare",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.022857142857142857,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Global Infrastructure",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.022857142857142857,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - World Minimum Volatility",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.022857142857142857,
+          "subcat": "equity_thematic"
+        }
+      ],
+      "subcat_weights": {
+        "alloc_balanced": 15,
+        "alloc_flexible": 6,
+        "bond_aggregate": 12,
+        "bond_thematic": 22,
+        "bond_target": 3,
+        "equity_thematic": 8,
+        "equity_dev": 2,
+        "equity_em": 2
+      }
+    },
+    "Bull": {
+      "info": "Equity 40% · Bond 30% · Private Markets 30%",
+      "funds": [
+        {
+          "nome": "AZ Allocation - Balanced Plus",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04642857142857143,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Flexible Equity",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04642857142857143,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Long Term Credit",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04642857142857143,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Potential Income Upside",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.04642857142857143,
+          "subcat": "alloc_balanced"
+        },
+        {
+          "nome": "AZ Allocation - Trend",
+          "gruppo": "ALLOCATION",
+          "categoria": "Bilanciati/Flessibili",
+          "az_pct": 0.5,
+          "obb_pct": 0.5,
+          "weight": 0.07142857142857142,
+          "subcat": "alloc_flexible"
+        },
+        {
+          "nome": "AZ Bond - Aggregate Bond Euro",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.04285714285714286,
+          "subcat": "bond_aggregate"
+        },
+        {
+          "nome": "AZ Bond - Patriot",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.04285714285714286,
+          "subcat": "bond_aggregate"
+        },
+        {
+          "nome": "AZ Bond - Bond Value",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.04047619047619048,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - CoCo Bonds (EUR-hedged)",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.04047619047619048,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Convertible Bond",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.04047619047619048,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Global Macro Bond",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.04047619047619048,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Hybrids",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.04047619047619048,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Total Return Bond",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.04047619047619048,
+          "subcat": "bond_thematic"
+        },
+        {
+          "nome": "AZ Bond - Frontier Markets Debt",
+          "gruppo": "BOND",
+          "categoria": "Obbligazionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02857142857142857,
+          "subcat": "bond_em"
+        },
+        {
+          "nome": "AZ Equity - Brazil Trend",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02857142857142857,
+          "subcat": "equity_em"
+        },
+        {
+          "nome": "AZ Equity - Global Emerging FoF",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02857142857142857,
+          "subcat": "equity_em"
+        },
+        {
+          "nome": "AZ Equity - Europe",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02142857142857143,
+          "subcat": "equity_dev"
+        },
+        {
+          "nome": "AZ Equity - Small Cap Europe FoF",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.02142857142857143,
+          "subcat": "equity_dev"
+        },
+        {
+          "nome": "AZ Equity - Emerging Markets",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.07142857142857142,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Future Opportunities",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.07142857142857142,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Global Dividend",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.07142857142857142,
+          "subcat": "equity_thematic"
+        },
+        {
+          "nome": "AZ Equity - Global Growth",
+          "gruppo": "AZIONARI (LONG)",
+          "categoria": "Azionari",
+          "az_pct": 0.92,
+          "obb_pct": 0.07999999999999996,
+          "weight": 0.07142857142857142,
+          "subcat": "equity_thematic"
+        }
+      ],
+      "subcat_weights": {
+        "alloc_balanced": 13,
+        "alloc_flexible": 5,
+        "bond_aggregate": 6,
+        "bond_thematic": 17,
+        "bond_em": 2,
+        "equity_thematic": 20,
+        "equity_dev": 3,
+        "equity_em": 4
+      }
+    }
+  }
+}
