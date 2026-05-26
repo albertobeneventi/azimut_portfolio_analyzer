@@ -2697,7 +2697,7 @@ def free_portfolio_ui(data):
     with c2: w = st.number_input("Peso %",0.1,100.0,10.0,0.5,key="sel_w")
     with c3:
         st.markdown("<br>",unsafe_allow_html=True)
-        if st.button("➕ Aggiungi",use_container_width=True):
+        if st.button("➕ Aggiungi", width='stretch'):
             # Strip FIDArating tag "· FN", Morningstar tag "· MN" and macro-cat "  [...]"
             fname = re.split(r'\s+·\s+[FM]\d|\s{2}\[', sel)[0].strip()
             if any(f["nome"]==fname for f in st.session_state.free_ptf):
@@ -2719,7 +2719,7 @@ def free_portfolio_ui(data):
             nw = st.number_input("Peso",0.0,100.0,float(fund["w_input"]),0.5,key=f"fw_{i}",label_visibility="collapsed")
             st.session_state.free_ptf[i]["w_input"] = nw
         with r3:
-            if st.button("🗑️",key=f"del_{i}",use_container_width=True):
+            if st.button("🗑️",key=f"del_{i}", width='stretch'):
                 st.session_state.free_ptf.pop(i); st.rerun()
         total_w += st.session_state.free_ptf[i]["w_input"]
 
@@ -3566,7 +3566,7 @@ def main():
                 f"</style>",
                 unsafe_allow_html=True)
             if st.button("📥  Aggiorna Dati",
-                         use_container_width=True,
+                         width='stretch',
                          help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
                               "Morningstar e — se il GP è caricato — dati fondi GP."):
                 if _can_update:
@@ -3923,9 +3923,9 @@ def main():
     col_l,col_r = st.columns([1.15,0.85],gap="large")
     with col_l:
         st.markdown('<p class="sec-title">Allocazione per Fondo</p>',unsafe_allow_html=True)
-        st.plotly_chart(make_fund_pie(df_act,wcol,profile),use_container_width=True,config={"displayModeBar":False})
+        st.plotly_chart(make_fund_pie(df_act,wcol,profile),config={"displayModeBar":False})
         st.markdown('<p class="sec-title">Allocazione per Macro-Categoria</p>',unsafe_allow_html=True)
-        st.plotly_chart(make_macro_bar(df_act,wcol),use_container_width=True,config={"displayModeBar":False})
+        st.plotly_chart(make_macro_bar(df_act,wcol),config={"displayModeBar":False})
     with col_r:
         st.markdown('<p class="sec-title">Composizione del Portafoglio</p>',unsafe_allow_html=True)
         _gruppi = list(df_act["gruppo"].unique())
@@ -4422,7 +4422,7 @@ def main():
                 data=st.session_state["_pdf_bytes_ready"],
                 file_name=st.session_state.get("_pdf_fname_ready", "report.pdf"),
                 mime="application/pdf",
-                use_container_width=True,
+                width='stretch',
                 type="primary",
             )
             st.caption(f"✅ {st.session_state.get('_pdf_lbl','PDF pronto')}")
@@ -4434,10 +4434,10 @@ def main():
                     data=st.session_state["_pdf_bytes_ready"],
                     file_name=st.session_state.get("_pdf_fname_ready", "report.pdf"),
                     mime="application/pdf",
-                    use_container_width=True,
+                    width='stretch',
                 )
                 st.caption("Clicca 'Genera' per aggiornare con i pesi attuali.")
-            if st.button("⚡  Genera PDF", use_container_width=True, type="primary"):
+            if st.button("⚡  Genera PDF", width='stretch', type="primary"):
                 for _k in ("_pdf_bytes_ready", "_pdf_fname_ready", "_pdf_lbl"):
                     st.session_state.pop(_k, None)
                 pb = st.progress(0, text="Scarico dati FondiDoc…")
