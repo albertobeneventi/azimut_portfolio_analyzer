@@ -998,18 +998,31 @@ _FB_BRANCH    = "master"
 def load_factbook_auto() -> dict:
     """Load factbook data from data/factbook_dati.json (committed in the repo).
     Returns {} when the file is absent or empty.
+    Filtra le chiavi di metadati (last_updated, _*).
     """
-    import json
     try:
         fp = Path(__file__).parent / "data" / "factbook_dati.json"
         if fp.exists() and fp.stat().st_size > 5:
             with open(fp, encoding="utf-8") as fh:
                 data = json.load(fh)
                 if isinstance(data, dict) and data:
-                    return data
+                    return {k: v for k, v in data.items()
+                            if not k.startswith("_") and k != "last_updated"}
     except Exception:
         pass
     return {}
+
+
+def save_factbook_local(fb_data: dict):
+    """Salva factbook_dati.json in locale con last_updated."""
+    try:
+        fp = Path(__file__).parent / "data" / "factbook_dati.json"
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"last_updated": datetime.date.today().isoformat(), **fb_data}
+        fp.write_text(json.dumps(payload, ensure_ascii=False, indent=2,
+                                 default=str), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def save_factbook_to_repo(fb_data: dict) -> bool:
@@ -3304,48 +3317,53 @@ def main():
         st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
         st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
 
-        # ── Uploader Excel ────────────────────────────────────────────────────
+        # ── Carica date cache prima di aprire l'expander ──────────────────────
         _xl_cache_raw, _xl_cache_date = load_excel_cache()
-        if _xl_cache_date:
-            _xl_hint = (f"💾 Cache: {_xl_cache_date} · carica per aggiornare")
-        else:
-            _xl_hint = "Nessuna cache — carica il file mensile."
-        uploaded = st.file_uploader(
-            "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)",
-            type=["xlsx","xls"],
-            help=_xl_hint,
-        )
-        if _xl_cache_date and uploaded is None:
-            st.caption(f"📂 Excel da cache · {_xl_cache_date}")
-
-        # ── Uploader Factbook ─────────────────────────────────────────────────
-        uploaded_fb = st.file_uploader(
-            "FACTBOOK PDF (prima estrazione)",
-            type=["pdf"],
-            help="Carica il Factbook PDF per estrarre Duration, Rating e Asset "
-                 "Allocation. Dopo la prima estrazione scarica il file Excel "
-                 "e ricaricalo la prossima volta: è più veloce.",
-        )
-        uploaded_fb_xl = st.file_uploader(
-            "DATI FACTBOOK (Excel, dopo prima estrazione)",
-            type=["xlsx","xls"],
-            help="Carica il file Excel scaricato dopo la prima estrazione del "
-                 "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
-        )
-
-        # ── Uploader GP ───────────────────────────────────────────────────────
         _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
-        if _gp_cache_date:
-            _gp_hint = (f"💾 Cache: {_gp_cache_date} · carica per aggiornare")
-        else:
-            _gp_hint = "Nessuna cache — carica il PDF trimestrale."
-        uploaded_gp = st.file_uploader(
-            "GLOBAL PERSPECTIVES PDF",
-            type=["pdf"],
-            help=_gp_hint,
-        )
-        if _gp_cache_date and uploaded_gp is None:
-            st.caption(f"📂 GP da cache · {_gp_cache_date}")
+        _fb_cache_date = ""
+        try:
+            _fb_p = Path(__file__).parent / "data" / "factbook_dati.json"
+            if _fb_p.exists() and _fb_p.stat().st_size > 5:
+                import json as _json
+                _fb_cache_date = _json.loads(
+                    _fb_p.read_text(encoding="utf-8-sig")).get("last_updated", "")
+        except Exception:
+            pass
+
+        # ── Stato cache in una riga compatta sopra l'expander ────────────────
+        _cache_parts = []
+        if _xl_cache_date:   _cache_parts.append(f"📊 Excel {_xl_cache_date}")
+        if _fb_cache_date:   _cache_parts.append(f"📖 Factbook {_fb_cache_date}")
+        if _gp_cache_date:   _cache_parts.append(f"🌐 GP {_gp_cache_date}")
+        if _cache_parts:
+            st.caption("  ·  ".join(_cache_parts))
+
+        # ── Expander uploader — chiuso di default ─────────────────────────────
+        with st.expander("⬆️  Aggiorna file sorgente", expanded=False):
+            # Excel
+            _xl_hint = (f"💾 Cache: {_xl_cache_date} · carica per aggiornare"
+                        if _xl_cache_date else "Nessuna cache — carica il file mensile.")
+            uploaded = st.file_uploader(
+                "EXCEL PTF (mensile)",
+                type=["xlsx","xls"],
+                help=_xl_hint,
+            )
+            # Factbook PDF
+            _fb_hint = (f"💾 Cache: {_fb_cache_date} · carica per aggiornare"
+                        if _fb_cache_date else "Nessuna cache — carica il Factbook PDF.")
+            uploaded_fb = st.file_uploader(
+                "FACTBOOK PDF (quando aggiornato)",
+                type=["pdf"],
+                help=_fb_hint,
+            )
+            # Global Perspectives PDF
+            _gp_hint = (f"💾 Cache: {_gp_cache_date} · carica per aggiornare"
+                        if _gp_cache_date else "Nessuna cache — carica il PDF trimestrale.")
+            uploaded_gp = st.file_uploader(
+                "GLOBAL PERSPECTIVES PDF (trimestrale)",
+                type=["pdf"],
+                help=_gp_hint,
+            )
 
         # ── Parsing GP (solo quando cambia file) ─────────────────────────────
         if uploaded_gp is not None:
@@ -3699,6 +3717,8 @@ def main():
             factbook_data = _new
             _fb_source = f"PDF ({len(_new)} fondi)"
             st.success(f"✅ Factbook estratto — {len(_new)} fondi trovati")
+            # Salva localmente con last_updated (sempre disponibile)
+            save_factbook_local(_new)
             # Auto-save to GitHub repo (needs GITHUB_TOKEN secret)
             with st.spinner("💾 Salvo dati nel repository…"):
                 _saved = save_factbook_to_repo(_new)
@@ -3724,16 +3744,6 @@ def main():
         else:
             st.warning("⚠️ Factbook PDF caricato ma nessun dato estratto — "
                        "verrà usato FondiDoc")
-
-    if uploaded_fb_xl is not None:
-        # Manual override: user uploaded a corrected Excel
-        _xl = factbook_from_excel(uploaded_fb_xl.read())
-        if _xl:
-            factbook_data = _xl
-            _fb_source = f"Excel ({len(_xl)} fondi)"
-            st.success(f"✅ Dati Factbook caricati da Excel — {len(_xl)} fondi")
-        else:
-            st.warning("⚠️ Excel Factbook vuoto — uso dati precedenti")
 
     if _is_suggerito:
         _gp_data_main = st.session_state.get("_gp_data", {})
