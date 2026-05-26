@@ -1538,70 +1538,102 @@ def fetch_all_fund_data(df: pd.DataFrame, fida_urls: dict,
 
 
 # ════════════════════════════════════════════════════════════
-# FONDIONLINE API — Morningstar rating
+# MORNINGSTAR RATINGS — lt.morningstar.com (replaces FondiOnline)
 # ════════════════════════════════════════════════════════════
-# FondiOnline exposes a JSON API used by its fund screener page.
-# One HTTP request returns all funds for a company with Rating field.
+# FondiOnline.it è offline dal 2025 (TCP timeout, IP irraggiungibile).
+# Nuova strategia: lt.morningstar.com — server legacy accessibile senza WAF.
+# 1. Screener JSON: term={ISIN} → campo starRating diretto (1 req per fondo)
+# 2. Fallback:  security_details con itype=isin → XML → estrae starRating
 
-FONDIONLINE_BASE    = "https://www.fondionline.it"
-FO_API_URL          = "https://www.fondionline.it/offers-list"
-FO_AZ_COMPANY_ID    = "0C00001L0E"   # Azimut Investments S.A. (Morningstar ID)
-FONDIONLINE_HDR     = {
-    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
+_MS_LT_BASE = "https://lt.morningstar.com/api/rest.svc/klr5zyak8x"
+_MS_HDR = {
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/124.0.0.0 Safari/537.36",
     "Accept":          "application/json, text/plain, */*",
-    "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
-    "Referer":         "https://www.fondionline.it/fondi/elenco_prodotti.html",
+    "Accept-Language": "it-IT,it;q=0.9",
+    "Referer":         "https://lt.morningstar.com/",
 }
 
 
-def _fo_fetch_company_ratings(company_id: str) -> dict:
-    """Fetch all Morningstar ratings for one company via FondiOnline JSON API.
-
-    Single HTTP request — returns {ISIN: {"ms_rating": int|None, "fo_url": str|None}}.
-    The API paginates; we request pageSize=1000 to get everything in one shot
-    (Azimut has ~310 funds total).
-    """
-    result: dict = {}
+def _ms_rating_screener(isin: str, sess: requests.Session) -> int | None:
+    """Screener lt.morningstar.com: term=ISIN → starRating (1-5) o None."""
     try:
-        r = requests.get(
-            FO_API_URL,
+        r = sess.get(
+            f"{_MS_LT_BASE}/screener",
             params={
-                "productType":      "OICR",
-                "sortOrder":        "asc",
-                "pageNumber":       1,
-                "pageSize":         1000,
-                "tab":              0,
-                "fundId":           "",
-                "orderBy":          "Name",
-                "brandingCompanyId": company_id,
-                "distribution":     -1,
+                "output":               "json",
+                "currencyId":           "EUR",
+                "languageId":           "it-IT",
+                "limit":                5,
+                "securityDataPoints":   "SecId,isin,starRating",
+                "filters":              "",
+                "term":                 isin,
+                "resultPage":           1,
             },
-            headers=FONDIONLINE_HDR,
-            timeout=15,
+            headers=_MS_HDR,
+            timeout=10,
         )
         if r.status_code == 200:
-            data = r.json()
-            for fund in data.get("funds", []):
-                isin   = (fund.get("ISIN") or "").strip()
-                rating = fund.get("Rating")          # "1"…"5" or absent
-                url    = (f"{FONDIONLINE_BASE}/elenco-fondi/{fund['detailsUrl']}"
-                          if fund.get("detailsUrl") else None)
-                if isin:
-                    result[isin] = {
-                        "ms_rating": int(rating) if rating else None,
-                        "fo_url":    url,
-                    }
+            for row in r.json().get("rows", []):
+                if str(row.get("isin", "")).strip() == isin:
+                    v = row.get("starRating")
+                    if v is not None:
+                        try:
+                            return int(v)
+                        except (ValueError, TypeError):
+                            pass
     except Exception:
         pass
-    return result
+    return None
+
+
+def _ms_rating_snapshot(isin: str, sess: requests.Session) -> int | None:
+    """Fallback: security_details con itype=isin → XML → starRating."""
+    import xml.etree.ElementTree as ET
+    try:
+        r = sess.get(
+            f"{_MS_LT_BASE}/security_details/{isin}",
+            params={
+                "viewId":     "MFsnapshot",
+                "currencyId": "EUR",
+                "itype":      "isin",
+                "languageId": "it",
+            },
+            headers=_MS_HDR,
+            timeout=10,
+        )
+        if r.status_code == 200 and r.text.strip():
+            root = ET.fromstring(r.text)
+            # Prova vari tag usati nelle diverse versioni dell'API Morningstar
+            for tag in ("starRating", "Rating_MStarOverall",
+                        "StarRatingM255", "mStarRating"):
+                el = root.find(f".//{tag}")
+                if el is not None and el.text:
+                    try:
+                        v = int(el.text.strip())
+                        if 1 <= v <= 5:
+                            return v
+                    except (ValueError, TypeError):
+                        pass
+    except Exception:
+        pass
+    return None
+
+
+def _ms_rating_for_isin(isin: str, sess: requests.Session) -> int | None:
+    """Prova screener, poi snapshot come fallback."""
+    r = _ms_rating_screener(isin, sess)
+    if r is None:
+        r = _ms_rating_snapshot(isin, sess)
+    return r
 
 
 def fetch_all_ms_ratings(df: pd.DataFrame, fida_df: pd.DataFrame,
                           progress_cb=None) -> dict:
-    """Fetch Morningstar ratings for all portfolio funds via FondiOnline API.
+    """Fetch Morningstar ratings via lt.morningstar.com (FondiOnline offline).
 
-    Replaces the old per-page scraping approach with a single JSON API call.
-    Returns {fund_name: {"ms_rating": int_or_None, "fo_url": str_or_None}}.
+    Fetch parallelo per ISIN — restituisce {fund_name: {"ms_rating": int|None, "fo_url": None}}.
     """
     # 1. Build nome → ISIN map from FIDA sheet
     nome_to_isin: dict = {}
@@ -1613,16 +1645,43 @@ def fetch_all_ms_ratings(df: pd.DataFrame, fida_df: pd.DataFrame,
 
     portfolio_names = list(df["nome"].unique()) if not df.empty else []
 
-    # 2. One API call → ISIN → {ms_rating, fo_url}
-    isin_to_ms = _fo_fetch_company_ratings(FO_AZ_COMPANY_ID)
-    if progress_cb:
-        progress_cb(1.0)
+    # 2. ISIN unici da cercare
+    isins_needed = {
+        nome: nome_to_isin[nome]
+        for nome in portfolio_names
+        if nome in nome_to_isin
+    }
+    unique_isins = list(set(isins_needed.values()))
 
-    # 3. Match portfolio funds by ISIN
+    # 3. Fetch parallelo
+    isin_to_rating: dict = {}
+    sess = requests.Session()
+    total = max(len(unique_isins), 1)
+    done  = 0
+
+    def _fetch_one(isin: str):
+        return isin, _ms_rating_for_isin(isin, sess)
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {pool.submit(_fetch_one, isin): isin for isin in unique_isins}
+        for future in as_completed(futures):
+            try:
+                isin, rating = future.result()
+                isin_to_rating[isin] = rating
+            except Exception:
+                pass
+            done += 1
+            if progress_cb:
+                progress_cb(done / total)
+
+    # 4. Map back to fund names
     results: dict = {}
     for nome in portfolio_names:
-        isin = nome_to_isin.get(nome, "")
-        results[nome] = isin_to_ms.get(isin, {"ms_rating": None, "fo_url": None})
+        isin = isins_needed.get(nome, "")
+        results[nome] = {
+            "ms_rating": isin_to_rating.get(isin) if isin else None,
+            "fo_url":    None,
+        }
 
     return results
 
@@ -3717,7 +3776,7 @@ def main():
             _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
                       .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
             if not _df_ms.empty:
-                with st.spinner("⭐ Scarico rating Morningstar da FondiOnline…"):
+                with st.spinner("⭐ Scarico rating Morningstar da lt.morningstar.com…"):
                     _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
                 save_ms_cache(_ms_new)
                 st.session_state["_ms_data"] = _ms_new
