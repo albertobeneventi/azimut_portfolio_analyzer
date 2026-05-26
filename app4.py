@@ -3685,25 +3685,26 @@ def main():
                 "0%{opacity:.92}50%{opacity:.55}100%{opacity:.92}}</style>",
                 unsafe_allow_html=True)
         elif _can_update:
-            # Colore tasto: ambra lampeggiante (apertura) / verde / giallo / rosso
-            if _needs_upd and _any_data:
-                _btn_bg   = "linear-gradient(135deg,#92400e,#D97706)"
-                _btn_anim = "animation:_aggiorna_blink 1.4s ease-in-out infinite;"
+            # Colore tasto: rosso lampeggiante (apertura) / verde / giallo / rosso
+            if _needs_upd:
+                # App appena aperta → rosso lampeggiante con bordo rosso
+                _btn_bg   = "linear-gradient(135deg,#7f1d1d,#DC2626)"
+                _btn_brd  = "border:2px solid #ef4444 !important;"
+                _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite;"
                 _btn_shadow_kf = (
                     "@keyframes _aggiorna_blink{"
-                    "0%,100%{opacity:1;box-shadow:0 0 8px 3px #d9770666}"
-                    "50%{opacity:.5;box-shadow:0 0 18px 6px #d97706bb}}"
+                    "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
+                    "50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}"
                 )
             elif _all_ok:
-                _btn_bg   = "linear-gradient(135deg,#14532d,#16A34A)"
-                _btn_anim = ""
-                _btn_shadow_kf = ""
+                _btn_bg, _btn_brd, _btn_anim, _btn_shadow_kf = (
+                    "linear-gradient(135deg,#14532d,#16A34A)", "", "", "")
             elif _any_data:
-                _btn_bg   = "linear-gradient(135deg,#78350f,#D97706)"
-                _btn_anim = ""
-                _btn_shadow_kf = ""
+                _btn_bg, _btn_brd, _btn_anim, _btn_shadow_kf = (
+                    "linear-gradient(135deg,#78350f,#D97706)", "", "", "")
             else:
-                _btn_bg   = "linear-gradient(135deg,#7f1d1d,#DC2626)"
+                _btn_bg  = "linear-gradient(135deg,#7f1d1d,#DC2626)"
+                _btn_brd = "border:2px solid #ef4444 !important;"
                 _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite;"
                 _btn_shadow_kf = (
                     "@keyframes _aggiorna_blink{"
@@ -3720,7 +3721,7 @@ def main():
                 f"<style>"
                 f"{_btn_sel}{{"
                 f"background:{_btn_bg} !important;"
-                f"color:#fff !important;border:none !important;"
+                f"color:#fff !important;{_btn_brd}"
                 f"font-weight:600 !important;{_btn_anim}}}"
                 f"{_btn_sel}:hover{{"
                 f"filter:brightness(1.18) !important;}}"
