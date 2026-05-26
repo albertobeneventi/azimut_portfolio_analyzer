@@ -1,1 +1,2932 @@
-{"last_updated":"","PTF FULL":[],"PTF SHORT":[],"FIDA":[],"fida_urls":{}}
+{
+  "last_updated": "2026-05-26",
+  "PTF FULL": [
+    {
+      "nome": "AZ F.1 All. Balanced Brave A Cap EUR",
+      "categoria": "Bilanciati Flessibili EUR - Globali",
+      "gruppo": "ALLOCATION",
+      "az_pct": 0.3,
+      "obb_pct": 0.7,
+      "r_weight": 0.06,
+      "mc": 1.0,
+      "me": 1.0,
+      "ma": 1.0,
+      "w_cons": 0.059999999999999984,
+      "w_equil": 0.059999999999999984,
+      "w_accr": 0.06,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#92650A"
+    },
+    {
+      "nome": "AZ F.1 All. Balanced FoF A Cap EUR",
+      "categoria": "Bilanciati Moderati EUR - Globali",
+      "gruppo": "ALLOCATION",
+      "az_pct": 0.44,
+      "obb_pct": 0.56,
+      "r_weight": 0.08,
+      "mc": 1.0,
+      "me": 1.0,
+      "ma": 1.0,
+      "w_cons": 0.07999999999999999,
+      "w_equil": 0.07999999999999999,
+      "w_accr": 0.08,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#B8860B"
+    },
+    {
+      "nome": "AZ F.1 All. Trend A Cap EUR",
+      "categoria": "Bilanciati Azionari EUR - Globali",
+      "gruppo": "ALLOCATION",
+      "az_pct": 0.88,
+      "obb_pct": 0.12,
+      "r_weight": 0.06,
+      "mc": 1.0,
+      "me": 1.0,
+      "ma": 1.0,
+      "w_cons": 0.059999999999999984,
+      "w_equil": 0.059999999999999984,
+      "w_accr": 0.06,
+      "macro_cat": "Azionari",
+      "color": "#0D3080"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2030 A Cap EUR",
+      "categoria": "EUR Flexible Allocation - Globali",
+      "gruppo": "ALLOCATION",
+      "az_pct": 0.21,
+      "obb_pct": 0.79,
+      "r_weight": 0.09,
+      "mc": 1.0,
+      "me": 1.0,
+      "ma": 1.0,
+      "w_cons": 0.08999999999999998,
+      "w_equil": 0.08999999999999998,
+      "w_accr": 0.09,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#C9A84C"
+    },
+    {
+      "nome": "AZ F.1 All. Flexible Equity A Cap EUR",
+      "categoria": "EUR Flexible Allocation - Global (Flessibili Globali)",
+      "gruppo": "ALLOCATION",
+      "az_pct": 0.83,
+      "obb_pct": 0.17000000000000004,
+      "r_weight": 0.07,
+      "mc": 1.0,
+      "me": 1.0,
+      "ma": 1.0,
+      "w_cons": 0.06999999999999999,
+      "w_equil": 0.06999999999999999,
+      "w_accr": 0.07,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#D4B572"
+    },
+    {
+      "nome": "AZ F.1 All. Risk Parity Factors A Cap EUR",
+      "categoria": "Bilanciati Flessibili EUR - Globali",
+      "gruppo": "AZIONARI (LONG)",
+      "az_pct": 1.0,
+      "obb_pct": 0.0,
+      "r_weight": 0.05,
+      "mc": 0.2,
+      "me": 1.0,
+      "ma": 1.6,
+      "w_cons": 0.01,
+      "w_equil": 0.04999999999999999,
+      "w_accr": 0.08000000000000002,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#DFC298"
+    },
+    {
+      "nome": "AZ F.1 Eq. Best Value A Cap EUR",
+      "categoria": "Azionari Internazionali Mid Cap",
+      "gruppo": "AZIONARI (LONG)",
+      "az_pct": 1.0,
+      "obb_pct": 0.0,
+      "r_weight": 0.08,
+      "mc": 0.2,
+      "me": 1.0,
+      "ma": 1.6,
+      "w_cons": 0.015999999999999997,
+      "w_equil": 0.07999999999999999,
+      "w_accr": 0.128,
+      "macro_cat": "Azionari",
+      "color": "#1B4FBB"
+    },
+    {
+      "nome": "AZ F.1 Eq. Escalator A Cap EUR",
+      "categoria": "Bilanciati Flessibili EUR - Globali",
+      "gruppo": "AZIONARI (LONG)",
+      "az_pct": 1.0,
+      "obb_pct": 0.0,
+      "r_weight": 0.08,
+      "mc": 0.2,
+      "me": 1.0,
+      "ma": 1.6,
+      "w_cons": 0.015999999999999997,
+      "w_equil": 0.07999999999999999,
+      "w_accr": 0.128,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#E9CEB4"
+    },
+    {
+      "nome": "AZ F.1 Eq. Emerging Markets Technology A Cap EUR",
+      "categoria": "Azionari Paesi Emergenti Tecnologia EUR",
+      "gruppo": "AZIONARI (LONG)",
+      "az_pct": 1.0,
+      "obb_pct": 0.0,
+      "r_weight": 0.03,
+      "mc": 0.2,
+      "me": 1.0,
+      "ma": 1.6,
+      "w_cons": 0.005999999999999998,
+      "w_equil": 0.029999999999999992,
+      "w_accr": 0.048,
+      "macro_cat": "Azionari",
+      "color": "#2563EB"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Dividend A Cap EUR",
+      "categoria": "Azionari Globali - Global Equity Income",
+      "gruppo": "AZIONARI (LONG)",
+      "az_pct": 1.0,
+      "obb_pct": 0.0,
+      "r_weight": 0.04,
+      "mc": 0.2,
+      "me": 1.0,
+      "ma": 1.6,
+      "w_cons": 0.007999999999999998,
+      "w_equil": 0.039999999999999994,
+      "w_accr": 0.064,
+      "macro_cat": "Azionari",
+      "color": "#3B82F6"
+    },
+    {
+      "nome": "AZ F.1 Eq. Industrial Revolution 4.0 A Cap EUR",
+      "categoria": "Azionari Globali - Industriali",
+      "gruppo": "AZIONARI (LONG)",
+      "az_pct": 1.0,
+      "obb_pct": 0.0,
+      "r_weight": 0.04,
+      "mc": 0.2,
+      "me": 1.0,
+      "ma": 1.6,
+      "w_cons": 0.007999999999999998,
+      "w_equil": 0.039999999999999994,
+      "w_accr": 0.064,
+      "macro_cat": "Azionari",
+      "color": "#60A5FA"
+    },
+    {
+      "nome": "AZ F.1 All. Potential Income Upside 2030 A Cap EUR",
+      "categoria": "Obbligazionari Fondi a scadenza",
+      "gruppo": "BOND",
+      "az_pct": 0.03,
+      "obb_pct": 0.97,
+      "r_weight": 0.04,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.4,
+      "w_cons": 0.072,
+      "w_equil": 0.039999999999999994,
+      "w_accr": 0.016,
+      "macro_cat": "Azionari",
+      "color": "#93C5FD"
+    },
+    {
+      "nome": "AZ F.1 Bd Bond Value A Cap EUR",
+      "categoria": "Obbligazionari Diversificati Lungo Termine",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.01,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.4,
+      "w_cons": 0.018,
+      "w_equil": 0.009999999999999998,
+      "w_accr": 0.004,
+      "macro_cat": "Azionari",
+      "color": "#BFDBFE"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 A Cap EUR",
+      "categoria": "Obbligazionari Fondi a scadenza",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.05,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.4,
+      "w_cons": 0.09,
+      "w_equil": 0.04999999999999999,
+      "w_accr": 0.020000000000000004,
+      "macro_cat": "Azionari",
+      "color": "#0D3080"
+    },
+    {
+      "nome": "AZ F.1 Bd High Income FoF A Cap EUR",
+      "categoria": "Obbligazionari Flessibili EUR",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.03,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.4,
+      "w_cons": 0.053999999999999986,
+      "w_equil": 0.029999999999999992,
+      "w_accr": 0.012,
+      "macro_cat": "Azionari",
+      "color": "#1B4FBB"
+    },
+    {
+      "nome": "AZ F.1 Bd High Yield A Cap EUR",
+      "categoria": "Obbligazionari High Yield Globali - EUR Hedged",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.02,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.4,
+      "w_cons": 0.036,
+      "w_equil": 0.019999999999999997,
+      "w_accr": 0.008,
+      "macro_cat": "Azionari",
+      "color": "#2563EB"
+    },
+    {
+      "nome": "AZ F.1 Bd Hybrids A Cap EUR",
+      "categoria": "Obbligazionari Subordinati EUR",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.02,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.4,
+      "w_cons": 0.036,
+      "w_equil": 0.019999999999999997,
+      "w_accr": 0.008,
+      "macro_cat": "Azionari",
+      "color": "#3B82F6"
+    },
+    {
+      "nome": "AZ F.1 Bd Patriot A Cap EUR",
+      "categoria": "Obbligazionari Diversificati EUR",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.03,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.4,
+      "w_cons": 0.053999999999999986,
+      "w_equil": 0.029999999999999992,
+      "w_accr": 0.012,
+      "macro_cat": "Azionari",
+      "color": "#60A5FA"
+    },
+    {
+      "nome": "AZ F.1 All. Long Term Credit Opportunities A Cap EUR",
+      "categoria": "Bilanciati Prudenti EUR - Globali",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.03,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.4,
+      "w_cons": 0.053999999999999986,
+      "w_equil": 0.029999999999999992,
+      "w_accr": 0.012,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#F3DACD"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt A-HU Cap EUR Hdg",
+      "categoria": "Obbligazionari Paesi Emergenti EUR",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.02,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.4,
+      "w_cons": 0.036,
+      "w_equil": 0.019999999999999997,
+      "w_accr": 0.008,
+      "macro_cat": "Azionari",
+      "color": "#93C5FD"
+    },
+    {
+      "nome": "AZ F.1 Bd Global Macro Bond A Cap EUR",
+      "categoria": "Obbligazionari Flessibili Globali - EUR Hedged",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.07,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.4,
+      "w_cons": 0.126,
+      "w_equil": 0.06999999999999999,
+      "w_accr": 0.028000000000000004,
+      "macro_cat": "Azionari",
+      "color": "#BFDBFE"
+    }
+  ],
+  "PTF SHORT": [
+    {
+      "nome": "AZ F.1 All. Balanced FoF A Cap EUR",
+      "categoria": "Bilanciati Moderati EUR - Globali",
+      "gruppo": "ALLOCATION",
+      "az_pct": 0.44,
+      "obb_pct": 0.56,
+      "r_weight": 0.14,
+      "mc": 1.0,
+      "me": 1.0,
+      "ma": 1.0,
+      "w_cons": 0.14112903225806453,
+      "w_equil": 0.14,
+      "w_accr": 0.1390268123138034,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#92650A"
+    },
+    {
+      "nome": "AZ F.1 All. Trend A Cap EUR",
+      "categoria": "Bilanciati Azionari EUR - Globali",
+      "gruppo": "ALLOCATION",
+      "az_pct": 0.88,
+      "obb_pct": 0.12,
+      "r_weight": 0.12,
+      "mc": 1.0,
+      "me": 1.0,
+      "ma": 1.0,
+      "w_cons": 0.12096774193548386,
+      "w_equil": 0.12,
+      "w_accr": 0.11916583912611718,
+      "macro_cat": "Azionari",
+      "color": "#0D3080"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2030 A Cap EUR",
+      "categoria": "EUR Flexible Allocation - Globali",
+      "gruppo": "ALLOCATION",
+      "az_pct": 0.21,
+      "obb_pct": 0.79,
+      "r_weight": 0.15,
+      "mc": 1.0,
+      "me": 1.0,
+      "ma": 1.0,
+      "w_cons": 0.15120967741935484,
+      "w_equil": 0.15,
+      "w_accr": 0.14895729890764647,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#B8860B"
+    },
+    {
+      "nome": "AZ F.1 All. Risk Parity Factors A Cap EUR",
+      "categoria": "Bilanciati Flessibili EUR - Globali",
+      "gruppo": "AZIONARI (LONG)",
+      "az_pct": 1.0,
+      "obb_pct": 0.0,
+      "r_weight": 0.08,
+      "mc": 0.2,
+      "me": 1.0,
+      "ma": 1.7,
+      "w_cons": 0.016129032258064516,
+      "w_equil": 0.08,
+      "w_accr": 0.13505461767626617,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#C9A84C"
+    },
+    {
+      "nome": "AZ F.1 Eq. Best Value A Cap EUR",
+      "categoria": "Azionari Internazionali Small/Mid Cap",
+      "gruppo": "AZIONARI (LONG)",
+      "az_pct": 1.0,
+      "obb_pct": 0.0,
+      "r_weight": 0.11,
+      "mc": 0.2,
+      "me": 1.0,
+      "ma": 1.7,
+      "w_cons": 0.02217741935483871,
+      "w_equil": 0.11,
+      "w_accr": 0.18570009930486595,
+      "macro_cat": "Azionari",
+      "color": "#1B4FBB"
+    },
+    {
+      "nome": "AZ F.1 Eq. Escalator A Cap EUR",
+      "categoria": "Bilanciati Flessibili EUR - Globali",
+      "gruppo": "AZIONARI (LONG)",
+      "az_pct": 1.0,
+      "obb_pct": 0.0,
+      "r_weight": 0.11,
+      "mc": 0.2,
+      "me": 1.0,
+      "ma": 1.7,
+      "w_cons": 0.02217741935483871,
+      "w_equil": 0.11,
+      "w_accr": 0.18570009930486595,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#D4B572"
+    },
+    {
+      "nome": "AZ F.1 All. Potential Income Upside 2030 A Cap EUR",
+      "categoria": "Obbligazionari Fondi a scadenza",
+      "gruppo": "BOND",
+      "az_pct": 0.03,
+      "obb_pct": 0.97,
+      "r_weight": 0.06,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.3,
+      "w_cons": 0.10887096774193548,
+      "w_equil": 0.06,
+      "w_accr": 0.01787487586891758,
+      "macro_cat": "Azionari",
+      "color": "#2563EB"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 A Cap EUR",
+      "categoria": "Obbligazionari Fondi a scadenza",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.08,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.3,
+      "w_cons": 0.14516129032258066,
+      "w_equil": 0.08,
+      "w_accr": 0.02383316782522344,
+      "macro_cat": "Azionari",
+      "color": "#3B82F6"
+    },
+    {
+      "nome": "AZ F.1 All. Long Term Credit Opportunities A Cap EUR",
+      "categoria": "Bilanciati Prudenti EUR - Globali",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.04,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.3,
+      "w_cons": 0.07258064516129033,
+      "w_equil": 0.04,
+      "w_accr": 0.01191658391261172,
+      "macro_cat": "Bilanciati/Flessibili",
+      "color": "#DFC298"
+    },
+    {
+      "nome": "AZ F.1 Bd Global Macro Bond A Cap EUR",
+      "categoria": "Obbligazionari Flessibili Globali - EUR Hedged",
+      "gruppo": "BOND",
+      "az_pct": 0.0,
+      "obb_pct": 1.0,
+      "r_weight": 0.11,
+      "mc": 1.8,
+      "me": 1.0,
+      "ma": 0.3,
+      "w_cons": 0.1995967741935484,
+      "w_equil": 0.11,
+      "w_accr": 0.03277060575968223,
+      "macro_cat": "Azionari",
+      "color": "#60A5FA"
+    }
+  ],
+  "FIDA": [
+    {
+      "nome": "AZ Eskatos Multistrategy ILS A Cap $(i)",
+      "isin": "LU0866065187",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Eskatos Multistrategy ILS B Cap EUR(i)",
+      "isin": "LU0354663808",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Eskatos Multistrategy ILS B Dis $(i)",
+      "isin": "LU0866088122",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Eskatos Multistrategy ILS D Dis EUR(i)",
+      "isin": "LU0386610272",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Asset Timing 2026 A Cap EUR",
+      "isin": "LU2621756779",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Asset Timing 2026 B Cap EUR",
+      "isin": "LU2621756852",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Asset Timing 2028 A Cap EUR",
+      "isin": "LU3081956784",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Asset Timing 2028 A Dis EUR",
+      "isin": "LU3081956867",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Asset Timing 2028 B Cap EUR",
+      "isin": "LU3081956941",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Asset Timing 2028 B Dis EUR",
+      "isin": "LU3081957089",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Balanced Brave A Cap EUR",
+      "isin": "LU2148611275",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Balanced Brave B Cap EUR",
+      "isin": "LU2148611358",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Balanced Brave I Cap EUR(i)",
+      "isin": "LU2148611515",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Balanced FoF B Cap EUR",
+      "isin": "LU0346934713",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Balanced Plus A Cap EUR",
+      "isin": "LU3081370317",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Balanced Plus A Dis EUR",
+      "isin": "LU3081370580",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Balanced Plus B Cap EUR",
+      "isin": "LU3081370408",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Balanced Plus B Dis EUR",
+      "isin": "LU3081370663",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2026 A Cap EUR",
+      "isin": "LU2384057423",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2026 A Dis EUR",
+      "isin": "LU2384057696",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2026 B Cap EUR",
+      "isin": "LU2384057852",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2026 B Dis EUR",
+      "isin": "LU2384057779",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2028 A Cap EUR",
+      "isin": "LU2622183411",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2028 A Dis EUR",
+      "isin": "LU2622183502",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2028 B Cap EUR",
+      "isin": "LU2622183767",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2028 B Dis EUR",
+      "isin": "LU2622183684",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2030 A Cap EUR",
+      "isin": "LU3081792221",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2030 A Dis EUR",
+      "isin": "LU3081792494",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2030 B Cap EUR",
+      "isin": "LU3081792577",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Escalator 2030 B Dis EUR",
+      "isin": "LU3081792650",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Flexible Equity A Cap EUR",
+      "isin": "LU2168558927",
+      "categoria": "Diversificati Aggressivi",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Flexible Equity B Cap EUR",
+      "isin": "LU2168559065",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Global Aggressive A Cap $",
+      "isin": "LU2097823673",
+      "categoria": "Diversificati Aggressivi",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Global Aggressive A Cap EUR",
+      "isin": "LU2097823160",
+      "categoria": "Diversificati Aggressivi",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Global Aggressive A Dis EUR",
+      "isin": "LU2097823327",
+      "categoria": "Diversificati Aggressivi",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Global Aggressive B Cap EUR",
+      "isin": "LU2097823244",
+      "categoria": "Diversificati Aggressivi",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Global Aggressive B Dis EUR",
+      "isin": "LU2097823590",
+      "categoria": "Diversificati Aggressivi",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Global Balanced A Cap EUR",
+      "isin": "LU0262757841",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Global Balanced A Dis EUR",
+      "isin": "LU3020847698",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Global Balanced B Cap EUR",
+      "isin": "LU0262758146",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Global Balanced B Dis EUR",
+      "isin": "LU3020847771",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Global Conservative A Cap EUR",
+      "isin": "LU0947788757",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Global Conservative A Dis EUR",
+      "isin": "LU0947789136",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Global Conservative B Cap EUR",
+      "isin": "LU0947788831",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Global Conservative B Dis EUR",
+      "isin": "LU0947789219",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Global Conservative C Cap EUR",
+      "isin": "LU2081248465",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Global Conservative C Dis EUR",
+      "isin": "LU2081248549",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Global Conservative I Cap EUR(i)",
+      "isin": "LU2081248978",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Italian Long Term Opportunities A Cap EUR",
+      "isin": "LU2458530842",
+      "categoria": "Azionari Italia - Mid & Small Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 All. Italian Long Term Opportunities A Dis EUR",
+      "isin": "LU2458530925",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Italian Long Term Opportunities C Cap EUR",
+      "isin": "LU2461762481",
+      "categoria": "Azionari Italia - Mid & Small Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 All. Italian Trend A Cap EUR",
+      "isin": "LU2168562101",
+      "categoria": "Azionari Italia - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 All. Italian Trend A Dis EUR",
+      "isin": "LU2168562366",
+      "categoria": "Azionari Italia - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 All. Italian Trend B Cap EUR",
+      "isin": "LU2168562283",
+      "categoria": "Azionari Italia - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 All. Italian Trend B Dis EUR",
+      "isin": "LU2168562440",
+      "categoria": "Azionari Italia - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 All. Italian Trend I Cap EUR(i)",
+      "isin": "LU2168563414",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Life Plan 2040 A Cap EUR",
+      "isin": "LU3081705785",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Life Plan 2040 A Dis EUR",
+      "isin": "LU3081705868",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Life Plan 2040 B Cap EUR",
+      "isin": "LU3081705942",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Long Term Credit Opportunities A Cap EUR",
+      "isin": "LU2458531147",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Long Term Credit Opportunities A Dis EUR",
+      "isin": "LU2458531220",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Long Term Credit Opportunities C Cap EUR",
+      "isin": "LU2461763539",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Long Term Equity Opportunities A Cap EUR",
+      "isin": "LU2458531907",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Long Term Equity Opportunities A Dis EUR",
+      "isin": "LU2458532038",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. PIR Italian Excellence 70% A Cap EUR",
+      "isin": "LU1621765012",
+      "categoria": "Diversificati Altri Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. PIR Italian Excellence 70% B Cap EUR",
+      "isin": "LU1621765285",
+      "categoria": "Diversificati Altri Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. PIR Italian Excellence 70% G Cap EUR",
+      "isin": "LU1621765103",
+      "categoria": "Diversificati Altri Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ F.1 All. Potential Income Upside 2030 A Cap EUR",
+      "isin": "LU2637786422",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Potential Income Upside 2030 A Dis EUR",
+      "isin": "LU2637785960",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Potential Income Upside 2030 B Cap EUR",
+      "isin": "LU2637786265",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Potential Income Upside 2030 B Dis EUR",
+      "isin": "LU2637786182",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Risk Parity Factors A Cap EUR",
+      "isin": "LU2102340044",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Risk Parity Factors A Dis EUR",
+      "isin": "LU2102340390",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Risk Parity Factors A-HE Cap $ Hdg",
+      "isin": "LU2102340556",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Risk Parity Factors B Cap EUR",
+      "isin": "LU2102340127",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Risk Parity Factors B Dis EUR",
+      "isin": "LU2102340473",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Trend A Cap EUR",
+      "isin": "LU2168564065",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Trend A Cap JPY",
+      "isin": "LU2168563844",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Trend A-HE Cap $ Hdg",
+      "isin": "LU2168564222",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Trend A-HE Cap JPY Hdg",
+      "isin": "LU2168563687",
+      "categoria": "Ritorno Assoluto Altre Valute",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Trend B Cap EUR",
+      "isin": "LU2168564149",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Trend I Cap EUR(i)",
+      "isin": "LU2168564495",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Turkey A Cap EUR",
+      "isin": "LU0947792270",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Turkey A Dis EUR",
+      "isin": "LU0947786462",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Turkey B Cap EUR",
+      "isin": "LU0947786116",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 All. Turkey B Dis EUR",
+      "isin": "LU0947786546",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Alt. Capital Enhanced A Cap EUR",
+      "isin": "LU0677519224",
+      "categoria": "Monetari Euro",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Alt. Capital Enhanced A Dis EUR",
+      "isin": "LU2081248200",
+      "categoria": "Monetari Euro",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Alt. Capital Enhanced B Cap EUR",
+      "isin": "LU0677534298",
+      "categoria": "Monetari Euro",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Alt. Capital Enhanced B Dis EUR",
+      "isin": "LU2081248382",
+      "categoria": "Monetari Euro",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Alt. Capital Enhanced L Cap EUR",
+      "isin": "LU2698718140",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Alt. Commodity A Cap EUR",
+      "isin": "LU2238329978",
+      "categoria": "Commodities",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Alt. Commodity A-HU Cap EUR Hdg",
+      "isin": "LU2238330125",
+      "categoria": "Commodities",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Alt. Commodity B Cap EUR",
+      "isin": "LU2238330042",
+      "categoria": "Commodities",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Alt. Commodity B-HU Cap EUR Hdg",
+      "isin": "LU2238330398",
+      "categoria": "Commodities",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd ABS A Cap EUR",
+      "isin": "LU2056383008",
+      "categoria": "Obbligazionari Euro - Asset e Mortgage Backed",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd ABS B Cap EUR",
+      "isin": "LU2056383180",
+      "categoria": "Obbligazionari Euro - Asset e Mortgage Backed",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Aggregate Bond Euro A Cap EUR",
+      "isin": "LU0194809330",
+      "categoria": "Obbligazionari Euro - Globali - Corporate e Governativi",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Aggregate Bond Euro B Cap EUR",
+      "isin": "LU0499090040",
+      "categoria": "Obbligazionari Euro - Globali - Corporate e Governativi",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Asian Bond A Cap EUR",
+      "isin": "LU2286016758",
+      "categoria": "Obbligazionari Asia Pacifico",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Asian Bond A-HU Cap EUR Hdg",
+      "isin": "LU2286016592",
+      "categoria": "Obbligazionari Euro Hedged Asia Pacifico",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Asian Bond B Cap EUR",
+      "isin": "LU2286016832",
+      "categoria": "Obbligazionari Asia Pacifico",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Asian Bond B-HU Cap EUR Hdg",
+      "isin": "LU2286016675",
+      "categoria": "Obbligazionari Euro Hedged Asia Pacifico",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Bond Value A Cap EUR",
+      "isin": "LU3081730460",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Bond Value A Dis EUR",
+      "isin": "LU3081730627",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Bond Value B Cap EUR",
+      "isin": "LU3081730544",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Bond Value B Dis EUR",
+      "isin": "LU3081730890",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd CoCo Bonds A Cap EUR",
+      "isin": "LU2622195423",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd CoCo Bonds A Dis EUR",
+      "isin": "LU2622195696",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd CoCo Bonds A-HU Cap EUR Hdg",
+      "isin": "LU2622195936",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd CoCo Bonds A-HU Dis EUR Hdg",
+      "isin": "LU2622196074",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd CoCo Bonds B Cap EUR",
+      "isin": "LU2622195779",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd CoCo Bonds B Dis EUR",
+      "isin": "LU2622195852",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd CoCo Bonds B-HU Cap EUR Hdg",
+      "isin": "LU2622196157",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd CoCo Bonds B-HU Dis EUR Hdg",
+      "isin": "LU2622196231",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Convertible A-HU Cap EUR Hdg",
+      "isin": "LU1422848470",
+      "categoria": "Obbligazionari Convertibili Globali - Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Convertible A-HU Dis EUR Hdg",
+      "isin": "LU1422848637",
+      "categoria": "Obbligazionari Convertibili Globali - Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Convertible B-HU Cap EUR Hdg",
+      "isin": "LU1422848553",
+      "categoria": "Obbligazionari Convertibili Globali - Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Convertible B-HU Dis EUR Hdg",
+      "isin": "LU1422848710",
+      "categoria": "Obbligazionari Convertibili Globali - Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Enhanced Yield A Cap EUR",
+      "isin": "LU0677519067",
+      "categoria": "Monetari Euro (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Enhanced Yield B Cap EUR",
+      "isin": "LU0677533720",
+      "categoria": "Monetari Euro (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Enhanced Yield L Cap EUR",
+      "isin": "LU2699155870",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Euro Corporate A Cap EUR",
+      "isin": "LU0677516477",
+      "categoria": "Obbligazionari Euro - Corporate",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Euro Corporate B Cap EUR",
+      "isin": "LU0677531195",
+      "categoria": "Obbligazionari Euro - Corporate",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt A Cap $",
+      "isin": "LU2458359572",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt A Cap EUR",
+      "isin": "LU2458359069",
+      "categoria": "Obbligazionari Globali (Mercati Emergenti) - Corporate e Governativi",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt A Dis $",
+      "isin": "LU2458359655",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt A Dis EUR",
+      "isin": "LU2458359226",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt A-HU Cap EUR Hdg",
+      "isin": "LU2458358681",
+      "categoria": "Obbligazionari Euro Hedged Mercati Emergenti",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt A-HU Dis EUR Hdg",
+      "isin": "LU2458358848",
+      "categoria": "Obbligazionari Euro Hedged Mercati Emergenti",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt B Cap $",
+      "isin": "LU2458359143",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt B Dis EUR",
+      "isin": "LU2458359499",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt B-HU Cap EUR Hdg",
+      "isin": "LU2458358764",
+      "categoria": "Obbligazionari Euro Hedged Mercati Emergenti",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Frontier Markets Debt B-HU Dis EUR Hdg",
+      "isin": "LU2458358921",
+      "categoria": "Obbligazionari Euro Hedged Mercati Emergenti",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Global Macro Bond A Cap EUR",
+      "isin": "LU2085663008",
+      "categoria": "Ritorno Assoluto Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Global Macro Bond A Dis EUR",
+      "isin": "LU2085664584",
+      "categoria": "Ritorno Assoluto Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Global Macro Bond B Cap EUR",
+      "isin": "LU2085663859",
+      "categoria": "Ritorno Assoluto Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Global Macro Bond B Dis EUR",
+      "isin": "LU2085665474",
+      "categoria": "Ritorno Assoluto Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Global Macro Bond I Cap EUR(i)",
+      "isin": "LU2081249430",
+      "categoria": "Ritorno Assoluto Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Income FoF A Cap EUR",
+      "isin": "LU2244841198",
+      "categoria": "Obbligazionari Globali - Corporate e Governativi High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Income FoF A Dis EUR",
+      "isin": "LU2244841271",
+      "categoria": "Obbligazionari Euro Hedged Globali - High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Income FoF A-HU Cap EUR Hdg",
+      "isin": "LU0677516717",
+      "categoria": "Obbligazionari Euro Hedged Globali - High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Income FoF A-HU Dis EUR Hdg",
+      "isin": "LU0677517103",
+      "categoria": "Obbligazionari Euro Hedged Globali - High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Income FoF B Cap EUR",
+      "isin": "LU2244841354",
+      "categoria": "Obbligazionari Globali - Corporate e Governativi High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Income FoF B Dis EUR",
+      "isin": "LU2244841438",
+      "categoria": "Obbligazionari Globali - Corporate e Governativi High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Income FoF B-HU Cap EUR Hdg",
+      "isin": "LU0677531435",
+      "categoria": "Obbligazionari Euro Hedged Globali - High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Income FoF B-HU Dis EUR Hdg",
+      "isin": "LU0677531781",
+      "categoria": "Obbligazionari Euro Hedged Globali - High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Yield A Cap EUR",
+      "isin": "LU2056382372",
+      "categoria": "Obbligazionari Globali - Corporate High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Yield A Dis EUR",
+      "isin": "LU2056382539",
+      "categoria": "Obbligazionari Globali - Corporate High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Yield B Cap EUR",
+      "isin": "LU2056382612",
+      "categoria": "Obbligazionari Globali - Corporate High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd High Yield B Dis EUR",
+      "isin": "LU2056382703",
+      "categoria": "Obbligazionari Globali - Corporate High Yield",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd HY Target 2028 Climate Trans. A Cap EUR",
+      "isin": "LU2951582399",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd HY Target 2028 Climate Trans. A Dis EUR",
+      "isin": "LU2951582472",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Hybrids A Cap EUR",
+      "isin": "LU2056384311",
+      "categoria": "Ritorno Assoluto ESG",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Hybrids A Dis EUR",
+      "isin": "LU2056384402",
+      "categoria": "Ritorno Assoluto ESG",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Hybrids A-HE Cap $ Hdg",
+      "isin": "LU2056384824",
+      "categoria": "Ritorno Assoluto ESG",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Hybrids B Cap EUR",
+      "isin": "LU2056384667",
+      "categoria": "Ritorno Assoluto ESG",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Hybrids B Dis EUR",
+      "isin": "LU2056384741",
+      "categoria": "Ritorno Assoluto ESG",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Income Dynamic A Cap EUR",
+      "isin": "LU0108019232",
+      "categoria": "Obbligazionari Area Euro - Governativi (1-3 Anni)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Income Dynamic B Cap EUR",
+      "isin": "LU0108019315",
+      "categoria": "Obbligazionari Area Euro - Governativi (1-3 Anni)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Income Dynamic L Cap EUR",
+      "isin": "LU2699158387",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd International FoF A Cap EUR",
+      "isin": "LU0538790550",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd International FoF A Dis EUR",
+      "isin": "LU2208932942",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd International FoF A-HU Cap EUR Hdg",
+      "isin": "LU2208933833",
+      "categoria": "Obbligazionari Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd International FoF A-HU Dis EUR Hdg",
+      "isin": "LU2208934567",
+      "categoria": "Obbligazionari Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd International FoF B Cap EUR",
+      "isin": "LU0538790980",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd International FoF B Dis EUR",
+      "isin": "LU2208933247",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd International FoF B-HU Cap EUR Hdg",
+      "isin": "LU2208934211",
+      "categoria": "Obbligazionari Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd International FoF B-HU Dis EUR Hdg",
+      "isin": "LU2208934641",
+      "categoria": "Obbligazionari Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Latin America Bonds A Cap EUR",
+      "isin": "LU2622200017",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Latin America Bonds A Dis EUR",
+      "isin": "LU2622200280",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Latin America Bonds A-HU Cap EUR Hdg",
+      "isin": "LU2622200447",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Latin America Bonds A-HU Dis EUR Hdg",
+      "isin": "LU2622200793",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Latin America Bonds B Cap EUR",
+      "isin": "LU2622200108",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Latin America Bonds B Dis EUR",
+      "isin": "LU2622200363",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Latin America Bonds B-HU Cap EUR Hdg",
+      "isin": "LU2622200520",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Latin America Bonds B-HU Dis EUR Hdg",
+      "isin": "LU2622200876",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Patriot A Cap EUR",
+      "isin": "LU0738951036",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Patriot A Dis EUR",
+      "isin": "LU0738951549",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Patriot B Cap EUR",
+      "isin": "LU0738951119",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Patriot B Dis EUR",
+      "isin": "LU0738951622",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Renminbi Opp. A Cap EUR",
+      "isin": "LU2238329036",
+      "categoria": "Obbligazionari Renminbi Cinese",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Renminbi Opp. A-HU Cap EUR Hdg",
+      "isin": "LU2238328814",
+      "categoria": "Obbligazionari Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Renminbi Opp. B EUR",
+      "isin": "LU2238329119",
+      "categoria": "Obbligazionari Renminbi Cinese",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Renminbi Opp. B-HU Cap EUR Hdg",
+      "isin": "LU2238328905",
+      "categoria": "Obbligazionari Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Renminbi Opp. I-HU Cap EUR Hdg(i)",
+      "isin": "LU2238329549",
+      "categoria": "Obbligazionari Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Short Term IG Clim. Trans. A Cap EUR",
+      "isin": "LU2951607303",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Short Term IG Clim. Trans. A Dis EUR",
+      "isin": "LU2951607485",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Short Term IG Clim. Trans. B Cap EUR",
+      "isin": "LU3063740529",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Short Term IG Clim. Trans. B Dis EUR",
+      "isin": "LU3063740792",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Short Term IG Clim. Trans. C Dis EUR",
+      "isin": "LU3066587604",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2026 A Cap EUR",
+      "isin": "LU2286015784",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2026 A Dis EUR",
+      "isin": "LU2286015941",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2026 B Cap EUR",
+      "isin": "LU2286015867",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2026 B Dis EUR",
+      "isin": "LU2286016089",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2026 I Cap EUR(i)",
+      "isin": "LU2305238862",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2028 A Cap EUR",
+      "isin": "LU2622175078",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2028 A Dis EUR",
+      "isin": "LU2622175318",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2028 B Cap EUR",
+      "isin": "LU2622175235",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2028 B Dis EUR",
+      "isin": "LU2622175409",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 A Cap EUR",
+      "isin": "LU2951609937",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 A Dis EUR",
+      "isin": "LU2951610273",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 B Cap EUR",
+      "isin": "LU2951610190",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 B Dis EUR",
+      "isin": "LU2951610356",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 USD A-HU Cap EUR Hdg",
+      "isin": "LU2097826429",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 USD A-HU Dis EUR Hdg",
+      "isin": "LU2097826775",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 USD B Cap EUR",
+      "isin": "LU2097826189",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 USD B Dis EUR",
+      "isin": "LU2097826346",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 USD B-HU Cap EUR Hdg",
+      "isin": "LU2097826692",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2029 USD B-HU Dis EUR Hdg",
+      "isin": "LU2097826858",
+      "categoria": "Obbligazionari Target Date",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2031 A Cap EUR",
+      "isin": "LU2951613707",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2031 A Dis EUR",
+      "isin": "LU2951614002",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2031 B Cap EUR",
+      "isin": "LU2951613889",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Target 2031 B Dis EUR",
+      "isin": "LU2951614184",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Bd Total Return Bond A Cap EUR",
+      "isin": "LU2168561392",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Total Return Bond A Dis EUR",
+      "isin": "LU2168561558",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Total Return Bond B Cap EUR",
+      "isin": "LU2168561475",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Total Return Bond B Dis EUR",
+      "isin": "LU2168561632",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd Total Return Bond I Cap EUR(i)",
+      "isin": "LU2168561988",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd US Dollar Aggregate A Cap EUR",
+      "isin": "LU2097823913",
+      "categoria": "Obbligazionari USA - Corporate e Governativi",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd US Dollar Aggregate A Dis EUR",
+      "isin": "LU2097824135",
+      "categoria": "Obbligazionari USA - Corporate e Governativi",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd US Dollar Aggregate A-HU Cap EUR Hdg",
+      "isin": "LU2097824309",
+      "categoria": "Obbligazionari Euro Hedged Usa",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd US Dollar Aggregate A-HU Dis EUR Hdg",
+      "isin": "LU2097824564",
+      "categoria": "Obbligazionari Euro Hedged Usa",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd US Dollar Aggregate B Cap $",
+      "isin": "LU2097824051",
+      "categoria": "Obbligazionari USA - Corporate e Governativi",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd US Dollar Aggregate B Dis $",
+      "isin": "LU2097824218",
+      "categoria": "Obbligazionari USA - Corporate e Governativi",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd US Dollar Aggregate B-HU Cap EUR Hdg",
+      "isin": "LU2106023489",
+      "categoria": "Obbligazionari Euro Hedged Usa",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Bd US Dollar Aggregate B-HU Dis EUR Hdg",
+      "isin": "LU2097824481",
+      "categoria": "Obbligazionari Euro Hedged Usa",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. American Opportunities A Cap EUR",
+      "isin": "LU0107998642",
+      "categoria": "Azionari Usa - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. American Opportunities A-HU Cap EUR Hdg",
+      "isin": "LU2582543927",
+      "categoria": "Azionari Usa Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. American Opportunities B Cap EUR",
+      "isin": "LU0107998725",
+      "categoria": "Azionari Usa - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. American Opportunities B-HU Cap EUR Hdg",
+      "isin": "LU2582544065",
+      "categoria": "Azionari Usa Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Asean Countries A Cap EUR",
+      "isin": "LU2238330802",
+      "categoria": "Azionari Asia Pacifico (Mercati Emergenti e Sviluppati escl. Giappone)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Asean Countries B Cap EUR",
+      "isin": "LU2238330984",
+      "categoria": "Azionari Asia Pacifico (Mercati Emergenti e Sviluppati escl. Giappone)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Best Value A Cap EUR",
+      "isin": "LU2056383347",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap Value",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Best Value B Cap EUR",
+      "isin": "LU2056383420",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap Value",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Biotechnology A Cap EUR",
+      "isin": "LU2622177447",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Biotechnology A-HU Cap EUR Hdg",
+      "isin": "LU2622177793",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Biotechnology B Cap EUR",
+      "isin": "LU2622177520",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Biotechnology B-HU Cap EUR Hdg",
+      "isin": "LU2622177876",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Borletti Global Lifestyle A Cap EUR",
+      "isin": "LU2097829100",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Borletti Global Lifestyle B Cap EUR",
+      "isin": "LU2097829282",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Borletti Global Lifestyle I Cap EUR(i)",
+      "isin": "LU2097828987",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Brazil Trend A Cap EUR",
+      "isin": "LU2097822436",
+      "categoria": "Azionari Brasile",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Brazil Trend B Cap EUR",
+      "isin": "LU2097822519",
+      "categoria": "Azionari Brasile",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. CGM Opport. European A Cap EUR",
+      "isin": "LU0677515586",
+      "categoria": "Ritorno Assoluto Europa",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. CGM Opport. Global A Cap EUR",
+      "isin": "LU0677515826",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. China A Cap EUR",
+      "isin": "LU2097828631",
+      "categoria": "Azionari Grande Cina (Cina, Hong Kong, Taiwan)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. China B Cap EUR",
+      "isin": "LU2097828714",
+      "categoria": "Azionari Grande Cina (Cina, Hong Kong, Taiwan)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Egypt A Cap EUR",
+      "isin": "LU2097821974",
+      "categoria": "Altri Azionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Egypt B Cap EUR",
+      "isin": "LU2097822196",
+      "categoria": "Altri Azionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Emerging Asia FoF A Cap EUR",
+      "isin": "LU0107999889",
+      "categoria": "Azionari Asia Pacifico (Mercati Emergenti)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Emerging Asia FoF B Cap EUR",
+      "isin": "LU0108015834",
+      "categoria": "Azionari Asia Pacifico (Mercati Emergenti)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Emerging Markets Technology A Cap EUR",
+      "isin": "LU3081725973",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Emerging Markets Technology A Dis EUR",
+      "isin": "LU3081726435",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Emerging Markets Technology B Cap EUR",
+      "isin": "LU3081726278",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Emerging Markets Technology B Dis EUR",
+      "isin": "LU3081726609",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Escalator A Cap EUR",
+      "isin": "LU1867654516",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Escalator A Dis EUR",
+      "isin": "LU1867654607",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Escalator B Cap EUR",
+      "isin": "LU1867654789",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Escalator B Dis EUR",
+      "isin": "LU1867654862",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Europe A Cap EUR",
+      "isin": "LU0107996786",
+      "categoria": "Azionari Europa (Mercati Sviluppati) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Europe B Cap EUR",
+      "isin": "LU0107997081",
+      "categoria": "Azionari Europa (Mercati Sviluppati) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Food & Agriculture A Cap EUR",
+      "isin": "LU2240827464",
+      "categoria": "Azionari Settoriali - Agricoltura",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Food & Agriculture B Cap EUR",
+      "isin": "LU2240827548",
+      "categoria": "Azionari Settoriali - Agricoltura",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Future Opportunities A Cap EUR",
+      "isin": "LU2332973481",
+      "categoria": "Azionari Usa - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Future Opportunities A-HU Cap EUR Hdg",
+      "isin": "LU2332973564",
+      "categoria": "Azionari Usa Euro Hedged",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Future Opportunities I Cap EUR(i)",
+      "isin": "LU2332522809",
+      "categoria": "Azionari Usa - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Gl. Infrastructure A Cap EUR",
+      "isin": "LU1621767737",
+      "categoria": "Azionari Settoriali - Infrastrutture",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Gl. Infrastructure A Dis EUR",
+      "isin": "LU1621767810",
+      "categoria": "Azionari Settoriali - Infrastrutture",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Gl. Infrastructure B Cap EUR",
+      "isin": "LU1621767901",
+      "categoria": "Azionari Settoriali - Infrastrutture",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Gl. Infrastructure B Dis EUR",
+      "isin": "LU1621768115",
+      "categoria": "Azionari Settoriali - Infrastrutture",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Dividend A Cap EUR",
+      "isin": "LU3081740188",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Dividend A Dis EUR",
+      "isin": "LU3081740774",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Dividend B Cap EUR",
+      "isin": "LU3081740428",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Dividend B Dis EUR",
+      "isin": "LU3081740931",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Emerging FoF A Cap EUR",
+      "isin": "LU1225037040",
+      "categoria": "Azionari Globali (Mercati Emergenti) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Emerging FoF A Dis EUR",
+      "isin": "LU2081247731",
+      "categoria": "Azionari Globali (Mercati Emergenti) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Emerging FoF B Cap EUR",
+      "isin": "LU1225037123",
+      "categoria": "Azionari Globali (Mercati Emergenti) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Emerging FoF B Dis EUR",
+      "isin": "LU2081247814",
+      "categoria": "Azionari Globali (Mercati Emergenti) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global ESG FoF A Cap EUR",
+      "isin": "LU1867654276",
+      "categoria": "Azionari Tematici - ESG (Globale)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global ESG FoF A Dis EUR",
+      "isin": "LU2072948610",
+      "categoria": "Azionari Tematici - ESG (Globale)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global ESG FoF B Cap EUR",
+      "isin": "LU1867654359",
+      "categoria": "Azionari Tematici - ESG (Globale)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global ESG FoF B Dis EUR",
+      "isin": "LU2072948701",
+      "categoria": "Azionari Tematici - ESG (Globale)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global ESG FoF I Cap EUR(i)",
+      "isin": "LU2075861885",
+      "categoria": "Azionari Tematici - ESG (Globale)",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global FoF A Cap EUR",
+      "isin": "LU0262760399",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global FoF B Cap EUR",
+      "isin": "LU0262760639",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Growth A Cap EUR",
+      "isin": "LU0804221488",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap Growth",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Growth B Cap EUR",
+      "isin": "LU0804229622",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap Growth",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Growth I Cap EUR(i)",
+      "isin": "LU1232061934",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap Growth",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Healthcare A Cap EUR",
+      "isin": "LU2384058314",
+      "categoria": "Azionari Settoriali - Farmaceutico e Sanitario",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Healthcare A Dis EUR",
+      "isin": "LU2385753624",
+      "categoria": "Azionari Settoriali - Farmaceutico e Sanitario",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Healthcare B Cap EUR",
+      "isin": "LU2384058405",
+      "categoria": "Azionari Settoriali - Farmaceutico e Sanitario",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Healthcare B Dis EUR",
+      "isin": "LU2385753897",
+      "categoria": "Azionari Settoriali - Farmaceutico e Sanitario",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Value FoF A Cap EUR",
+      "isin": "LU2622203623",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Global Value FoF B Cap EUR",
+      "isin": "LU2622203896",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Industrial Revolution 4.0 A Cap EUR",
+      "isin": "LU2622500598",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Industrial Revolution 4.0 B Cap EUR",
+      "isin": "LU2622500754",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Japan A Cap EUR",
+      "isin": "LU0108016568",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Japan A Dis EUR",
+      "isin": "LU1303498973",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Japan A-HJ Cap EUR Hdg",
+      "isin": "LU2072948370",
+      "categoria": "Ritorno Assoluto (Eur Hedged)",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Japan B Cap EUR",
+      "isin": "LU0108016642",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Japan B Dis EUR",
+      "isin": "LU1303499351",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Japan B-HJ Cap EUR Hdg",
+      "isin": "LU2072948453",
+      "categoria": "Ritorno Assoluto (Eur Hedged)",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. MENA A Cap EUR",
+      "isin": "LU2458361552",
+      "categoria": "Azionari Africa e Medio Oriente",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. MENA B Cap EUR",
+      "isin": "LU2458361636",
+      "categoria": "Azionari Africa e Medio Oriente",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Mexico A Cap EUR",
+      "isin": "LU2622215981",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Mexico B Cap EUR",
+      "isin": "LU2622216104",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Momentum A Cap EUR",
+      "isin": "LU2240824875",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Momentum B Cap EUR",
+      "isin": "LU2240824958",
+      "categoria": "Azionari Globali (Mercati Emergenti e Sviluppati) - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Small Cap Europe FoF A Cap EUR",
+      "isin": "LU0262753857",
+      "categoria": "Azionari Europa (Mercati Sviluppati) - Mid & Small Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Small Cap Europe FoF B Cap EUR",
+      "isin": "LU0262754079",
+      "categoria": "Azionari Europa (Mercati Sviluppati) - Mid & Small Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Special Needs & Inclusion A Cap EUR",
+      "isin": "LU2622215718",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Special Needs & Inclusion A Dis EUR",
+      "isin": "LU2781417485",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Special Needs & Inclusion B Cap EUR",
+      "isin": "LU2622215809",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Special Needs & Inclusion B Dis EUR",
+      "isin": "LU2781417568",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. Water & Renewable Resources A Cap EUR",
+      "isin": "LU2240825336",
+      "categoria": "Azionari Tematici - Ecologia e Ambiente",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. Water & Renewable Resources B Cap EUR",
+      "isin": "LU2240825419",
+      "categoria": "Azionari Tematici - Ecologia e Ambiente",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Eq. World Minimum Volatility A Cap EUR",
+      "isin": "LU0262757098",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. World Minimum Volatility A Dis EUR",
+      "isin": "LU1059390606",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. World Minimum Volatility B Cap EUR",
+      "isin": "LU0262757411",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Eq. World Minimum Volatility B Dis EUR",
+      "isin": "LU1059390788",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ F.1 Islamic Global Sukuk A Cap EUR",
+      "isin": "LU0947790142",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Islamic Global Sukuk A Dis EUR",
+      "isin": "LU0947789565",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Islamic Global Sukuk B Cap EUR",
+      "isin": "LU0947790225",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ F.1 Islamic Global Sukuk B Dis EUR",
+      "isin": "LU0947789649",
+      "categoria": "Altri Obbligazionari",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "AZ Multi Asset All. Break. Healthcare AZ Ret Cap EUR",
+      "isin": "LU2279425255",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Multi Asset All. CGM Flexible Brave A Cap EUR",
+      "isin": "LU2547534086",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Multi Asset All. Environment AZ Ret Cap EUR",
+      "isin": "LU2279426147",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Multi Asset All. Future Generations AZ Ret Cap EUR",
+      "isin": "LU2279427111",
+      "categoria": "Diversificati Aggressivi",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Multi Asset All. Smart Cities AZ Ret Cap EUR",
+      "isin": "LU2279428275",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Multi Asset All. Venus A Dis EUR(i)",
+      "isin": "LU1590081771",
+      "categoria": "-",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Multi Asset All.Flexible Eq. A Dis EUR(i)",
+      "isin": "LU2156582442",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Multi Asset Eq. Technology AZ Ret Cap EUR",
+      "isin": "LU2279429166",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ Multi Asset Romeo A Dis EUR(i)",
+      "isin": "LU0878849610",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ TF All. Global Goals A Cap EUR",
+      "isin": "IE0009PPJD19",
+      "categoria": "Diversificati Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "AZ TF Equity New Generations A Cap EUR",
+      "isin": "IE000DYHML73",
+      "categoria": "Diversificati Aggressivi",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "AZ TF Equity Space A Cap EUR",
+      "isin": "IE000CNYXZU4",
+      "categoria": "Azionari Settoriali - Beni e Servizi Industriali",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "Azimut Dinamico",
+      "isin": "IT0000384567",
+      "categoria": "Ritorno Assoluto Europa",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "Azimut Italia Alto Potenziale",
+      "isin": "IT0001055091",
+      "categoria": "Azionari Italia - Mid & Small Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "Azimut Scudo",
+      "isin": "IT0001055117",
+      "categoria": "Diversificati Euro Difensivi",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "Azimut Strategic Trend",
+      "isin": "IT0003795587",
+      "categoria": "Ritorno Assoluto (Media Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "Azimut Trading",
+      "isin": "IT0004764558",
+      "categoria": "Diversificati Euro Moderati",
+      "macro_cat": "Bilanciati/Flessibili"
+    },
+    {
+      "nome": "Azimut Trend",
+      "isin": "IT0001010476",
+      "categoria": "Ritorno Assoluto (Alta Volatilita')",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "Azimut Trend America",
+      "isin": "IT0001055075",
+      "categoria": "Azionari Usa - Large & Mid Cap",
+      "macro_cat": "Azionari"
+    },
+    {
+      "nome": "Azimut Trend Italia",
+      "isin": "IT0001055158",
+      "categoria": "Diversificati Altri Aggressivi",
+      "macro_cat": "Altro"
+    },
+    {
+      "nome": "Azimut Trend Tassi",
+      "isin": "IT0001055133",
+      "categoria": "Obbligazionari Area Euro - Governativi (5-10 Anni)",
+      "macro_cat": "Azionari"
+    }
+  ],
+  "fida_urls": {
+    "AZ F.1 All. Balanced FoF A Cap EUR": "https://www.fondidoc.it/d/Index/AZPOA/LU0346933400_az-f1-allocation-balanced-fof-a-az-fund-cap-eur",
+    "AZ Bond - Convertible Bond": "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg",
+    "NOME": "https://www.fondidoc.it/Ricerca?sort=Nome&sortDir=-1",
+    "AZ Eskatos Multistrategy ILS A Cap $(i)": "https://www.fondidoc.it/d/Index/ESKAZMAU/LU0866065187_az-eskatos-multistrategy-ils-a-cap",
+    "AZ Eskatos Multistrategy ILS B Cap EUR(i)": "https://www.fondidoc.it/d/Index/ESKB/LU0354663808_az-eskatos-multistrategy-ils-b-cap-eur",
+    "AZ Eskatos Multistrategy ILS B Dis $(i)": "https://www.fondidoc.it/d/Index/ESKAZMBU/LU0866088122_az-eskatos-multistrategy-ils-b-dis",
+    "AZ Eskatos Multistrategy ILS D Dis EUR(i)": "https://www.fondidoc.it/d/Index/ESKD/LU0386610272_az-eskatos-multistrategy-ils-d-dis-eur",
+    "AZ F.1 All. Asset Timing 2026 A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3116/LU2621756779_az-f1-all-asset-timing-2026-a-cap-eur",
+    "AZ F.1 All. Asset Timing 2026 B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3117/LU2621756852_az-f1-all-asset-timing-2026-b-cap-eur",
+    "AZ F.1 All. Asset Timing 2028 A Cap EUR": "https://www.fondidoc.it/d/Index/FDM03291/LU3081956784_az-f1-all-asset-timing-2028-a-cap-eur",
+    "AZ F.1 All. Asset Timing 2028 A Dis EUR": "https://www.fondidoc.it/d/Index/FDM03300/LU3081956867_az-f1-all-asset-timing-2028-a-dis-eur",
+    "AZ F.1 All. Asset Timing 2028 B Cap EUR": "https://www.fondidoc.it/d/Index/FDM03301/LU3081956941_az-f1-all-asset-timing-2028-b-cap-eur",
+    "AZ F.1 All. Asset Timing 2028 B Dis EUR": "https://www.fondidoc.it/d/Index/FDM03302/LU3081957089_az-f1-all-asset-timing-2028-b-dis-eur",
+    "AZ F.1 All. Balanced Brave A Cap EUR": "https://www.fondidoc.it/d/Index/IARNM02/LU2148611275_az-f1-all-balanced-brave-a-cap-eur",
+    "AZ F.1 All. Balanced Brave B Cap EUR": "https://www.fondidoc.it/d/Index/IARNM04/LU2148611358_az-f1-all-balanced-brave-b-cap-eur",
+    "AZ F.1 All. Balanced Brave I Cap EUR(i)": "https://www.fondidoc.it/d/Index/IARNM03/LU2148611515_az-f1-all-balanced-brave-i-cap-eur",
+    "AZ F.1 All. Balanced FoF B Cap EUR": "https://www.fondidoc.it/d/Index/AZPOB/LU0346934713_az-f1-all-balanced-fof-b-cap-eur",
+    "AZ F.1 All. Balanced Plus A Cap EUR": "https://www.fondidoc.it/d/Index/FDM03292/LU3081370317_az-f1-all-balanced-plus-a-cap-eur",
+    "AZ F.1 All. Balanced Plus A Dis EUR": "https://www.fondidoc.it/d/Index/FDM03309/LU3081370580_az-f1-all-balanced-plus-a-dis-eur",
+    "AZ F.1 All. Balanced Plus B Cap EUR": "https://www.fondidoc.it/d/Index/FDM03310/LU3081370408_az-f1-all-balanced-plus-b-cap-eur",
+    "AZ F.1 All. Balanced Plus B Dis EUR": "https://www.fondidoc.it/d/Index/FDM03311/LU3081370663_az-f1-all-balanced-plus-b-dis-eur",
+    "AZ F.1 All. Escalator 2026 A Cap EUR": "https://www.fondidoc.it/d/Index/AZAE26/LU2384057423_az-f1-all-escalator-2026-a-cap-eur",
+    "AZ F.1 All. Escalator 2026 A Dis EUR": "https://www.fondidoc.it/d/Index/AZFAATB2/LU2384057696_az-f1-all-escalator-2026-a-dis-eur",
+    "AZ F.1 All. Escalator 2026 B Cap EUR": "https://www.fondidoc.it/d/Index/AZFAATB3/LU2384057852_az-f1-all-escalator-2026-b-cap-eur",
+    "AZ F.1 All. Escalator 2026 B Dis EUR": "https://www.fondidoc.it/d/Index/AZFAATB4/LU2384057779_az-f1-all-escalator-2026-b-dis-eur",
+    "AZ F.1 All. Escalator 2028 A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3118/LU2622183411_az-f1-all-escalator-2028-a-cap-eur",
+    "AZ F.1 All. Escalator 2028 A Dis EUR": "https://www.fondidoc.it/d/Index/FDFM3119/LU2622183502_az-f1-all-escalator-2028-a-dis-eur",
+    "AZ F.1 All. Escalator 2028 B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3729/LU2622183767_az-f1-all-escalator-2028-b-cap-eur",
+    "AZ F.1 All. Escalator 2028 B Dis EUR": "https://www.fondidoc.it/d/Index/FDFM3730/LU2622183684_az-f1-all-escalator-2028-b-dis-eur",
+    "AZ F.1 All. Escalator 2030 A Cap EUR": "https://www.fondidoc.it/d/Index/FDM03293/LU3081792221_az-f1-all-escalator-2030-a-cap-eur",
+    "AZ F.1 All. Escalator 2030 A Dis EUR": "https://www.fondidoc.it/d/Index/FDM03319/LU3081792494_az-f1-all-escalator-2030-a-dis-eur",
+    "AZ F.1 All. Escalator 2030 B Cap EUR": "https://www.fondidoc.it/d/Index/FDM03320/LU3081792577_az-f1-all-escalator-2030-b-cap-eur",
+    "AZ F.1 All. Escalator 2030 B Dis EUR": "https://www.fondidoc.it/d/Index/FDM03321/LU3081792650_az-f1-all-escalator-2030-b-dis-eur",
+    "AZ F.1 All. Flexible Equity A Cap EUR": "https://www.fondidoc.it/d/Index/G1U13782/LU2168558927_az-f1-all-flexible-equity-a-cap-eur",
+    "AZ F.1 All. Flexible Equity B Cap EUR": "https://www.fondidoc.it/d/Index/G1U13785/LU2168559065_az-f1-all-flexible-equity-b-cap-eur",
+    "AZ F.1 All. Global Aggressive A Cap $": "https://www.fondidoc.it/d/Index/G1U12927/LU2097823673_az-f1-all-global-aggressive-a-cap",
+    "AZ F.1 All. Global Aggressive A Cap EUR": "https://www.fondidoc.it/d/Index/AZ211509/LU2097823160_az-f1-all-global-aggressive-a-cap-eur",
+    "AZ F.1 All. Global Aggressive A Dis EUR": "https://www.fondidoc.it/d/Index/AZ211510/LU2097823327_az-f1-all-global-aggressive-a-dis-eur",
+    "AZ F.1 All. Global Aggressive B Cap EUR": "https://www.fondidoc.it/d/Index/G1U12928/LU2097823244_az-f1-all-global-aggressive-b-cap-eur",
+    "AZ F.1 All. Global Aggressive B Dis EUR": "https://www.fondidoc.it/d/Index/G1U12929/LU2097823590_az-f1-all-global-aggressive-b-dis-eur",
+    "AZ F.1 All. Global Balanced A Cap EUR": "https://www.fondidoc.it/d/Index/AZSTRAAZ/LU0262757841_az-f1-all-global-balanced-a-cap-eur",
+    "AZ F.1 All. Global Balanced A Dis EUR": "https://www.fondidoc.it/d/Index/FDM00022/LU3020847698_az-f1-all-global-balanced-a-dis-eur",
+    "AZ F.1 All. Global Balanced B Cap EUR": "https://www.fondidoc.it/d/Index/AZSTRBAZ/LU0262758146_az-f1-all-global-balanced-b-cap-eur",
+    "AZ F.1 All. Global Balanced B Dis EUR": "https://www.fondidoc.it/d/Index/FDM00023/LU3020847771_az-f1-all-global-balanced-b-dis-eur",
+    "AZ F.1 All. Global Conservative A Cap EUR": "https://www.fondidoc.it/d/Index/FRAS1311/LU0947788757_az-f1-all-global-conservative-a-cap-eur",
+    "AZ F.1 All. Global Conservative A Dis EUR": "https://www.fondidoc.it/d/Index/FRAS1312/LU0947789136_az-f1-all-global-conservative-a-dis-eur",
+    "AZ F.1 All. Global Conservative B Cap EUR": "https://www.fondidoc.it/d/Index/AZTOPRBC/LU0947788831_az-f1-all-global-conservative-b-cap-eur",
+    "AZ F.1 All. Global Conservative B Dis EUR": "https://www.fondidoc.it/d/Index/AZTOPRBD/LU0947789219_az-f1-all-global-conservative-b-dis-eur",
+    "AZ F.1 All. Global Conservative C Cap EUR": "https://www.fondidoc.it/d/Index/G1U12184/LU2081248465_az-f1-all-global-conservative-c-cap-eur",
+    "AZ F.1 All. Global Conservative C Dis EUR": "https://www.fondidoc.it/d/Index/G1U12185/LU2081248549_az-f1-all-global-conservative-c-dis-eur",
+    "AZ F.1 All. Global Conservative I Cap EUR(i)": "https://www.fondidoc.it/d/Index/G1U12187/LU2081248978_az-f1-all-global-conservative-i-cap-eur",
+    "AZ F.1 All. Italian Long Term Opportunities A Cap EUR": "https://www.fondidoc.it/d/Index/TUT04221/LU2458530842_az-f1-all-italian-long-term-opportunities-a-cap-eur",
+    "AZ F.1 All. Italian Long Term Opportunities A Dis EUR": "https://www.fondidoc.it/d/Index/TUT06787/LU2458530925_az-f1-all-italian-long-term-opportunities-a-dis-eur",
+    "AZ F.1 All. Italian Long Term Opportunities C Cap EUR": "https://www.fondidoc.it/d/Index/TUT04220/LU2461762481_az-f1-all-italian-long-term-opportunities-c-cap-eur",
+    "AZ F.1 All. Italian Trend A Cap EUR": "https://www.fondidoc.it/d/Index/G1U13787/LU2168562101_az-f1-all-italian-trend-a-cap-eur",
+    "AZ F.1 All. Italian Trend A Dis EUR": "https://www.fondidoc.it/d/Index/G1U13788/LU2168562366_az-f1-all-italian-trend-a-dis-eur",
+    "AZ F.1 All. Italian Trend B Cap EUR": "https://www.fondidoc.it/d/Index/G1U13796/LU2168562283_az-f1-all-italian-trend-b-cap-eur",
+    "AZ F.1 All. Italian Trend B Dis EUR": "https://www.fondidoc.it/d/Index/G1U13797/LU2168562440_az-f1-all-italian-trend-b-dis-eur",
+    "AZ F.1 All. Italian Trend I Cap EUR(i)": "https://www.fondidoc.it/d/Index/RESTAR81/LU2168563414_az-f1-all-italian-trend-i-cap-eur",
+    "AZ F.1 All. Life Plan 2040 A Cap EUR": "https://www.fondidoc.it/d/Index/FDM03295/LU3081705785_az-f1-all-life-plan-2040-a-cap-eur",
+    "AZ F.1 All. Life Plan 2040 A Dis EUR": "https://www.fondidoc.it/d/Index/FDM03329/LU3081705868_az-f1-all-life-plan-2040-a-dis-eur",
+    "AZ F.1 All. Life Plan 2040 B Cap EUR": "https://www.fondidoc.it/d/Index/FDM03330/LU3081705942_az-f1-all-life-plan-2040-b-cap-eur",
+    "AZ F.1 All. Long Term Credit Opportunities A Cap EUR": "https://www.fondidoc.it/d/Index/TUT04226/LU2458531147_az-f1-all-long-term-credit-opportunities-a-cap-eur",
+    "AZ F.1 All. Long Term Credit Opportunities A Dis EUR": "https://www.fondidoc.it/d/Index/TUT04222/LU2458531220_az-f1-all-long-term-credit-opportunities-a-dis-eur",
+    "AZ F.1 All. Long Term Credit Opportunities C Cap EUR": "https://www.fondidoc.it/d/Index/TUT04224/LU2461763539_az-f1-all-long-term-credit-opportunities-c-cap-eur",
+    "AZ F.1 All. Long Term Equity Opportunities A Cap EUR": "https://www.fondidoc.it/d/Index/TUT04227/LU2458531907_az-f1-all-long-term-equity-opportunities-a-cap-eur",
+    "AZ F.1 All. Long Term Equity Opportunities A Dis EUR": "https://www.fondidoc.it/d/Index/FIDFM437/LU2458532038_az-f1-all-long-term-equity-opportunities-a-dis-eur",
+    "AZ F.1 All. PIR Italian Excellence 70% A Cap EUR": "https://www.fondidoc.it/d/Index/GIU_5170/LU1621765012_az-f1-all-pir-italian-excellence-70-a-cap-eur",
+    "AZ F.1 All. PIR Italian Excellence 70% B Cap EUR": "https://www.fondidoc.it/d/Index/GIU_5173/LU1621765285_az-f1-all-pir-italian-excellence-70-b-cap-eur",
+    "AZ F.1 All. PIR Italian Excellence 70% G Cap EUR": "https://www.fondidoc.it/d/Index/GIU_5172/LU1621765103_az-f1-all-pir-italian-excellence-70-g-cap-eur",
+    "AZ F.1 All. Potential Income Upside 2030 A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3145/LU2637786422_az-f1-all-potential-income-upside-2030-a-cap-eur",
+    "AZ F.1 All. Potential Income Upside 2030 A Dis EUR": "https://www.fondidoc.it/d/Index/FDFM3150/LU2637785960_az-f1-all-potential-income-upside-2030-a-dis-eur",
+    "AZ F.1 All. Potential Income Upside 2030 B Cap EUR": "https://www.fondidoc.it/d/Index/FIDFM819/LU2637786265_az-f1-all-potential-income-upside-2030-b-cap-eur",
+    "AZ F.1 All. Potential Income Upside 2030 B Dis EUR": "https://www.fondidoc.it/d/Index/FIDFM831/LU2637786182_az-f1-all-potential-income-upside-2030-b-dis-eur",
+    "AZ F.1 All. Risk Parity Factors A Cap EUR": "https://www.fondidoc.it/d/Index/G1U12930/LU2102340044_az-f1-all-risk-parity-factors-a-cap-eur",
+    "AZ F.1 All. Risk Parity Factors A Dis EUR": "https://www.fondidoc.it/d/Index/G1U12931/LU2102340390_az-f1-all-risk-parity-factors-a-dis-eur",
+    "AZ F.1 All. Risk Parity Factors A-HE Cap $ Hdg": "https://www.fondidoc.it/d/Index/G1U12932/LU2102340556_az-f1-all-risk-parity-factors-a-he-cap-hdg",
+    "AZ F.1 All. Risk Parity Factors B Cap EUR": "https://www.fondidoc.it/d/Index/G1U12933/LU2102340127_az-f1-all-risk-parity-factors-b-cap-eur",
+    "AZ F.1 All. Risk Parity Factors B Dis EUR": "https://www.fondidoc.it/d/Index/G1U12934/LU2102340473_az-f1-all-risk-parity-factors-b-dis-eur",
+    "AZ F.1 All. Trend A Cap EUR": "https://www.fondidoc.it/d/Index/AZFALT/LU2168564065_az-f1-all-trend-a-cap-eur",
+    "AZ F.1 All. Trend A Cap JPY": "https://www.fondidoc.it/d/Index/ATUT4811/LU2168563844_az-f1-all-trend-a-cap-jpy",
+    "AZ F.1 All. Trend A-HE Cap $ Hdg": "https://www.fondidoc.it/d/Index/ATUT4813/LU2168564222_az-f1-all-trend-a-he-cap-hdg",
+    "AZ F.1 All. Trend A-HE Cap JPY Hdg": "https://www.fondidoc.it/d/Index/ATUT4810/LU2168563687_az-f1-all-trend-a-he-cap-jpy-hdg",
+    "AZ F.1 All. Trend B Cap EUR": "https://www.fondidoc.it/d/Index/ATUT4812/LU2168564149_az-f1-all-trend-b-cap-eur",
+    "AZ F.1 All. Trend I Cap EUR(i)": "https://www.fondidoc.it/d/Index/ATUT4814/LU2168564495_az-f1-all-trend-i-cap-eur",
+    "AZ F.1 All. Turkey A Cap EUR": "https://www.fondidoc.it/d/Index/AZLIPLA/LU0947792270_az-f1-all-turkey-a-cap-eur",
+    "AZ F.1 All. Turkey A Dis EUR": "https://www.fondidoc.it/d/Index/FRAS1307/LU0947786462_az-f1-all-turkey-a-dis-eur",
+    "AZ F.1 All. Turkey B Cap EUR": "https://www.fondidoc.it/d/Index/AZLIRABC/LU0947786116_az-f1-all-turkey-b-cap-eur",
+    "AZ F.1 All. Turkey B Dis EUR": "https://www.fondidoc.it/d/Index/AZLIRABD/LU0947786546_az-f1-all-turkey-b-dis-eur",
+    "AZ F.1 Alt. Capital Enhanced A Cap EUR": "https://www.fondidoc.it/d/Index/AZF129/LU0677519224_az-f1-alt-capital-enhanced-a-cap-eur",
+    "AZ F.1 Alt. Capital Enhanced A Dis EUR": "https://www.fondidoc.it/d/Index/IARNM05/LU2081248200_az-f1-alt-capital-enhanced-a-dis-eur",
+    "AZ F.1 Alt. Capital Enhanced B Cap EUR": "https://www.fondidoc.it/d/Index/AZF130/LU0677534298_az-f1-alt-capital-enhanced-b-cap-eur",
+    "AZ F.1 Alt. Capital Enhanced B Dis EUR": "https://www.fondidoc.it/d/Index/IARNM06/LU2081248382_az-f1-alt-capital-enhanced-b-dis-eur",
+    "AZ F.1 Alt. Capital Enhanced L Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3733/LU2698718140_az-f1-alt-capital-enhanced-l-cap-eur",
+    "AZ F.1 Alt. Commodity A Cap EUR": "https://www.fondidoc.it/d/Index/ATUT4624/LU2238329978_az-f1-alt-commodity-a-cap-eur",
+    "AZ F.1 Alt. Commodity A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/ATUT4721/LU2238330125_az-f1-alt-commodity-a-hu-cap-eur-hdg",
+    "AZ F.1 Alt. Commodity B Cap EUR": "https://www.fondidoc.it/d/Index/ATUT4625/LU2238330042_az-f1-alt-commodity-b-cap-eur",
+    "AZ F.1 Alt. Commodity B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/ATUT5631/LU2238330398_az-f1-alt-commodity-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd ABS A Cap EUR": "https://www.fondidoc.it/d/Index/G1U12188/LU2056383008_az-f1-bd-abs-a-cap-eur",
+    "AZ F.1 Bd ABS B Cap EUR": "https://www.fondidoc.it/d/Index/G1U12189/LU2056383180_az-f1-bd-abs-b-cap-eur",
+    "AZ F.1 Bd Aggregate Bond Euro A Cap EUR": "https://www.fondidoc.it/d/Index/AZLOBOA/LU0194809330_az-f1-bd-aggregate-bond-euro-a-cap-eur",
+    "AZ F.1 Bd Aggregate Bond Euro B Cap EUR": "https://www.fondidoc.it/d/Index/AZ1LTBB/LU0499090040_az-f1-bd-aggregate-bond-euro-b-cap-eur",
+    "AZ F.1 Bd Asian Bond A Cap EUR": "https://www.fondidoc.it/d/Index/G1U17721/LU2286016758_az-f1-bd-asian-bond-a-cap-eur",
+    "AZ F.1 Bd Asian Bond A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/G1U17720/LU2286016592_az-f1-bd-asian-bond-a-hu-cap-eur-hdg",
+    "AZ F.1 Bd Asian Bond B Cap EUR": "https://www.fondidoc.it/d/Index/G1U17726/LU2286016832_az-f1-bd-asian-bond-b-cap-eur",
+    "AZ F.1 Bd Asian Bond B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/G1U17727/LU2286016675_az-f1-bd-asian-bond-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd Bond Value A Cap EUR": "https://www.fondidoc.it/d/Index/FDM03290/LU3081730460_az-f1-bd-bond-value-a-cap-eur",
+    "AZ F.1 Bd Bond Value A Dis EUR": "https://www.fondidoc.it/d/Index/FDM03337/LU3081730627_az-f1-bd-bond-value-a-dis-eur",
+    "AZ F.1 Bd Bond Value B Cap EUR": "https://www.fondidoc.it/d/Index/FDM03340/LU3081730544_az-f1-bd-bond-value-b-cap-eur",
+    "AZ F.1 Bd Bond Value B Dis EUR": "https://www.fondidoc.it/d/Index/FDM03341/LU3081730890_az-f1-bd-bond-value-b-dis-eur",
+    "AZ F.1 Bd CoCo Bonds A Cap EUR": "https://www.fondidoc.it/d/Index/FIDFM857/LU2622195423_az-f1-bd-coco-bonds-a-cap-eur",
+    "AZ F.1 Bd CoCo Bonds A Dis EUR": "https://www.fondidoc.it/d/Index/FDFM4345/LU2622195696_az-f1-bd-coco-bonds-a-dis-eur",
+    "AZ F.1 Bd CoCo Bonds A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/FDFM4346/LU2622195936_az-f1-bd-coco-bonds-a-hu-cap-eur-hdg",
+    "AZ F.1 Bd CoCo Bonds A-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/FDFM4347/LU2622196074_az-f1-bd-coco-bonds-a-hu-dis-eur-hdg",
+    "AZ F.1 Bd CoCo Bonds B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4356/LU2622195779_az-f1-bd-coco-bonds-b-cap-eur",
+    "AZ F.1 Bd CoCo Bonds B Dis EUR": "https://www.fondidoc.it/d/Index/FDFM4357/LU2622195852_az-f1-bd-coco-bonds-b-dis-eur",
+    "AZ F.1 Bd CoCo Bonds B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/FDFM4358/LU2622196157_az-f1-bd-coco-bonds-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd CoCo Bonds B-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/FDFM4359/LU2622196231_az-f1-bd-coco-bonds-b-hu-dis-eur-hdg",
+    "AZ F.1 Bd Convertible A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg",
+    "AZ F.1 Bd Convertible A-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/AZF11672/LU1422848637_az-f1-bd-convertible-a-hu-dis-eur-hdg",
+    "AZ F.1 Bd Convertible B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/AZF11673/LU1422848553_az-f1-bd-convertible-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd Convertible B-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/AZF11674/LU1422848710_az-f1-bd-convertible-b-hu-dis-eur-hdg",
+    "AZ F.1 Bd Enhanced Yield A Cap EUR": "https://www.fondidoc.it/d/Index/AZF125/LU0677519067_az-f1-bd-enhanced-yield-a-cap-eur",
+    "AZ F.1 Bd Enhanced Yield B Cap EUR": "https://www.fondidoc.it/d/Index/AZF126/LU0677533720_az-f1-bd-enhanced-yield-b-cap-eur",
+    "AZ F.1 Bd Enhanced Yield L Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3737/LU2699155870_az-f1-bd-enhanced-yield-l-cap-eur",
+    "AZ F.1 Bd Euro Corporate A Cap EUR": "https://www.fondidoc.it/d/Index/AZF149/LU0677516477_az-f1-bd-euro-corporate-a-cap-eur",
+    "AZ F.1 Bd Euro Corporate B Cap EUR": "https://www.fondidoc.it/d/Index/AZF150/LU0677531195_az-f1-bd-euro-corporate-b-cap-eur",
+    "AZ F.1 Bd Frontier Markets Debt A Cap $": "https://www.fondidoc.it/d/Index/TUT11617/LU2458359572_az-f1-bd-frontier-markets-debt-a-cap",
+    "AZ F.1 Bd Frontier Markets Debt A Cap EUR": "https://www.fondidoc.it/d/Index/AZFBFMND/LU2458359069_az-f1-bd-frontier-markets-debt-a-cap-eur",
+    "AZ F.1 Bd Frontier Markets Debt A Dis $": "https://www.fondidoc.it/d/Index/FDFM2925/LU2458359655_az-f1-bd-frontier-markets-debt-a-dis",
+    "AZ F.1 Bd Frontier Markets Debt A Dis EUR": "https://www.fondidoc.it/d/Index/TUT07034/LU2458359226_az-f1-bd-frontier-markets-debt-a-dis-eur",
+    "AZ F.1 Bd Frontier Markets Debt A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/FIDFM440/LU2458358681_az-f1-bd-frontier-markets-debt-a-hu-cap-eur-hdg",
+    "AZ F.1 Bd Frontier Markets Debt A-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/FIDFM439/LU2458358848_az-f1-bd-frontier-markets-debt-a-hu-dis-eur-hdg",
+    "AZ F.1 Bd Frontier Markets Debt B Cap $": "https://www.fondidoc.it/d/Index/TUT07033/LU2458359143_az-f1-bd-frontier-markets-debt-b-cap",
+    "AZ F.1 Bd Frontier Markets Debt B Dis EUR": "https://www.fondidoc.it/d/Index/TUT09206/LU2458359499_az-f1-bd-frontier-markets-debt-b-dis-eur",
+    "AZ F.1 Bd Frontier Markets Debt B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/TUT07032/LU2458358764_az-f1-bd-frontier-markets-debt-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd Frontier Markets Debt B-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/TUT09205/LU2458358921_az-f1-bd-frontier-markets-debt-b-hu-dis-eur-hdg",
+    "AZ F.1 Bd Global Macro Bond A Cap EUR": "https://www.fondidoc.it/d/Index/G1U12175/LU2085663008_az-f1-bd-global-macro-bond-a-cap-eur",
+    "AZ F.1 Bd Global Macro Bond A Dis EUR": "https://www.fondidoc.it/d/Index/G1U12176/LU2085664584_az-f1-bd-global-macro-bond-a-dis-eur",
+    "AZ F.1 Bd Global Macro Bond B Cap EUR": "https://www.fondidoc.it/d/Index/G1U12177/LU2085663859_az-f1-bd-global-macro-bond-b-cap-eur",
+    "AZ F.1 Bd Global Macro Bond B Dis EUR": "https://www.fondidoc.it/d/Index/G1U12178/LU2085665474_az-f1-bd-global-macro-bond-b-dis-eur",
+    "AZ F.1 Bd Global Macro Bond I Cap EUR(i)": "https://www.fondidoc.it/d/Index/G1U12179/LU2081249430_az-f1-bd-global-macro-bond-i-cap-eur",
+    "AZ F.1 Bd High Income FoF A Cap EUR": "https://www.fondidoc.it/d/Index/ATUT4347/LU2244841198_az-f1-bd-high-income-fof-a-cap-eur",
+    "AZ F.1 Bd High Income FoF A Dis EUR": "https://www.fondidoc.it/d/Index/TUT00177/LU2244841271_az-f1-bd-high-income-fof-a-dis-eur",
+    "AZ F.1 Bd High Income FoF A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/AZF101/LU0677516717_az-f1-bd-high-income-fof-a-hu-cap-eur-hdg",
+    "AZ F.1 Bd High Income FoF A-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/AZF105/LU0677517103_az-f1-bd-high-income-fof-a-hu-dis-eur-hdg",
+    "AZ F.1 Bd High Income FoF B Cap EUR": "https://www.fondidoc.it/d/Index/ATUT5449/LU2244841354_az-f1-bd-high-income-fof-b-cap-eur",
+    "AZ F.1 Bd High Income FoF B Dis EUR": "https://www.fondidoc.it/d/Index/TUT02844/LU2244841438_az-f1-bd-high-income-fof-b-dis-eur",
+    "AZ F.1 Bd High Income FoF B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/AZF103/LU0677531435_az-f1-bd-high-income-fof-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd High Income FoF B-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/AZF107/LU0677531781_az-f1-bd-high-income-fof-b-hu-dis-eur-hdg",
+    "AZ F.1 Bd High Yield A Cap EUR": "https://www.fondidoc.it/d/Index/G1U12199/LU2056382372_az-f1-bd-high-yield-a-cap-eur",
+    "AZ F.1 Bd High Yield A Dis EUR": "https://www.fondidoc.it/d/Index/G1U12200/LU2056382539_az-f1-bd-high-yield-a-dis-eur",
+    "AZ F.1 Bd High Yield B Cap EUR": "https://www.fondidoc.it/d/Index/G1U12201/LU2056382612_az-f1-bd-high-yield-b-cap-eur",
+    "AZ F.1 Bd High Yield B Dis EUR": "https://www.fondidoc.it/d/Index/AZZI05/LU2056382703_az-f1-bd-high-yield-b-dis-eur",
+    "AZ F.1 Bd HY Target 2028 Climate Trans. A Cap EUR": "https://www.fondidoc.it/d/Index/FDM00025/LU2951582399_az-f1-bd-hy-target-2028-climate-trans-a-cap-eur",
+    "AZ F.1 Bd HY Target 2028 Climate Trans. A Dis EUR": "https://www.fondidoc.it/d/Index/FDM00027/LU2951582472_az-f1-bd-hy-target-2028-climate-trans-a-dis-eur",
+    "AZ F.1 Bd Hybrids A Cap EUR": "https://www.fondidoc.it/d/Index/AZZI06/LU2056384311_az-f1-bd-hybrids-a-cap-eur",
+    "AZ F.1 Bd Hybrids A Dis EUR": "https://www.fondidoc.it/d/Index/AZZI07/LU2056384402_az-f1-bd-hybrids-a-dis-eur",
+    "AZ F.1 Bd Hybrids A-HE Cap $ Hdg": "https://www.fondidoc.it/d/Index/ATUT4763/LU2056384824_az-f1-bd-hybrids-a-he-cap-hdg",
+    "AZ F.1 Bd Hybrids B Cap EUR": "https://www.fondidoc.it/d/Index/IARNM08/LU2056384667_az-f1-bd-hybrids-b-cap-eur",
+    "AZ F.1 Bd Hybrids B Dis EUR": "https://www.fondidoc.it/d/Index/IARNM07/LU2056384741_az-f1-bd-hybrids-b-dis-eur",
+    "AZ F.1 Bd Income Dynamic A Cap EUR": "https://www.fondidoc.it/d/Index/AZ1RESE/LU0108019232_az-f1-bd-income-dynamic-a-cap-eur",
+    "AZ F.1 Bd Income Dynamic B Cap EUR": "https://www.fondidoc.it/d/Index/AZRESTE/LU0108019315_az-f1-bd-income-dynamic-b-cap-eur",
+    "AZ F.1 Bd Income Dynamic L Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3740/LU2699158387_az-f1-bd-income-dynamic-l-cap-eur",
+    "AZ F.1 Bd International FoF A Cap EUR": "https://www.fondidoc.it/d/Index/AZBEA2/LU0538790550_az-f1-bd-international-fof-a-cap-eur",
+    "AZ F.1 Bd International FoF A Dis EUR": "https://www.fondidoc.it/d/Index/ATUT3057/LU2208932942_az-f1-bd-international-fof-a-dis-eur",
+    "AZ F.1 Bd International FoF A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/ATUT3059/LU2208933833_az-f1-bd-international-fof-a-hu-cap-eur-hdg",
+    "AZ F.1 Bd International FoF A-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/ATUT3061/LU2208934567_az-f1-bd-international-fof-a-hu-dis-eur-hdg",
+    "AZ F.1 Bd International FoF B Cap EUR": "https://www.fondidoc.it/d/Index/AZBEA7/LU0538790980_az-f1-bd-international-fof-b-cap-eur",
+    "AZ F.1 Bd International FoF B Dis EUR": "https://www.fondidoc.it/d/Index/ATUT3058/LU2208933247_az-f1-bd-international-fof-b-dis-eur",
+    "AZ F.1 Bd International FoF B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/ATUT3060/LU2208934211_az-f1-bd-international-fof-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd International FoF B-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/ATUT3062/LU2208934641_az-f1-bd-international-fof-b-hu-dis-eur-hdg",
+    "AZ F.1 Bd Latin America Bonds A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4218/LU2622200017_az-f1-bd-latin-america-bonds-a-cap-eur",
+    "AZ F.1 Bd Latin America Bonds A Dis EUR": "https://www.fondidoc.it/d/Index/FDFM4220/LU2622200280_az-f1-bd-latin-america-bonds-a-dis-eur",
+    "AZ F.1 Bd Latin America Bonds A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/FDFM4219/LU2622200447_az-f1-bd-latin-america-bonds-a-hu-cap-eur-hdg",
+    "AZ F.1 Bd Latin America Bonds A-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/FDFM4221/LU2622200793_az-f1-bd-latin-america-bonds-a-hu-dis-eur-hdg",
+    "AZ F.1 Bd Latin America Bonds B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4226/LU2622200108_az-f1-bd-latin-america-bonds-b-cap-eur",
+    "AZ F.1 Bd Latin America Bonds B Dis EUR": "https://www.fondidoc.it/d/Index/FDFM4228/LU2622200363_az-f1-bd-latin-america-bonds-b-dis-eur",
+    "AZ F.1 Bd Latin America Bonds B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/FDFM4227/LU2622200520_az-f1-bd-latin-america-bonds-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd Latin America Bonds B-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/FDFM4229/LU2622200876_az-f1-bd-latin-america-bonds-b-hu-dis-eur-hdg",
+    "AZ F.1 Bd Patriot A Cap EUR": "https://www.fondidoc.it/d/Index/AZF1005/LU0738951036_az-f1-bd-patriot-a-cap-eur",
+    "AZ F.1 Bd Patriot A Dis EUR": "https://www.fondidoc.it/d/Index/AZF1009/LU0738951549_az-f1-bd-patriot-a-dis-eur",
+    "AZ F.1 Bd Patriot B Cap EUR": "https://www.fondidoc.it/d/Index/AZF1007/LU0738951119_az-f1-bd-patriot-b-cap-eur",
+    "AZ F.1 Bd Patriot B Dis EUR": "https://www.fondidoc.it/d/Index/AZF1011/LU0738951622_az-f1-bd-patriot-b-dis-eur",
+    "AZ F.1 Bd Renminbi Opp. A Cap EUR": "https://www.fondidoc.it/d/Index/ATUT4604/LU2238329036_az-f1-bd-renminbi-opp-a-cap-eur",
+    "AZ F.1 Bd Renminbi Opp. A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/ATUT4602/LU2238328814_az-f1-bd-renminbi-opp-a-hu-cap-eur-hdg",
+    "AZ F.1 Bd Renminbi Opp. B EUR": "https://www.fondidoc.it/d/Index/ATUT4605/LU2238329119_az-f1-bd-renminbi-opp-b-eur",
+    "AZ F.1 Bd Renminbi Opp. B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/ATUT4603/LU2238328905_az-f1-bd-renminbi-opp-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd Renminbi Opp. I-HU Cap EUR Hdg(i)": "https://www.fondidoc.it/d/Index/ATUT4606/LU2238329549_az-f1-bd-renminbi-opp-i-hu-cap-eur-hdg",
+    "AZ F.1 Bd Short Term IG Clim. Trans. A Cap EUR": "https://www.fondidoc.it/d/Index/FDM00038/LU2951607303_az-f1-bd-short-term-ig-clim-trans-a-cap-eur",
+    "AZ F.1 Bd Short Term IG Clim. Trans. A Dis EUR": "https://www.fondidoc.it/d/Index/FDM00040/LU2951607485_az-f1-bd-short-term-ig-clim-trans-a-dis-eur",
+    "AZ F.1 Bd Short Term IG Clim. Trans. B Cap EUR": "https://www.fondidoc.it/d/Index/FDM00497/LU3063740529_az-f1-bd-short-term-ig-clim-trans-b-cap-eur",
+    "AZ F.1 Bd Short Term IG Clim. Trans. B Dis EUR": "https://www.fondidoc.it/d/Index/FDM00498/LU3063740792_az-f1-bd-short-term-ig-clim-trans-b-dis-eur",
+    "AZ F.1 Bd Short Term IG Clim. Trans. C Dis EUR": "https://www.fondidoc.it/d/Index/FDM02361/LU3066587604_az-f1-bd-short-term-ig-clim-trans-c-dis-eur",
+    "AZ F.1 Bd Target 2026 A Cap EUR": "https://www.fondidoc.it/d/Index/G1U17729/LU2286015784_az-f1-bd-target-2026-a-cap-eur",
+    "AZ F.1 Bd Target 2026 A Dis EUR": "https://www.fondidoc.it/d/Index/TUT07630/LU2286015941_az-f1-bd-target-2026-a-dis-eur",
+    "AZ F.1 Bd Target 2026 B Cap EUR": "https://www.fondidoc.it/d/Index/TUT07629/LU2286015867_az-f1-bd-target-2026-b-cap-eur",
+    "AZ F.1 Bd Target 2026 B Dis EUR": "https://www.fondidoc.it/d/Index/TUT07631/LU2286016089_az-f1-bd-target-2026-b-dis-eur",
+    "AZ F.1 Bd Target 2026 I Cap EUR(i)": "https://www.fondidoc.it/d/Index/G1U17728/LU2305238862_az-f1-bd-target-2026-i-cap-eur",
+    "AZ F.1 Bd Target 2028 A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3114/LU2622175078_az-f1-bd-target-2028-a-cap-eur",
+    "AZ F.1 Bd Target 2028 A Dis EUR": "https://www.fondidoc.it/d/Index/FDFM3115/LU2622175318_az-f1-bd-target-2028-a-dis-eur",
+    "AZ F.1 Bd Target 2028 B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3746/LU2622175235_az-f1-bd-target-2028-b-cap-eur",
+    "AZ F.1 Bd Target 2028 B Dis EUR": "https://www.fondidoc.it/d/Index/FDFM3747/LU2622175409_az-f1-bd-target-2028-b-dis-eur",
+    "AZ F.1 Bd Target 2029 A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM9064/LU2951609937_az-f1-bd-target-2029-a-cap-eur",
+    "AZ F.1 Bd Target 2029 A Dis EUR": "https://www.fondidoc.it/d/Index/FDFM9065/LU2951610273_az-f1-bd-target-2029-a-dis-eur",
+    "AZ F.1 Bd Target 2029 B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM9070/LU2951610190_az-f1-bd-target-2029-b-cap-eur",
+    "AZ F.1 Bd Target 2029 B Dis EUR": "https://www.fondidoc.it/d/Index/FDFM9071/LU2951610356_az-f1-bd-target-2029-b-dis-eur",
+    "AZ F.1 Bd Target 2029 USD A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/G1U12265/LU2097826429_az-f1-bd-target-2029-usd-a-hu-cap-eur-hdg",
+    "AZ F.1 Bd Target 2029 USD A-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/G1U12266/LU2097826775_az-f1-bd-target-2029-usd-a-hu-dis-eur-hdg",
+    "AZ F.1 Bd Target 2029 USD B Cap EUR": "https://www.fondidoc.it/d/Index/AZZI02/LU2097826189_az-f1-bd-target-2029-usd-b-cap-eur",
+    "AZ F.1 Bd Target 2029 USD B Dis EUR": "https://www.fondidoc.it/d/Index/AZZI04/LU2097826346_az-f1-bd-target-2029-usd-b-dis-eur",
+    "AZ F.1 Bd Target 2029 USD B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/G1U12269/LU2097826692_az-f1-bd-target-2029-usd-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd Target 2029 USD B-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/G1U12270/LU2097826858_az-f1-bd-target-2029-usd-b-hu-dis-eur-hdg",
+    "AZ F.1 Bd Target 2031 A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM9072/LU2951613707_az-f1-bd-target-2031-a-cap-eur",
+    "AZ F.1 Bd Target 2031 A Dis EUR": "https://www.fondidoc.it/d/Index/FDFM9073/LU2951614002_az-f1-bd-target-2031-a-dis-eur",
+    "AZ F.1 Bd Target 2031 B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM9078/LU2951613889_az-f1-bd-target-2031-b-cap-eur",
+    "AZ F.1 Bd Target 2031 B Dis EUR": "https://www.fondidoc.it/d/Index/FDFM9079/LU2951614184_az-f1-bd-target-2031-b-dis-eur",
+    "AZ F.1 Bd Total Return Bond A Cap EUR": "https://www.fondidoc.it/d/Index/AZF1BNDC/LU2168561392_az-f1-bd-total-return-bond-a-cap-eur",
+    "AZ F.1 Bd Total Return Bond A Dis EUR": "https://www.fondidoc.it/d/Index/AZF1BNDD/LU2168561558_az-f1-bd-total-return-bond-a-dis-eur",
+    "AZ F.1 Bd Total Return Bond B Cap EUR": "https://www.fondidoc.it/d/Index/ATUT8309/LU2168561475_az-f1-bd-total-return-bond-b-cap-eur",
+    "AZ F.1 Bd Total Return Bond B Dis EUR": "https://www.fondidoc.it/d/Index/ATUT8310/LU2168561632_az-f1-bd-total-return-bond-b-dis-eur",
+    "AZ F.1 Bd Total Return Bond I Cap EUR(i)": "https://www.fondidoc.it/d/Index/ATUT4189/LU2168561988_az-f1-bd-total-return-bond-i-cap-eur",
+    "AZ F.1 Bd US Dollar Aggregate A Cap EUR": "https://www.fondidoc.it/d/Index/G1U12277/LU2097823913_az-f1-bd-us-dollar-aggregate-a-cap-eur",
+    "AZ F.1 Bd US Dollar Aggregate A Dis EUR": "https://www.fondidoc.it/d/Index/G1U12278/LU2097824135_az-f1-bd-us-dollar-aggregate-a-dis-eur",
+    "AZ F.1 Bd US Dollar Aggregate A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/G1U12279/LU2097824309_az-f1-bd-us-dollar-aggregate-a-hu-cap-eur-hdg",
+    "AZ F.1 Bd US Dollar Aggregate A-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/G1U12280/LU2097824564_az-f1-bd-us-dollar-aggregate-a-hu-dis-eur-hdg",
+    "AZ F.1 Bd US Dollar Aggregate B Cap $": "https://www.fondidoc.it/d/Index/G1U12281/LU2097824051_az-f1-bd-us-dollar-aggregate-b-cap",
+    "AZ F.1 Bd US Dollar Aggregate B Dis $": "https://www.fondidoc.it/d/Index/G1U12282/LU2097824218_az-f1-bd-us-dollar-aggregate-b-dis",
+    "AZ F.1 Bd US Dollar Aggregate B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/G1U12283/LU2106023489_az-f1-bd-us-dollar-aggregate-b-hu-cap-eur-hdg",
+    "AZ F.1 Bd US Dollar Aggregate B-HU Dis EUR Hdg": "https://www.fondidoc.it/d/Index/G1U12284/LU2097824481_az-f1-bd-us-dollar-aggregate-b-hu-dis-eur-hdg",
+    "AZ F.1 Eq. American Opportunities A Cap EUR": "https://www.fondidoc.it/d/Index/AZAMEU/LU0107998642_az-f1-eq-american-opportunities-a-cap-eur",
+    "AZ F.1 Eq. American Opportunities A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/SIM2064/LU2582543927_az-f1-eq-american-opportunities-a-hu-cap-eur-hdg",
+    "AZ F.1 Eq. American Opportunities B Cap EUR": "https://www.fondidoc.it/d/Index/AZAMEBE/LU0107998725_az-f1-eq-american-opportunities-b-cap-eur",
+    "AZ F.1 Eq. American Opportunities B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/SIM2065/LU2582544065_az-f1-eq-american-opportunities-b-hu-cap-eur-hdg",
+    "AZ F.1 Eq. Asean Countries A Cap EUR": "https://www.fondidoc.it/d/Index/ATUT4609/LU2238330802_az-f1-eq-asean-countries-a-cap-eur",
+    "AZ F.1 Eq. Asean Countries B Cap EUR": "https://www.fondidoc.it/d/Index/ATUT4610/LU2238330984_az-f1-eq-asean-countries-b-cap-eur",
+    "AZ F.1 Eq. Best Value A Cap EUR": "https://www.fondidoc.it/d/Index/G1U12190/LU2056383347_az-f1-eq-best-value-a-cap-eur",
+    "AZ F.1 Eq. Best Value B Cap EUR": "https://www.fondidoc.it/d/Index/G1U12191/LU2056383420_az-f1-eq-best-value-b-cap-eur",
+    "AZ F.1 Eq. Biotechnology A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3112/LU2622177447_az-f1-eq-biotechnology-a-cap-eur",
+    "AZ F.1 Eq. Biotechnology A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/FDFM3113/LU2622177793_az-f1-eq-biotechnology-a-hu-cap-eur-hdg",
+    "AZ F.1 Eq. Biotechnology B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM3752/LU2622177520_az-f1-eq-biotechnology-b-cap-eur",
+    "AZ F.1 Eq. Biotechnology B-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/FDFM3753/LU2622177876_az-f1-eq-biotechnology-b-hu-cap-eur-hdg",
+    "AZ F.1 Eq. Borletti Global Lifestyle A Cap EUR": "https://www.fondidoc.it/d/Index/G1U12972/LU2097829100_az-f1-eq-borletti-global-lifestyle-a-cap-eur",
+    "AZ F.1 Eq. Borletti Global Lifestyle B Cap EUR": "https://www.fondidoc.it/d/Index/IARNM11/LU2097829282_az-f1-eq-borletti-global-lifestyle-b-cap-eur",
+    "AZ F.1 Eq. Borletti Global Lifestyle I Cap EUR(i)": "https://www.fondidoc.it/d/Index/IARNM10/LU2097828987_az-f1-eq-borletti-global-lifestyle-i-cap-eur",
+    "AZ F.1 Eq. Brazil Trend A Cap EUR": "https://www.fondidoc.it/d/Index/G1U12973/LU2097822436_az-f1-eq-brazil-trend-a-cap-eur",
+    "AZ F.1 Eq. Brazil Trend B Cap EUR": "https://www.fondidoc.it/d/Index/IARNM14/LU2097822519_az-f1-eq-brazil-trend-b-cap-eur",
+    "AZ F.1 Eq. CGM Opport. European A Cap EUR": "https://www.fondidoc.it/d/Index/AZF137/LU0677515586_az-f1-eq-cgm-opport-european-a-cap-eur",
+    "AZ F.1 Eq. CGM Opport. Global A Cap EUR": "https://www.fondidoc.it/d/Index/AZF141/LU0677515826_az-f1-eq-cgm-opport-global-a-cap-eur",
+    "AZ F.1 Eq. China A Cap EUR": "https://www.fondidoc.it/d/Index/G1U12974/LU2097828631_az-f1-eq-china-a-cap-eur",
+    "AZ F.1 Eq. China B Cap EUR": "https://www.fondidoc.it/d/Index/IARNM16/LU2097828714_az-f1-eq-china-b-cap-eur",
+    "AZ F.1 Eq. Egypt A Cap EUR": "https://www.fondidoc.it/d/Index/G1U12975/LU2097821974_az-f1-eq-egypt-a-cap-eur",
+    "AZ F.1 Eq. Egypt B Cap EUR": "https://www.fondidoc.it/d/Index/IARNM19/LU2097822196_az-f1-eq-egypt-b-cap-eur",
+    "AZ F.1 Eq. Emerging Asia FoF A Cap EUR": "https://www.fondidoc.it/d/Index/AZMARKET/LU0107999889_az-f1-eq-emerging-asia-fof-a-cap-eur",
+    "AZ F.1 Eq. Emerging Asia FoF B Cap EUR": "https://www.fondidoc.it/d/Index/AZMARKE/LU0108015834_az-f1-eq-emerging-asia-fof-b-cap-eur",
+    "AZ F.1 Eq. Emerging Markets Technology A Cap EUR": "https://www.fondidoc.it/d/Index/FDM03296/LU3081725973_az-f1-eq-emerging-markets-technology-a-cap-eur",
+    "AZ F.1 Eq. Emerging Markets Technology A Dis EUR": "https://www.fondidoc.it/d/Index/FDM03350/LU3081726435_az-f1-eq-emerging-markets-technology-a-dis-eur",
+    "AZ F.1 Eq. Emerging Markets Technology B Cap EUR": "https://www.fondidoc.it/d/Index/FDM03351/LU3081726278_az-f1-eq-emerging-markets-technology-b-cap-eur",
+    "AZ F.1 Eq. Emerging Markets Technology B Dis EUR": "https://www.fondidoc.it/d/Index/FDM03352/LU3081726609_az-f1-eq-emerging-markets-technology-b-dis-eur",
+    "AZ F.1 Eq. Escalator A Cap EUR": "https://www.fondidoc.it/d/Index/AZEESCAC/LU1867654516_az-f1-eq-escalator-a-cap-eur",
+    "AZ F.1 Eq. Escalator A Dis EUR": "https://www.fondidoc.it/d/Index/AZEESCAD/LU1867654607_az-f1-eq-escalator-a-dis-eur",
+    "AZ F.1 Eq. Escalator B Cap EUR": "https://www.fondidoc.it/d/Index/G1U12040/LU1867654789_az-f1-eq-escalator-b-cap-eur",
+    "AZ F.1 Eq. Escalator B Dis EUR": "https://www.fondidoc.it/d/Index/G1U12041/LU1867654862_az-f1-eq-escalator-b-dis-eur",
+    "AZ F.1 Eq. Europe A Cap EUR": "https://www.fondidoc.it/d/Index/AZEPEQ/LU0107996786_az-f1-eq-europe-a-cap-eur",
+    "AZ F.1 Eq. Europe B Cap EUR": "https://www.fondidoc.it/d/Index/AZFEQUI/LU0107997081_az-f1-eq-europe-b-cap-eur",
+    "AZ F.1 Eq. Food & Agriculture A Cap EUR": "https://www.fondidoc.it/d/Index/AZ211506/LU2240827464_az-f1-eq-food-agriculture-a-cap-eur",
+    "AZ F.1 Eq. Food & Agriculture B Cap EUR": "https://www.fondidoc.it/d/Index/ATUT5865/LU2240827548_az-f1-eq-food-agriculture-b-cap-eur",
+    "AZ F.1 Eq. Future Opportunities A Cap EUR": "https://www.fondidoc.it/d/Index/G1U16575/LU2332973481_az-f1-eq-future-opportunities-a-cap-eur",
+    "AZ F.1 Eq. Future Opportunities A-HU Cap EUR Hdg": "https://www.fondidoc.it/d/Index/G1U16578/LU2332973564_az-f1-eq-future-opportunities-a-hu-cap-eur-hdg",
+    "AZ F.1 Eq. Future Opportunities I Cap EUR(i)": "https://www.fondidoc.it/d/Index/G1U16572/LU2332522809_az-f1-eq-future-opportunities-i-cap-eur",
+    "AZ F.1 Eq. Gl. Infrastructure A Cap EUR": "https://www.fondidoc.it/d/Index/GIU_5366/LU1621767737_az-f1-eq-gl-infrastructure-a-cap-eur",
+    "AZ F.1 Eq. Gl. Infrastructure A Dis EUR": "https://www.fondidoc.it/d/Index/GIU_5367/LU1621767810_az-f1-eq-gl-infrastructure-a-dis-eur",
+    "AZ F.1 Eq. Gl. Infrastructure B Cap EUR": "https://www.fondidoc.it/d/Index/GIU_5368/LU1621767901_az-f1-eq-gl-infrastructure-b-cap-eur",
+    "AZ F.1 Eq. Gl. Infrastructure B Dis EUR": "https://www.fondidoc.it/d/Index/GIU_5369/LU1621768115_az-f1-eq-gl-infrastructure-b-dis-eur",
+    "AZ F.1 Eq. Global Dividend A Cap EUR": "https://www.fondidoc.it/d/Index/FDM03297/LU3081740188_az-f1-eq-global-dividend-a-cap-eur",
+    "AZ F.1 Eq. Global Dividend A Dis EUR": "https://www.fondidoc.it/d/Index/FDM03358/LU3081740774_az-f1-eq-global-dividend-a-dis-eur",
+    "AZ F.1 Eq. Global Dividend B Cap EUR": "https://www.fondidoc.it/d/Index/FDM03359/LU3081740428_az-f1-eq-global-dividend-b-cap-eur",
+    "AZ F.1 Eq. Global Dividend B Dis EUR": "https://www.fondidoc.it/d/Index/FDM03360/LU3081740931_az-f1-eq-global-dividend-b-dis-eur",
+    "AZ F.1 Eq. Global Emerging FoF A Cap EUR": "https://www.fondidoc.it/d/Index/AZ1278/LU1225037040_az-f1-eq-global-emerging-fof-a-cap-eur",
+    "AZ F.1 Eq. Global Emerging FoF A Dis EUR": "https://www.fondidoc.it/d/Index/AZZI11/LU2081247731_az-f1-eq-global-emerging-fof-a-dis-eur",
+    "AZ F.1 Eq. Global Emerging FoF B Cap EUR": "https://www.fondidoc.it/d/Index/AZ1280/LU1225037123_az-f1-eq-global-emerging-fof-b-cap-eur",
+    "AZ F.1 Eq. Global Emerging FoF B Dis EUR": "https://www.fondidoc.it/d/Index/IARNM20/LU2081247814_az-f1-eq-global-emerging-fof-b-dis-eur",
+    "AZ F.1 Eq. Global ESG FoF A Cap EUR": "https://www.fondidoc.it/d/Index/AZFGESGA/LU1867654276_az-f1-eq-global-esg-fof-a-cap-eur",
+    "AZ F.1 Eq. Global ESG FoF A Dis EUR": "https://www.fondidoc.it/d/Index/AZZI09/LU2072948610_az-f1-eq-global-esg-fof-a-dis-eur",
+    "AZ F.1 Eq. Global ESG FoF B Cap EUR": "https://www.fondidoc.it/d/Index/G1U12058/LU1867654359_az-f1-eq-global-esg-fof-b-cap-eur",
+    "AZ F.1 Eq. Global ESG FoF B Dis EUR": "https://www.fondidoc.it/d/Index/AZZI10/LU2072948701_az-f1-eq-global-esg-fof-b-dis-eur",
+    "AZ F.1 Eq. Global ESG FoF I Cap EUR(i)": "https://www.fondidoc.it/d/Index/IARNM22/LU2075861885_az-f1-eq-global-esg-fof-i-cap-eur",
+    "AZ F.1 Eq. Global FoF A Cap EUR": "https://www.fondidoc.it/d/Index/AZCOAAZ/LU0262760399_az-f1-eq-global-fof-a-cap-eur",
+    "AZ F.1 Eq. Global FoF B Cap EUR": "https://www.fondidoc.it/d/Index/AZCOBAZ/LU0262760639_az-f1-eq-global-fof-b-cap-eur",
+    "AZ F.1 Eq. Global Growth A Cap EUR": "https://www.fondidoc.it/d/Index/AZFGGSA/LU0804221488_az-f1-eq-global-growth-a-cap-eur",
+    "AZ F.1 Eq. Global Growth B Cap EUR": "https://www.fondidoc.it/d/Index/AZFU001/LU0804229622_az-f1-eq-global-growth-b-cap-eur",
+    "AZ F.1 Eq. Global Growth I Cap EUR(i)": "https://www.fondidoc.it/d/Index/G1U12042/LU1232061934_az-f1-eq-global-growth-i-cap-eur",
+    "AZ F.1 Eq. Global Healthcare A Cap EUR": "https://www.fondidoc.it/d/Index/AZEGHAZ/LU2384058314_az-f1-eq-global-healthcare-a-cap-eur",
+    "AZ F.1 Eq. Global Healthcare A Dis EUR": "https://www.fondidoc.it/d/Index/AZFAATB5/LU2385753624_az-f1-eq-global-healthcare-a-dis-eur",
+    "AZ F.1 Eq. Global Healthcare B Cap EUR": "https://www.fondidoc.it/d/Index/AZFAATB6/LU2384058405_az-f1-eq-global-healthcare-b-cap-eur",
+    "AZ F.1 Eq. Global Healthcare B Dis EUR": "https://www.fondidoc.it/d/Index/AZFAATB7/LU2385753897_az-f1-eq-global-healthcare-b-dis-eur",
+    "AZ F.1 Eq. Global Value FoF A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4094/LU2622203623_az-f1-eq-global-value-fof-a-cap-eur",
+    "AZ F.1 Eq. Global Value FoF B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4095/LU2622203896_az-f1-eq-global-value-fof-b-cap-eur",
+    "AZ F.1 Eq. Industrial Revolution 4.0 A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4112/LU2622500598_az-f1-eq-industrial-revolution-40-a-cap-eur",
+    "AZ F.1 Eq. Industrial Revolution 4.0 B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4113/LU2622500754_az-f1-eq-industrial-revolution-40-b-cap-eur",
+    "AZ F.1 Eq. Japan A Cap EUR": "https://www.fondidoc.it/d/Index/AZ1PACI/LU0108016568_az-f1-eq-japan-a-cap-eur",
+    "AZ F.1 Eq. Japan A Dis EUR": "https://www.fondidoc.it/d/Index/LF1057/LU1303498973_az-f1-eq-japan-a-dis-eur",
+    "AZ F.1 Eq. Japan A-HJ Cap EUR Hdg": "https://www.fondidoc.it/d/Index/AZZI08/LU2072948370_az-f1-eq-japan-a-hj-cap-eur-hdg",
+    "AZ F.1 Eq. Japan B Cap EUR": "https://www.fondidoc.it/d/Index/AZPACIB/LU0108016642_az-f1-eq-japan-b-cap-eur",
+    "AZ F.1 Eq. Japan B Dis EUR": "https://www.fondidoc.it/d/Index/AZ1JPCBD/LU1303499351_az-f1-eq-japan-b-dis-eur",
+    "AZ F.1 Eq. Japan B-HJ Cap EUR Hdg": "https://www.fondidoc.it/d/Index/IARNM25/LU2072948453_az-f1-eq-japan-b-hj-cap-eur-hdg",
+    "AZ F.1 Eq. MENA A Cap EUR": "https://www.fondidoc.it/d/Index/FIDFM438/LU2458361552_az-f1-eq-mena-a-cap-eur",
+    "AZ F.1 Eq. MENA B Cap EUR": "https://www.fondidoc.it/d/Index/TUT06182/LU2458361636_az-f1-eq-mena-b-cap-eur",
+    "AZ F.1 Eq. Mexico A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4099/LU2622215981_az-f1-eq-mexico-a-cap-eur",
+    "AZ F.1 Eq. Mexico B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4100/LU2622216104_az-f1-eq-mexico-b-cap-eur",
+    "AZ F.1 Eq. Momentum A Cap EUR": "https://www.fondidoc.it/d/Index/AZ211508/LU2240824875_az-f1-eq-momentum-a-cap-eur",
+    "AZ F.1 Eq. Momentum B Cap EUR": "https://www.fondidoc.it/d/Index/ATUT5870/LU2240824958_az-f1-eq-momentum-b-cap-eur",
+    "AZ F.1 Eq. Small Cap Europe FoF A Cap EUR": "https://www.fondidoc.it/d/Index/AZSEUAAZ/LU0262753857_az-f1-eq-small-cap-europe-fof-a-cap-eur",
+    "AZ F.1 Eq. Small Cap Europe FoF B Cap EUR": "https://www.fondidoc.it/d/Index/AZSEUBAZ/LU0262754079_az-f1-eq-small-cap-europe-fof-b-cap-eur",
+    "AZ F.1 Eq. Special Needs & Inclusion A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4104/LU2622215718_az-f1-eq-special-needs-inclusion-a-cap-eur",
+    "AZ F.1 Eq. Special Needs & Inclusion A Dis EUR": "https://www.fondidoc.it/d/Index/FDFM4109/LU2781417485_az-f1-eq-special-needs-inclusion-a-dis-eur",
+    "AZ F.1 Eq. Special Needs & Inclusion B Cap EUR": "https://www.fondidoc.it/d/Index/FDFM4105/LU2622215809_az-f1-eq-special-needs-inclusion-b-cap-eur",
+    "AZ F.1 Eq. Special Needs & Inclusion B Dis EUR": "https://www.fondidoc.it/d/Index/FDFM4110/LU2781417568_az-f1-eq-special-needs-inclusion-b-dis-eur",
+    "AZ F.1 Eq. Water & Renewable Resources A Cap EUR": "https://www.fondidoc.it/d/Index/AZ211507/LU2240825336_az-f1-eq-water-renewable-resources-a-cap-eur",
+    "AZ F.1 Eq. Water & Renewable Resources B Cap EUR": "https://www.fondidoc.it/d/Index/ATUT5869/LU2240825419_az-f1-eq-water-renewable-resources-b-cap-eur",
+    "AZ F.1 Eq. World Minimum Volatility A Cap EUR": "https://www.fondidoc.it/d/Index/AZFABAAZ/LU0262757098_az-f1-eq-world-minimum-volatility-a-cap-eur",
+    "AZ F.1 Eq. World Minimum Volatility A Dis EUR": "https://www.fondidoc.it/d/Index/GIU243/LU1059390606_az-f1-eq-world-minimum-volatility-a-dis-eur",
+    "AZ F.1 Eq. World Minimum Volatility B Cap EUR": "https://www.fondidoc.it/d/Index/AZFABBAZ/LU0262757411_az-f1-eq-world-minimum-volatility-b-cap-eur",
+    "AZ F.1 Eq. World Minimum Volatility B Dis EUR": "https://www.fondidoc.it/d/Index/AZF1ABD/LU1059390788_az-f1-eq-world-minimum-volatility-b-dis-eur",
+    "AZ F.1 Islamic Global Sukuk A Cap EUR": "https://www.fondidoc.it/d/Index/GIU256/LU0947790142_az-f1-islamic-global-sukuk-a-cap-eur",
+    "AZ F.1 Islamic Global Sukuk A Dis EUR": "https://www.fondidoc.it/d/Index/FRAS1313/LU0947789565_az-f1-islamic-global-sukuk-a-dis-eur",
+    "AZ F.1 Islamic Global Sukuk B Cap EUR": "https://www.fondidoc.it/d/Index/AZF11013/LU0947790225_az-f1-islamic-global-sukuk-b-cap-eur",
+    "AZ F.1 Islamic Global Sukuk B Dis EUR": "https://www.fondidoc.it/d/Index/AZF11014/LU0947789649_az-f1-islamic-global-sukuk-b-dis-eur",
+    "AZ Multi Asset All. Break. Healthcare AZ Ret Cap EUR": "https://www.fondidoc.it/d/Index/TUT02724/LU2279425255_az-multi-asset-all-break-healthcare-az-ret-cap-eur",
+    "AZ Multi Asset All. CGM Flexible Brave A Cap EUR": "https://www.fondidoc.it/d/Index/TUT10548/LU2547534086_az-multi-asset-all-cgm-flexible-brave-a-cap-eur",
+    "AZ Multi Asset All. Environment AZ Ret Cap EUR": "https://www.fondidoc.it/d/Index/G1U16624/LU2279426147_az-multi-asset-all-environment-az-ret-cap-eur",
+    "AZ Multi Asset All. Future Generations AZ Ret Cap EUR": "https://www.fondidoc.it/d/Index/TUT02727/LU2279427111_az-multi-asset-all-future-generations-az-ret-cap-eur",
+    "AZ Multi Asset All. Smart Cities AZ Ret Cap EUR": "https://www.fondidoc.it/d/Index/TUT02730/LU2279428275_az-multi-asset-all-smart-cities-az-ret-cap-eur",
+    "AZ Multi Asset All. Venus A Dis EUR(i)": "https://www.fondidoc.it/d/Index/GIU_5177/LU1590081771_az-multi-asset-all-venus-a-dis-eur",
+    "AZ Multi Asset All.Flexible Eq. A Dis EUR(i)": "https://www.fondidoc.it/d/Index/ATUTT5904/LU2156582442_az-multi-asset-allflexible-eq-a-dis-eur",
+    "AZ Multi Asset Eq. Technology AZ Ret Cap EUR": "https://www.fondidoc.it/d/Index/TUT02733/LU2279429166_az-multi-asset-eq-technology-az-ret-cap-eur",
+    "AZ Multi Asset Romeo A Dis EUR(i)": "https://www.fondidoc.it/d/Index/AZMA1648/LU0878849610_az-multi-asset-romeo-a-dis-eur",
+    "AZ TF All. Global Goals A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM1711/IE0009PPJD19_az-tf-all-global-goals-a-cap-eur",
+    "AZ TF Equity New Generations A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM1703/IE000DYHML73_az-tf-equity-new-generations-a-cap-eur",
+    "AZ TF Equity Space A Cap EUR": "https://www.fondidoc.it/d/Index/FDFM1722/IE000CNYXZU4_az-tf-equity-space-a-cap-eur",
+    "Azimut Dinamico": "https://www.fondidoc.it/d/Index/AZIMUT/IT0000384567_azimut-dinamico",
+    "Azimut Italia Alto Potenziale": "https://www.fondidoc.it/d/Index/AZIPAC/IT0001055091_azimut-italia-alto-potenziale",
+    "Azimut Scudo": "https://www.fondidoc.it/d/Index/AZIVAL/IT0001055117_azimut-scudo",
+    "Azimut Strategic Trend": "https://www.fondidoc.it/d/Index/AZSTRA/IT0003795587_azimut-strategic-trend",
+    "Azimut Trading": "https://www.fondidoc.it/d/Index/SOFITRAD/IT0004764558_azimut-trading",
+    "Azimut Trend": "https://www.fondidoc.it/d/Index/AZITREND/IT0001010476_azimut-trend",
+    "Azimut Trend America": "https://www.fondidoc.it/d/Index/AZIAME/IT0001055075_azimut-trend-america",
+    "Azimut Trend Italia": "https://www.fondidoc.it/d/Index/AZITRE/IT0001055158_azimut-trend-italia",
+    "Azimut Trend Tassi": "https://www.fondidoc.it/d/Index/AZITAS/IT0001055133_azimut-trend-tassi"
+  }
+}
