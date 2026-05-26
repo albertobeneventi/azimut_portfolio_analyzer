@@ -2581,6 +2581,9 @@
   "fida_urls": {
     "AZ F.1 All. Balanced FoF A Cap EUR": "https://www.fondidoc.it/d/Index/AZPOA/LU0346933400_az-f1-allocation-balanced-fof-a-az-fund-cap-eur",
     "AZ Bond - Convertible Bond": "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg",
+    "AZ Equity - Global Infrastructure": "https://www.fondidoc.it/d/Index/GIU_5366/LU1621767737_az-f1-eq-gl-infrastructure-a-az-fund-cap-eur",
+    "AZ Bond - CoCo Bonds (EUR-hedged)": "https://www.fondidoc.it/d/Index/FDFM4346/LU2622195936_az-f1-bd-coco-bonds-a-az-fund-cap-eur-hdg",
+    "AZ Bond - CoCo Bonds": "https://www.fondidoc.it/d/Index/FIDFM857/LU2622195423_az-f1-bd-coco-bonds-a-az-fund-cap-eur",
     "NOME": "https://www.fondidoc.it/Ricerca?sort=Nome&sortDir=-1",
     "AZ Eskatos Multistrategy ILS A Cap $(i)": "https://www.fondidoc.it/d/Index/ESKAZMAU/LU0866065187_az-eskatos-multistrategy-ils-a-cap",
     "AZ Eskatos Multistrategy ILS B Cap EUR(i)": "https://www.fondidoc.it/d/Index/ESKB/LU0354663808_az-eskatos-multistrategy-ils-b-cap-eur",
