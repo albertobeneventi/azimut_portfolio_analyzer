@@ -210,8 +210,7 @@ def save_excel_cache(raw: dict):
 def load_gp_cache() -> tuple:
     """Carica i dati Global Perspectives salvati su disco.
 
-    Returns (gp_data, filename_str, last_updated_str, edition_str)
-    oppure (None, "", "", "").
+    Returns (gp_data, filename_str, last_updated_str) oppure (None, "", "").
     """
     try:
         if GP_CACHE_FILE.exists() and GP_CACHE_FILE.stat().st_size > 10:
@@ -220,23 +219,20 @@ def load_gp_cache() -> tuple:
             if gp_data and isinstance(gp_data, dict) and len(gp_data) >= 3:
                 return (gp_data,
                         payload.get("filename", ""),
-                        payload.get("last_updated", ""),
-                        payload.get("edition", ""))
+                        payload.get("last_updated", ""))
     except Exception:
         pass
-    return None, "", "", ""
+    return None, "", ""
 
 
-def save_gp_cache(gp_data: dict, filename: str = "", edition: str = ""):
+def save_gp_cache(gp_data: dict, filename: str = ""):
     """Salva i dati Global Perspectives su data/gp_cache.json."""
     try:
         GP_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "last_updated": datetime.date.today().isoformat(),
             "filename":     filename,
-            "edition":      edition,
-            "gp_data":      {k: v for k, v in gp_data.items()
-                             if not k.startswith("_")},
+            "gp_data":      gp_data,
         }
         GP_CACHE_FILE.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -244,22 +240,111 @@ def save_gp_cache(gp_data: dict, filename: str = "", edition: str = ""):
         pass
 
 
-# ── UNP/IUNP CATALOG ─────────────────────────────────────────────────────────
-# Caricato da data/unp_catalog.json (Catalogo Prodotti&Servizi Azimut).
-# Per aggiornare: invia il nuovo PDF del catalogo → viene rigenerato il JSON
-# e committato su GitHub senza toccare il codice.
-def _load_unp_catalog() -> dict:
-    try:
-        _p = Path(__file__).parent / "data" / "unp_catalog.json"
-        if _p.exists():
-            _raw = json.loads(_p.read_text(encoding="utf-8-sig"))
-            return {k: tuple(v) for k, v in _raw.items()
-                    if not k.startswith("_") and isinstance(v, list) and len(v) == 2}
-    except Exception:
-        pass
-    return {}
-
-UNP_CATALOG = _load_unp_catalog()
+# ── UNP/IUNP CATALOG (Catalogo Prodotti&Servizi Azimut, settembre 2025) ──────
+# Fonte: DETTAGLIO AZ FUND — valori %UNP e %IUNP36
+# Estratto da pdftotext su tutte le pagine del PDF (93 voci).
+# Nomi fondi esattamente come nel PDF; _normalize_for_unp() gestisce la
+# corrispondenza con i nomi abbreviati dell'Excel (es. "AZ F.1 Bd. ...").
+UNP_CATALOG = {
+    # ── AZ Allocation ─────────────────────────────────────────────────────────
+    "AZ Allocation - Asset Timing 2026":                               (2.29, 1.14),
+    "AZ Allocation - Asset Timing 2028":                               (2.29, 1.14),
+    "AZ Allocation - Balanced Brave":                                  (1.89, 0.94),
+    "AZ Allocation - Balanced FoF":                                    (1.89, 0.94),
+    "AZ Allocation - Balanced Plus":                                   (1.89, 0.94),
+    "AZ Allocation - Escalator 2026":                                  (2.29, 1.14),
+    "AZ Allocation - Escalator 2028":                                  (2.29, 1.14),
+    "AZ Allocation - Escalator 2030":                                  (2.29, 1.14),
+    "AZ Allocation - Flexible Equity":                                 (1.92, 0.96),
+    "AZ Allocation - Global Aggressive":                               (1.89, 0.94),
+    "AZ Allocation - Global Balanced":                                 (1.80, 0.90),
+    "AZ Allocation - Global Conservative":                             (1.61, 0.80),
+    "AZ Allocation - Global Conservative (Classe C)":                  (0.95, 0.47),
+    "AZ Allocation - Italian Trend":                                   (2.01, 1.00),
+    "AZ Allocation - Life Plan 2040":                                  (2.51, 1.25),
+    "AZ Allocation - PIR Italian Excellence 70%":                      (1.89, 0.94),
+    "AZ Allocation - Potential Income Upside 2030":                    (1.67, 0.83),
+    "AZ Allocation - Risk Parity Factors":                             (1.89, 0.94),
+    "AZ Allocation - Trend":                                           (2.01, 1.00),
+    "AZ Allocation - Turkey":                                          (1.89, 0.94),
+    # ── AZ Alternative ────────────────────────────────────────────────────────
+    "AZ Alternative - Capital Enhanced":                               (0.51, 0.25),
+    "AZ Alternative - Commodity":                                      (1.81, 0.90),
+    # ── AZ Bond ───────────────────────────────────────────────────────────────
+    "AZ Bond - Aggregate Bond Euro":                                   (1.10, 0.55),
+    "AZ Bond - Asian Bond":                                            (1.38, 0.69),
+    "AZ Bond - Bond Value":                                            (1.53, 0.76),
+    "AZ Bond - COCO Bonds":                                            (1.53, 0.76),
+    "AZ Bond - Convertible":                                           (1.62, 0.81),
+    "AZ Bond - Enhanced Yield":                                        (0.35, 0.17),
+    "AZ Bond - Euro Corporate":                                        (1.23, 0.61),
+    "AZ Bond - Frontier Markets Debt":                                 (1.62, 0.81),
+    "AZ Bond - Global Macro Bond":                                     (1.29, 0.64),
+    "AZ Bond - High Income FoF":                                       (1.62, 0.81),
+    "AZ Bond - High Yield":                                            (1.47, 0.73),
+    "AZ Bond - High Yield Target 2028 Climate Transition":             (1.53, 0.76),
+    "AZ Bond - High Yield Target 2028 Climate Transition (Classe C)":  (0.52, 0.26),
+    "AZ Bond - Income Dynamic":                                        (0.99, 0.49),
+    "AZ Bond - International FoF":                                     (1.62, 0.81),
+    "AZ Bond - Latin America Bonds":                                   (1.53, 0.76),
+    "AZ Bond - Patriot":                                               (1.36, 0.68),
+    "AZ Bond - Renminbi Opportunities":                                (1.23, 0.61),
+    "AZ Bond - Short Term Investment Grade Climate Transition":        (1.53, 0.76),
+    "AZ Bond - Short Term Investment Grade Climate Transition (Classe C)": (0.43, 0.21),
+    "AZ Bond - Sustainable Hybrid":                                    (1.46, 0.73),
+    "AZ Bond - Target 2025":                                           (1.11, 0.55),
+    "AZ Bond - Target 2026":                                           (1.11, 0.55),
+    "AZ Bond - Target 2028":                                           (1.11, 0.55),
+    "AZ Bond - Target 2029":                                           (1.11, 0.55),
+    "AZ Bond - Target 2029 USD":                                       (1.23, 0.61),
+    "AZ Bond - Target 2031":                                           (1.11, 0.55),
+    "AZ Bond - Total Return Bond":                                     (1.55, 0.77),
+    "AZ Bond - US Dollar Aggregate":                                   (1.24, 0.62),
+    # ── AZ Equity ─────────────────────────────────────────────────────────────
+    "AZ Equity - Al Mal Mena":                                         (2.51, 1.25),
+    "AZ Equity - American Opportunities":                              (2.19, 1.09),
+    "AZ Equity - ASEAN Countries":                                     (2.19, 1.09),
+    "AZ Equity - Best Value":                                          (2.09, 1.04),
+    "AZ Equity - Biotechnology":                                       (2.51, 1.25),
+    "AZ Equity - Borletti Global Lifestyle":                           (2.30, 1.15),
+    "AZ Equity - Brazil Trend":                                        (2.19, 1.09),
+    "AZ Equity - China":                                               (2.19, 1.09),
+    "AZ Equity - Egypt":                                               (2.51, 1.25),
+    "AZ Equity - Emerging Asia FoF":                                   (2.51, 1.25),
+    "AZ Equity - Emerging Markets Technology":                         (2.51, 1.25),
+    "AZ Equity - Escalator":                                           (2.29, 1.14),
+    "AZ Equity - Europe":                                              (2.19, 1.09),
+    "AZ Equity - Food & Agriculture":                                  (2.40, 1.20),
+    "AZ Equity - Global Dividend":                                     (2.51, 1.25),
+    "AZ Equity - Global Emerging FoF":                                 (2.51, 1.25),
+    "AZ Equity - Global ESG":                                          (2.51, 1.25),
+    "AZ Equity - Global FoF":                                          (2.51, 1.25),
+    "AZ Equity - Global Growth":                                       (2.40, 1.20),
+    "AZ Equity - Global Healthcare":                                   (2.40, 1.20),
+    "AZ Equity - Global Infrastructure":                               (2.26, 1.13),
+    "AZ Equity - Global Quality":                                      (2.18, 1.09),
+    "AZ Equity - Global Value FoF":                                    (2.51, 1.25),
+    "AZ Equity - Industrial Revolution 4.0":                           (2.51, 1.25),
+    "AZ Equity - Japan":                                               (2.20, 1.10),
+    "AZ Equity - Mexico":                                              (2.51, 1.25),
+    "AZ Equity - Momentum":                                            (2.19, 1.09),
+    "AZ Equity - Small Cap Europe FoF":                                (2.51, 1.25),
+    "AZ Equity - Special Needs & Inclusion":                           (2.51, 1.25),
+    "AZ Equity - Water & Renewable Resources":                         (2.40, 1.20),
+    "AZ Equity - World Minimum Volatility":                            (2.19, 1.09),
+    # ── AZ Islamic ────────────────────────────────────────────────────────────
+    "AZ Islamic - Global Sukuk":                                       (1.36, 0.68),
+    # ── Azimut Thematic Fund ──────────────────────────────────────────────────
+    "Azimut Thematic Fund - AZ Allocation - Global Goals":             (2.50, 1.25),
+    "Azimut Thematic Fund - AZ Equity - New Generation":               (2.79, 1.39),
+    "Azimut Thematic Fund - AZ Equity - Space":                        (2.79, 1.39),
+    # ── Fondi Economia Reale (sezione separata nel catalogo) ──────────────────
+    "AZ Allocation - Italian Long-Term Opp.":                          (2.73, 1.36),
+    "AZ Allocation - Long Term Credit Opp.":                           (1.94, 0.97),
+    "AZ Allocation - Long-Term Equity Opp.":                           (2.73, 1.36),
+    "AZ Bond - ABS":                                                   (1.23, 0.61),
+    "AZ Equity - Future Opportunities":                                (2.51, 1.25),
+}
 
 # CSS is injected inside main() to keep it within the error-handler scope.
 
@@ -1002,35 +1087,18 @@ _FB_BRANCH    = "master"
 def load_factbook_auto() -> dict:
     """Load factbook data from data/factbook_dati.json (committed in the repo).
     Returns {} when the file is absent or empty.
-    Filtra le chiavi di metadati (last_updated, _*).
     """
+    import json
     try:
         fp = Path(__file__).parent / "data" / "factbook_dati.json"
         if fp.exists() and fp.stat().st_size > 5:
             with open(fp, encoding="utf-8") as fh:
                 data = json.load(fh)
                 if isinstance(data, dict) and data:
-                    return {k: v for k, v in data.items()
-                            if not k.startswith("_")
-                            and k not in ("last_updated", "period")}
+                    return data
     except Exception:
         pass
     return {}
-
-
-def save_factbook_local(fb_data: dict, period: str = ""):
-    """Salva factbook_dati.json in locale con last_updated e (opzionale) period."""
-    try:
-        fp = Path(__file__).parent / "data" / "factbook_dati.json"
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        payload: dict = {"last_updated": datetime.date.today().isoformat()}
-        if period:
-            payload["period"] = period
-        payload.update(fb_data)
-        fp.write_text(json.dumps(payload, ensure_ascii=False, indent=2,
-                                 default=str), encoding="utf-8")
-    except Exception:
-        pass
 
 
 def save_factbook_to_repo(fb_data: dict) -> bool:
@@ -3020,18 +3088,7 @@ def parse_global_perspectives(pdf_bytes: bytes):
             "subcat_weights": sw,
         }
 
-    if not result:
-        return None
-
-    # ── Estrae edizione dalla prima pagina (es. "N° 2 2026") ─────────────────
-    _ed = ""
-    _m_ed = re.search(r'N[°o]\.?\s*(\d+)\s+(\d{4})', pages[0] if pages else "",
-                      re.IGNORECASE)
-    if _m_ed:
-        _ed = f"N° {_m_ed.group(1)} {_m_ed.group(2)}"
-    result["_edition"] = _ed
-
-    return result
+    return result if result else None
 
 
 # ── Module-level badge helpers (used in suggerito_portfolio_ui) ──────────────
@@ -3336,63 +3393,48 @@ def main():
         st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
         st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
 
-        # ── Carica date cache prima di aprire l'expander ──────────────────────
+        # ── Uploader Excel ────────────────────────────────────────────────────
         _xl_cache_raw, _xl_cache_date = load_excel_cache()
-        _gp_cache_data, _gp_cache_fname, _gp_cache_date, _gp_cache_edition = load_gp_cache()
-        _fb_cache_date = ""
-        _fb_cache_period = ""
-        try:
-            _fb_p = Path(__file__).parent / "data" / "factbook_dati.json"
-            if _fb_p.exists() and _fb_p.stat().st_size > 5:
-                import json as _json
-                _fb_meta = _json.loads(_fb_p.read_text(encoding="utf-8-sig"))
-                _fb_cache_date   = _fb_meta.get("last_updated", "")
-                _fb_cache_period = _fb_meta.get("period", "")
-        except Exception:
-            pass
-
-        # ── Stato cache in una riga compatta sopra l'expander ────────────────
-        _cache_parts = []
         if _xl_cache_date:
-            _cache_parts.append(f"📊 Fondi Qualità {_xl_cache_date}")
-        if _fb_cache_date:
-            _fb_label = _fb_cache_period if _fb_cache_period else _fb_cache_date
-            _cache_parts.append(f"📖 Schede Prodotto {_fb_label}")
-        if _gp_cache_date:
-            _gp_label = _gp_cache_edition if _gp_cache_edition else _gp_cache_date
-            _cache_parts.append(f"🌐 Global Perspectives {_gp_label}")
-        if _cache_parts:
-            st.caption("  ·  ".join(_cache_parts))
+            _xl_hint = (f"💾 Cache: {_xl_cache_date} · carica per aggiornare")
+        else:
+            _xl_hint = "Nessuna cache — carica il file mensile."
+        uploaded = st.file_uploader(
+            "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)",
+            type=["xlsx","xls"],
+            help=_xl_hint,
+        )
+        if _xl_cache_date and uploaded is None:
+            st.caption(f"📂 Excel da cache · {_xl_cache_date}")
 
-        # ── Expander uploader — aperto se non c'è nessun cache ───────────────
-        _no_cache = not (_xl_cache_raw or _fb_cache_date or _gp_cache_date)
-        with st.expander("⬆️  Aggiorna file sorgente", expanded=_no_cache):
-            # Excel
-            _xl_hint = (f"💾 Cache: {_xl_cache_date} · carica per aggiornare"
-                        if _xl_cache_date else "Nessuna cache — carica il file mensile.")
-            uploaded = st.file_uploader(
-                "FONDI QUALITÀ",
-                type=["xlsx","xls"],
-                help=_xl_hint,
-            )
-            # Factbook PDF
-            _fb_label_full = ("SCHEDE PRODOTTO" + (f" · {_fb_cache_period}" if _fb_cache_period else ""))
-            _fb_hint = (f"💾 Cache: {_fb_cache_period or _fb_cache_date} · carica per aggiornare"
-                        if _fb_cache_date else "Nessuna cache — carica il Factbook PDF.")
-            uploaded_fb = st.file_uploader(
-                _fb_label_full,
-                type=["pdf"],
-                help=_fb_hint,
-            )
-            # Global Perspectives PDF
-            _gp_label_full = ("GLOBAL PERSPECTIVES" + (f" · {_gp_cache_edition}" if _gp_cache_edition else ""))
-            _gp_hint = (f"💾 Cache: {_gp_cache_edition or _gp_cache_date} · carica per aggiornare"
-                        if _gp_cache_date else "Nessuna cache — carica il PDF trimestrale.")
-            uploaded_gp = st.file_uploader(
-                _gp_label_full,
-                type=["pdf"],
-                help=_gp_hint,
-            )
+        # ── Uploader Factbook ─────────────────────────────────────────────────
+        uploaded_fb = st.file_uploader(
+            "FACTBOOK PDF (prima estrazione)",
+            type=["pdf"],
+            help="Carica il Factbook PDF per estrarre Duration, Rating e Asset "
+                 "Allocation. Dopo la prima estrazione scarica il file Excel "
+                 "e ricaricalo la prossima volta: è più veloce.",
+        )
+        uploaded_fb_xl = st.file_uploader(
+            "DATI FACTBOOK (Excel, dopo prima estrazione)",
+            type=["xlsx","xls"],
+            help="Carica il file Excel scaricato dopo la prima estrazione del "
+                 "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
+        )
+
+        # ── Uploader GP ───────────────────────────────────────────────────────
+        _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
+        if _gp_cache_date:
+            _gp_hint = (f"💾 Cache: {_gp_cache_date} · carica per aggiornare")
+        else:
+            _gp_hint = "Nessuna cache — carica il PDF trimestrale."
+        uploaded_gp = st.file_uploader(
+            "GLOBAL PERSPECTIVES PDF",
+            type=["pdf"],
+            help=_gp_hint,
+        )
+        if _gp_cache_date and uploaded_gp is None:
+            st.caption(f"📂 GP da cache · {_gp_cache_date}")
 
         # ── Parsing GP (solo quando cambia file) ─────────────────────────────
         if uploaded_gp is not None:
@@ -3402,9 +3444,8 @@ def main():
                 if _gp_parsed:
                     st.session_state["_gp_data"]    = _gp_parsed
                     st.session_state["_gp_filename"] = uploaded_gp.name
-                    # Salva su disco per le sessioni future (con edizione es. "N° 2 2026")
-                    save_gp_cache(_gp_parsed, uploaded_gp.name,
-                                  _gp_parsed.get("_edition", ""))
+                    # Salva su disco per le sessioni future
+                    save_gp_cache(_gp_parsed, uploaded_gp.name)
                 else:
                     st.session_state.pop("_gp_data", None)
                     st.warning("⚠️ PDF non riconosciuto — verifica che sia un "
@@ -3484,6 +3525,7 @@ def main():
             unsafe_allow_html=True)
 
         # ── Unico tasto Aggiorna Dati ─────────────────────────────────────────
+        # "can update" = Excel disponibile (upload fresco OPPURE cache su disco) + GP
         _has_excel   = bool(uploaded or _xl_cache_raw)
         _can_update  = bool(_has_excel or _gp_loaded_now)
         _is_fetching = any(st.session_state.get(k) for k in (
@@ -3500,8 +3542,8 @@ def main():
                 "<style>@keyframes _aggiorna_pulse{"
                 "0%{opacity:.92}50%{opacity:.55}100%{opacity:.92}}</style>",
                 unsafe_allow_html=True)
-        else:
-            # Tasto sempre visibile — colore dipende dallo stato dati
+        elif _can_update:
+            # Colore tasto: rosso lampeggiante / giallo / verde
             if _all_ok:
                 _btn_bg   = "linear-gradient(135deg,#14532d,#16A34A)"
                 _btn_anim = ""
@@ -3518,6 +3560,7 @@ def main():
                     "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
                     "50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}"
                 )
+            # Selettori multipli per compatibilità con le versioni di Streamlit
             _btn_sel = (
                 "section[data-testid='stSidebar'] div[data-testid='stButton'] > button,"
                 "section[data-testid='stSidebar'] div[data-testid='stBaseButton-secondary'],"
@@ -3538,15 +3581,14 @@ def main():
                          use_container_width=True,
                          help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
                               "Morningstar e — se il GP è caricato — dati fondi GP."):
-                if _can_update:
-                    if _has_excel:
-                        st.session_state["_fetch_fd_requested"] = True
-                        st.session_state["_fetch_ms_requested"] = True
-                    if _gp_loaded_now:
-                        st.session_state["_fetch_gp_requested"] = True
-                    st.rerun()
-                else:
-                    st.warning("⬆️ Carica prima il file **FONDI QUALITÀ** (Excel)")
+                if _has_excel:
+                    st.session_state["_fetch_fd_requested"] = True
+                    st.session_state["_fetch_ms_requested"] = True
+                if _gp_loaded_now:
+                    st.session_state["_fetch_gp_requested"] = True
+                st.rerun()  # mostra subito lo stato "in corso" prima che parta lo scarico
+        else:
+            st.caption("⬆️ Carica il file Excel o il PDF Global Perspectives")
 
         st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         _gp_loaded    = bool(st.session_state.get("_gp_data"))
@@ -3740,28 +3782,12 @@ def main():
 
     if uploaded_fb is not None:
         # First-time (or refresh): parse PDF, auto-save, offer Excel
-        _fb_bytes = uploaded_fb.read()
         with st.spinner("📖 Estraggo dati dal Factbook PDF…"):
-            _new = parse_factbook(_fb_bytes)
+            _new = parse_factbook(uploaded_fb.read())
         if _new:
             factbook_data = _new
             _fb_source = f"PDF ({len(_new)} fondi)"
             st.success(f"✅ Factbook estratto — {len(_new)} fondi trovati")
-            # Estrai periodo dalla prima pagina (es. "Marzo 2026")
-            _fb_period = ""
-            try:
-                import pdfplumber as _plb, io as _fbio
-                _MESI = (r'(Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|'
-                         r'Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)')
-                with _plb.open(_fbio.BytesIO(_fb_bytes)) as _fbpdf:
-                    _pg0 = _fbpdf.pages[0].extract_text() or ""
-                _m_per = re.search(_MESI + r'\s+(\d{4})', _pg0, re.IGNORECASE)
-                if _m_per:
-                    _fb_period = f"{_m_per.group(1).capitalize()} {_m_per.group(2)}"
-            except Exception:
-                pass
-            # Salva localmente con last_updated e period (sempre disponibile)
-            save_factbook_local(_new, period=_fb_period)
             # Auto-save to GitHub repo (needs GITHUB_TOKEN secret)
             with st.spinner("💾 Salvo dati nel repository…"):
                 _saved = save_factbook_to_repo(_new)
@@ -3787,6 +3813,16 @@ def main():
         else:
             st.warning("⚠️ Factbook PDF caricato ma nessun dato estratto — "
                        "verrà usato FondiDoc")
+
+    if uploaded_fb_xl is not None:
+        # Manual override: user uploaded a corrected Excel
+        _xl = factbook_from_excel(uploaded_fb_xl.read())
+        if _xl:
+            factbook_data = _xl
+            _fb_source = f"Excel ({len(_xl)} fondi)"
+            st.success(f"✅ Dati Factbook caricati da Excel — {len(_xl)} fondi")
+        else:
+            st.warning("⚠️ Excel Factbook vuoto — uso dati precedenti")
 
     if _is_suggerito:
         _gp_data_main = st.session_state.get("_gp_data", {})
