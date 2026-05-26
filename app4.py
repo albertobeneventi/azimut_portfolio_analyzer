@@ -78,9 +78,51 @@ MANUAL_URL_OVERRIDES = {
         "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg",
 }
 
+# ── GITHUB REPO PERSISTENCE ──────────────────────────────────────────────────
+# Tutti i cache JSON vengono committati su GitHub via Contents API subito dopo
+# il salvataggio su disco. Richiede il secret GITHUB_TOKEN (contents:write).
+# In questo modo i dati sopravvivono ai riavvii di Streamlit Cloud e sono
+# immediatamente disponibili a tutti gli utenti dell'app.
+_REPO   = "albertobeneventi/azimut_portfolio_analyzer"
+_BRANCH = "master"
+
+
+def _push_json_to_repo(payload: dict, repo_path: str, commit_msg: str) -> bool:
+    """Commita un JSON su GitHub via Contents API (crea o aggiorna il file).
+
+    Silenzioso: non mostra UI. Restituisce True se ok, False altrimenti.
+    """
+    import base64
+    try:
+        token = st.secrets.get("GITHUB_TOKEN", "")
+        if not token:
+            return False
+        headers = {
+            "Authorization":    f"token {token}",
+            "Accept":           "application/vnd.github.v3+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        url = f"https://api.github.com/repos/{_REPO}/contents/{repo_path}"
+        r_get = requests.get(url, headers=headers,
+                             params={"ref": _BRANCH}, timeout=10)
+        sha = r_get.json().get("sha") if r_get.status_code == 200 else None
+        body: dict = {
+            "message": commit_msg,
+            "content": base64.b64encode(
+                json.dumps(payload, ensure_ascii=False, indent=2,
+                           default=str).encode("utf-8")
+            ).decode(),
+            "branch": _BRANCH,
+        }
+        if sha:
+            body["sha"] = sha
+        r_put = requests.put(url, json=body, headers=headers, timeout=20)
+        return r_put.status_code in (200, 201)
+    except Exception:
+        return False
+
+
 # ── FUND DATA CACHE ──────────────────────────────────────────────────────────
-# fund_cache.json is bundled in the repo and updated by the user after a fresh
-# FondiDoc fetch (download button → commit to git).
 CACHE_FILE = Path("data/fund_cache.json")
 
 def load_fund_cache() -> tuple:
@@ -95,10 +137,9 @@ def load_fund_cache() -> tuple:
     return {}, ""
 
 def save_fund_cache(fund_data: dict):
-    """Persist fund data to data/fund_cache.json (overwrites)."""
+    """Persist fund data to fund_cache.json e lo pusha su GitHub."""
     try:
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        # Preserve existing keys (es. ms_data) while updating fund_data
         payload = {}
         if CACHE_FILE.exists():
             try:
@@ -109,6 +150,8 @@ def save_fund_cache(fund_data: dict):
         payload["fund_data"] = fund_data
         CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
                               encoding="utf-8")
+        _push_json_to_repo(payload, "data/fund_cache.json",
+                           f"auto: aggiorna fund_cache {datetime.date.today().isoformat()}")
     except Exception:
         pass
 
@@ -125,7 +168,7 @@ def load_ms_cache() -> dict:
 
 
 def save_ms_cache(ms_data: dict):
-    """Persist Morningstar ratings to data/fund_cache.json alongside fund_data."""
+    """Persist Morningstar ratings in fund_cache.json e lo pusha su GitHub."""
     try:
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         payload = {}
@@ -137,6 +180,8 @@ def save_ms_cache(ms_data: dict):
         payload["ms_data"] = ms_data
         CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
                               encoding="utf-8")
+        _push_json_to_repo(payload, "data/fund_cache.json",
+                           f"auto: aggiorna ms_cache {datetime.date.today().isoformat()}")
     except Exception:
         pass
 
@@ -191,7 +236,7 @@ def load_excel_cache() -> tuple:
 
 
 def save_excel_cache(raw: dict):
-    """Salva i dati parsed dell'Excel su data/excel_cache.json."""
+    """Salva i dati Excel su disco e li pusha su GitHub."""
     try:
         EXCEL_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         payload: dict = {"last_updated": datetime.date.today().isoformat()}
@@ -203,6 +248,8 @@ def save_excel_cache(raw: dict):
         payload["fida_urls"] = raw.get("fida_urls") or {}
         EXCEL_CACHE_FILE.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _push_json_to_repo(payload, "data/excel_cache.json",
+                           f"auto: aggiorna excel_cache {datetime.date.today().isoformat()}")
     except Exception:
         pass
 
@@ -226,7 +273,7 @@ def load_gp_cache() -> tuple:
 
 
 def save_gp_cache(gp_data: dict, filename: str = ""):
-    """Salva i dati Global Perspectives su data/gp_cache.json."""
+    """Salva i dati Global Perspectives su disco e li pusha su GitHub."""
     try:
         GP_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -236,6 +283,8 @@ def save_gp_cache(gp_data: dict, filename: str = ""):
         }
         GP_CACHE_FILE.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _push_json_to_repo(payload, "data/gp_cache.json",
+                           f"auto: aggiorna gp_cache {datetime.date.today().isoformat()}")
     except Exception:
         pass
 
@@ -1079,11 +1128,6 @@ def factbook_from_excel(excel_bytes: bytes) -> dict:
 
 # ── Factbook JSON persistence (auto-load / GitHub API save) ─────────────────
 
-_FB_REPO      = "albertobeneventi/azimut_portfolio_analyzer"
-_FB_REPO_PATH = "data/factbook_dati.json"
-_FB_BRANCH    = "master"
-
-
 def load_factbook_auto() -> dict:
     """Load factbook data from data/factbook_dati.json (committed in the repo).
     Returns {} when the file is absent or empty.
@@ -1102,51 +1146,12 @@ def load_factbook_auto() -> dict:
 
 
 def save_factbook_to_repo(fb_data: dict) -> bool:
-    """Commit data/factbook_dati.json to GitHub via the Contents API.
-
-    Requires a Streamlit secret  GITHUB_TOKEN  with 'contents: write'
-    permission (fine-grained PAT) or  repo  scope (classic PAT).
-
-    Returns True on success, False on any error.
-    """
-    import json, base64
-    try:
-        token = st.secrets.get("GITHUB_TOKEN", "")
-        if not token:
-            return False
-
-        content_str = json.dumps(fb_data, ensure_ascii=False, indent=2,
-                                 default=str)
-        content_b64 = base64.b64encode(
-            content_str.encode("utf-8")).decode()
-
-        headers = {
-            "Authorization": f"token {token}",
-            "Accept": "application/vnd.github.v3+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        }
-        url = (f"https://api.github.com/repos/{_FB_REPO}"
-               f"/contents/{_FB_REPO_PATH}")
-
-        # Need existing SHA to update (not create) the file
-        r_get = requests.get(url, headers=headers,
-                             params={"ref": _FB_BRANCH}, timeout=10)
-        sha = (r_get.json().get("sha")
-               if r_get.status_code == 200 else None)
-
-        payload: dict = {
-            "message": (f"auto: aggiorna dati factbook "
-                        f"{datetime.date.today().isoformat()}"),
-            "content": content_b64,
-            "branch": _FB_BRANCH,
-        }
-        if sha:
-            payload["sha"] = sha
-
-        r_put = requests.put(url, json=payload, headers=headers, timeout=15)
-        return r_put.status_code in (200, 201)
-    except Exception:
-        return False
+    """Commit data/factbook_dati.json su GitHub. Richiede secret GITHUB_TOKEN."""
+    return _push_json_to_repo(
+        fb_data,
+        "data/factbook_dati.json",
+        f"auto: aggiorna dati factbook {datetime.date.today().isoformat()}",
+    )
 
 
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
