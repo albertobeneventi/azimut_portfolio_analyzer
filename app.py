@@ -76,11 +76,62 @@ MANUAL_URL_OVERRIDES = {
     # AZ Bond - Convertible Bond: pagina FondiDoc (classe A HU Cap EUR Hdg)
     "AZ Bond - Convertible Bond":
         "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg",
+    # AZ Equity - Global Infrastructure: classe A Cap EUR
+    "AZ Equity - Global Infrastructure":
+        "https://www.fondidoc.it/d/Index/GIU_5366/LU1621767737_az-f1-eq-gl-infrastructure-a-az-fund-cap-eur",
+    # AZ Bond - CoCo Bonds (EUR-hedged): classe A-HU Cap EUR Hdg
+    "AZ Bond - CoCo Bonds (EUR-hedged)":
+        "https://www.fondidoc.it/d/Index/FDFM4346/LU2622195936_az-f1-bd-coco-bonds-a-az-fund-cap-eur-hdg",
+    # AZ Bond - CoCo Bonds (senza hedging — nome alternativo nei portafogli)
+    "AZ Bond - CoCo Bonds":
+        "https://www.fondidoc.it/d/Index/FIDFM857/LU2622195423_az-f1-bd-coco-bonds-a-az-fund-cap-eur",
 }
 
+# ── GITHUB REPO PERSISTENCE ──────────────────────────────────────────────────
+# Tutti i cache JSON vengono committati su GitHub via Contents API subito dopo
+# il salvataggio su disco. Richiede il secret GITHUB_TOKEN (contents:write).
+# In questo modo i dati sopravvivono ai riavvii di Streamlit Cloud e sono
+# immediatamente disponibili a tutti gli utenti dell'app.
+_REPO   = "albertobeneventi/azimut_portfolio_analyzer"
+_BRANCH = "master"
+
+
+def _push_json_to_repo(payload: dict, repo_path: str, commit_msg: str) -> bool:
+    """Commita un JSON su GitHub via Contents API (crea o aggiorna il file).
+
+    Silenzioso: non mostra UI. Restituisce True se ok, False altrimenti.
+    """
+    import base64
+    try:
+        token = st.secrets.get("GITHUB_TOKEN", "")
+        if not token:
+            return False
+        headers = {
+            "Authorization":    f"token {token}",
+            "Accept":           "application/vnd.github.v3+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        url = f"https://api.github.com/repos/{_REPO}/contents/{repo_path}"
+        r_get = requests.get(url, headers=headers,
+                             params={"ref": _BRANCH}, timeout=10)
+        sha = r_get.json().get("sha") if r_get.status_code == 200 else None
+        body: dict = {
+            "message": commit_msg,
+            "content": base64.b64encode(
+                json.dumps(payload, ensure_ascii=False, indent=2,
+                           default=str).encode("utf-8")
+            ).decode(),
+            "branch": _BRANCH,
+        }
+        if sha:
+            body["sha"] = sha
+        r_put = requests.put(url, json=body, headers=headers, timeout=20)
+        return r_put.status_code in (200, 201)
+    except Exception:
+        return False
+
+
 # ── FUND DATA CACHE ──────────────────────────────────────────────────────────
-# fund_cache.json is bundled in the repo and updated by the user after a fresh
-# FondiDoc fetch (download button → commit to git).
 CACHE_FILE = Path("data/fund_cache.json")
 
 def load_fund_cache() -> tuple:
@@ -95,10 +146,9 @@ def load_fund_cache() -> tuple:
     return {}, ""
 
 def save_fund_cache(fund_data: dict):
-    """Persist fund data to data/fund_cache.json (overwrites)."""
+    """Persist fund data to fund_cache.json e lo pusha su GitHub."""
     try:
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        # Preserve existing keys (es. ms_data) while updating fund_data
         payload = {}
         if CACHE_FILE.exists():
             try:
@@ -109,6 +159,8 @@ def save_fund_cache(fund_data: dict):
         payload["fund_data"] = fund_data
         CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
                               encoding="utf-8")
+        _push_json_to_repo(payload, "data/fund_cache.json",
+                           f"auto: aggiorna fund_cache {datetime.date.today().isoformat()}")
     except Exception:
         pass
 
@@ -125,7 +177,7 @@ def load_ms_cache() -> dict:
 
 
 def save_ms_cache(ms_data: dict):
-    """Persist Morningstar ratings to data/fund_cache.json alongside fund_data."""
+    """Persist Morningstar ratings in fund_cache.json e lo pusha su GitHub."""
     try:
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         payload = {}
@@ -137,6 +189,8 @@ def save_ms_cache(ms_data: dict):
         payload["ms_data"] = ms_data
         CACHE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
                               encoding="utf-8")
+        _push_json_to_repo(payload, "data/fund_cache.json",
+                           f"auto: aggiorna ms_cache {datetime.date.today().isoformat()}")
     except Exception:
         pass
 
@@ -191,7 +245,7 @@ def load_excel_cache() -> tuple:
 
 
 def save_excel_cache(raw: dict):
-    """Salva i dati parsed dell'Excel su data/excel_cache.json."""
+    """Salva i dati Excel su disco e li pusha su GitHub."""
     try:
         EXCEL_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         payload: dict = {"last_updated": datetime.date.today().isoformat()}
@@ -203,6 +257,8 @@ def save_excel_cache(raw: dict):
         payload["fida_urls"] = raw.get("fida_urls") or {}
         EXCEL_CACHE_FILE.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _push_json_to_repo(payload, "data/excel_cache.json",
+                           f"auto: aggiorna excel_cache {datetime.date.today().isoformat()}")
     except Exception:
         pass
 
@@ -226,7 +282,7 @@ def load_gp_cache() -> tuple:
 
 
 def save_gp_cache(gp_data: dict, filename: str = ""):
-    """Salva i dati Global Perspectives su data/gp_cache.json."""
+    """Salva i dati Global Perspectives su disco e li pusha su GitHub."""
     try:
         GP_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -236,6 +292,8 @@ def save_gp_cache(gp_data: dict, filename: str = ""):
         }
         GP_CACHE_FILE.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _push_json_to_repo(payload, "data/gp_cache.json",
+                           f"auto: aggiorna gp_cache {datetime.date.today().isoformat()}")
     except Exception:
         pass
 
@@ -1079,11 +1137,6 @@ def factbook_from_excel(excel_bytes: bytes) -> dict:
 
 # ── Factbook JSON persistence (auto-load / GitHub API save) ─────────────────
 
-_FB_REPO      = "albertobeneventi/azimut_portfolio_analyzer"
-_FB_REPO_PATH = "data/factbook_dati.json"
-_FB_BRANCH    = "master"
-
-
 def load_factbook_auto() -> dict:
     """Load factbook data from data/factbook_dati.json (committed in the repo).
     Returns {} when the file is absent or empty.
@@ -1102,51 +1155,12 @@ def load_factbook_auto() -> dict:
 
 
 def save_factbook_to_repo(fb_data: dict) -> bool:
-    """Commit data/factbook_dati.json to GitHub via the Contents API.
-
-    Requires a Streamlit secret  GITHUB_TOKEN  with 'contents: write'
-    permission (fine-grained PAT) or  repo  scope (classic PAT).
-
-    Returns True on success, False on any error.
-    """
-    import json, base64
-    try:
-        token = st.secrets.get("GITHUB_TOKEN", "")
-        if not token:
-            return False
-
-        content_str = json.dumps(fb_data, ensure_ascii=False, indent=2,
-                                 default=str)
-        content_b64 = base64.b64encode(
-            content_str.encode("utf-8")).decode()
-
-        headers = {
-            "Authorization": f"token {token}",
-            "Accept": "application/vnd.github.v3+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        }
-        url = (f"https://api.github.com/repos/{_FB_REPO}"
-               f"/contents/{_FB_REPO_PATH}")
-
-        # Need existing SHA to update (not create) the file
-        r_get = requests.get(url, headers=headers,
-                             params={"ref": _FB_BRANCH}, timeout=10)
-        sha = (r_get.json().get("sha")
-               if r_get.status_code == 200 else None)
-
-        payload: dict = {
-            "message": (f"auto: aggiorna dati factbook "
-                        f"{datetime.date.today().isoformat()}"),
-            "content": content_b64,
-            "branch": _FB_BRANCH,
-        }
-        if sha:
-            payload["sha"] = sha
-
-        r_put = requests.put(url, json=payload, headers=headers, timeout=15)
-        return r_put.status_code in (200, 201)
-    except Exception:
-        return False
+    """Commit data/factbook_dati.json su GitHub. Richiede secret GITHUB_TOKEN."""
+    return _push_json_to_repo(
+        fb_data,
+        "data/factbook_dati.json",
+        f"auto: aggiorna dati factbook {datetime.date.today().isoformat()}",
+    )
 
 
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
@@ -3491,12 +3505,17 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stDownloadButton"]>button:hover{box-shadow:0 6px 24px rgba(27,79,187,.55) !important;transform:translateY(-2px) !important;}
 .w-ok{background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#065f46;}
 .w-warn{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#92400e;}
+@keyframes _aggiorna_blink{0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}
+@keyframes _card_amber{0%,100%{opacity:1;box-shadow:0 0 8px 2px #d9770688}50%{opacity:.6;box-shadow:0 0 18px 6px #d97706cc}}
 </style>
 """
 
 
 def main():
     st.markdown(_APP_CSS, unsafe_allow_html=True)
+    # Prima apertura della sessione → invita ad aggiornare i dati
+    if "_session_needs_update" not in st.session_state:
+        st.session_state["_session_needs_update"] = True
     _ms_with_rating = 0   # default; updated inside sidebar block below
     with st.sidebar:
         st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
@@ -3553,6 +3572,8 @@ def main():
                 if _gp_parsed:
                     st.session_state["_gp_data"]    = _gp_parsed
                     st.session_state["_gp_filename"] = uploaded_gp.name
+                    # Nuovo PDF → il fetch FondiDoc va rifatto
+                    st.session_state.pop("_gp_fetch_done", None)
                     # Salva su disco per le sessioni future
                     save_gp_cache(_gp_parsed, uploaded_gp.name)
                 else:
@@ -3604,8 +3625,22 @@ def main():
         _all_ok   = bool(_fd_now and _ms_with_rating
                         and (_gp_miss == 0 if _gp_loaded_now else True))
         _any_data = bool(_fd_now or _ms_with_rating)
-        # card colore: verde / giallo / rosso scuro lampeggiante
-        if _all_ok:
+        _needs_upd = st.session_state.get("_session_needs_update", False)
+
+        # card colore: ambra lampeggiante all'apertura / verde / giallo / rosso
+        if _needs_upd and _any_data:
+            # Dati in cache ma sessione fresca → invita ad aggiornare
+            _card_bg, _card_brd, _card_clr = "#1a1200", "#b45309", "#fde68a"
+            _card_extra_style = (
+                "border-width:2px;"
+                "box-shadow:0 0 10px 2px #d9770688;"
+                "animation:_card_amber 1.4s ease-in-out infinite;")
+            _card_anim_css = (
+                "<style>@keyframes _card_amber{"
+                "0%,100%{opacity:1;box-shadow:0 0 8px 2px #d9770688}"
+                "50%{opacity:.6;box-shadow:0 0 18px 6px #d97706cc}}"
+                "</style>")
+        elif _all_ok:
             _card_bg, _card_brd, _card_clr = "#0d2b1a", "#166534", "#86efac"
             _card_extra_style = ""
             _card_anim_css    = ""
@@ -3652,44 +3687,47 @@ def main():
                 "0%{opacity:.92}50%{opacity:.55}100%{opacity:.92}}</style>",
                 unsafe_allow_html=True)
         elif _can_update:
-            # Colore tasto: rosso lampeggiante / giallo / verde
-            if _all_ok:
-                _btn_bg   = "linear-gradient(135deg,#14532d,#16A34A)"
-                _btn_anim = ""
-                _btn_shadow_kf = ""
+            # Colore tasto: rosso lampeggiante (apertura) / verde / giallo / rosso
+            if _needs_upd:
+                # App appena aperta → rosso lampeggiante con bordo rosso
+                _btn_bg      = "linear-gradient(135deg,#7f1d1d,#DC2626)"
+                _btn_brd     = "border:2px solid #ef4444 !important;"
+                _wrap_anim   = "animation:_aggiorna_blink 1s ease-in-out infinite;"
+                _wrap_radius = "border-radius:8px;overflow:hidden;"
+            elif _all_ok:
+                _btn_bg      = "linear-gradient(135deg,#14532d,#16A34A)"
+                _btn_brd     = ""
+                _wrap_anim   = ""
+                _wrap_radius = ""
             elif _any_data:
-                _btn_bg   = "linear-gradient(135deg,#78350f,#D97706)"
-                _btn_anim = ""
-                _btn_shadow_kf = ""
+                _btn_bg      = "linear-gradient(135deg,#78350f,#D97706)"
+                _btn_brd     = ""
+                _wrap_anim   = ""
+                _wrap_radius = ""
             else:
-                _btn_bg   = "linear-gradient(135deg,#7f1d1d,#DC2626)"
-                _btn_anim = "animation:_aggiorna_blink 1s ease-in-out infinite;"
-                _btn_shadow_kf = (
-                    "@keyframes _aggiorna_blink{"
-                    "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
-                    "50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}"
-                )
-            # Selettori multipli per compatibilità con le versioni di Streamlit
-            _btn_sel = (
-                "section[data-testid='stSidebar'] div[data-testid='stButton'] > button,"
-                "section[data-testid='stSidebar'] div[data-testid='stBaseButton-secondary'],"
-                "section[data-testid='stSidebar'] .stButton > button"
-            )
+                _btn_bg      = "linear-gradient(135deg,#7f1d1d,#DC2626)"
+                _btn_brd     = "border:2px solid #ef4444 !important;"
+                _wrap_anim   = "animation:_aggiorna_blink 1s ease-in-out infinite;"
+                _wrap_radius = "border-radius:8px;overflow:hidden;"
+            # Selettori separati: wrapper (animation) e button (colori)
+            # Il wrapper div[stButton] non ha stili emotion → animation funziona
+            _wrap_sel = "section[data-testid='stSidebar'] div[data-testid='stButton']"
+            _btn_sel  = f"{_wrap_sel} > button"
             st.markdown(
                 f"<style>"
+                f"{_wrap_sel}{{{_wrap_anim}{_wrap_radius}}}"
                 f"{_btn_sel}{{"
                 f"background:{_btn_bg} !important;"
-                f"color:#fff !important;border:none !important;"
-                f"font-weight:600 !important;{_btn_anim}}}"
-                f"{_btn_sel}:hover{{"
-                f"filter:brightness(1.18) !important;}}"
-                f"{_btn_shadow_kf}"
+                f"color:#fff !important;{_btn_brd}"
+                f"font-weight:600 !important;}}"
+                f"{_btn_sel}:hover{{filter:brightness(1.18) !important;}}"
                 f"</style>",
                 unsafe_allow_html=True)
             if st.button("📥  Aggiorna Dati",
                          use_container_width=True,
                          help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
                               "Morningstar e — se il GP è caricato — dati fondi GP."):
+                st.session_state["_session_needs_update"] = False
                 if _has_excel:
                     st.session_state["_fetch_fd_requested"] = True
                     st.session_state["_fetch_ms_requested"] = True
@@ -3749,15 +3787,16 @@ def main():
         ptf_label   = f"SUGGERITO — Scenario {_sc_key_hdr}"
 
     # ── Auto-fetch GP links quando si entra in SUGGERITO con fondi mancanti ──
-    # Usa una firma (n_fondi_gp|dim_cache) per non ritentare se già fatto
+    # Scatta solo la prima volta (o dopo un nuovo PDF). Dopo qualsiasi fetch
+    # (auto o manuale) _gp_fetch_done=True impedisce rifetch su cambio scenario.
     _is_already_fetching = any(st.session_state.get(k) for k in (
         "_fetch_fd_requested", "_fetch_ms_requested", "_fetch_gp_requested"))
-    if _is_suggerito and _gp_loaded_now and _gp_miss > 0 and not _is_already_fetching:
-        _auto_sig = f"{_n_gp}|{_gp_miss}"
-        if st.session_state.get("_gp_auto_fetch_sig") != _auto_sig:
-            st.session_state["_gp_auto_fetch_sig"] = _auto_sig
-            st.session_state["_fetch_gp_requested"] = True
-            st.rerun()
+    if (_is_suggerito and _gp_loaded_now and _gp_miss > 0
+            and not _is_already_fetching
+            and not st.session_state.get("_gp_fetch_done")):
+        st.session_state["_gp_fetch_done"] = True
+        st.session_state["_fetch_gp_requested"] = True
+        st.rerun()
 
     # ── Invalidate cached PDF when portfolio type or profile changes ──────────
     _ptf_key = f"{ptf_choice}|{profile}"
@@ -3891,6 +3930,8 @@ def main():
                 st.warning(
                     "⚠️ Nessun dato trovato su FondiDoc per i fondi GP. "
                     "Potrebbe essere un problema di rete o di nomi.")
+            # Fetch completato: non ripetere finché non arriva un nuovo PDF
+            st.session_state["_gp_fetch_done"] = True
             st.rerun()
 
     # ── Factbook data ──────────────────────────────────────────────────────────
