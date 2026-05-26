@@ -3356,19 +3356,6 @@ def main():
         except Exception:
             pass
 
-        # ── Stato cache in una riga compatta sopra l'expander ────────────────
-        _cache_parts = []
-        if _xl_cache_date:
-            _cache_parts.append(f"📊 Fondi Qualità {_xl_cache_date}")
-        if _fb_cache_date:
-            _fb_label = _fb_cache_period if _fb_cache_period else _fb_cache_date
-            _cache_parts.append(f"📖 Schede Prodotto {_fb_label}")
-        if _gp_cache_date:
-            _gp_label = _gp_cache_edition if _gp_cache_edition else _gp_cache_date
-            _cache_parts.append(f"🌐 Global Perspectives {_gp_label}")
-        if _cache_parts:
-            st.caption("  ·  ".join(_cache_parts))
-
         # ── Expander uploader — aperto se non c'è nessun cache ───────────────
         _no_cache = not (_xl_cache_raw or _fb_cache_date or _gp_cache_date)
         with st.expander("⬆️  Aggiorna file sorgente", expanded=_no_cache):
