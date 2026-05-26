@@ -3507,6 +3507,10 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 .w-warn{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#92400e;}
 @keyframes _aggiorna_blink{0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}
 @keyframes _card_amber{0%,100%{opacity:1;box-shadow:0 0 8px 2px #d9770688}50%{opacity:.6;box-shadow:0 0 18px 6px #d97706cc}}
+[data-testid="stSidebar"] [data-testid="stExpander"]{background:#0d1e38 !important;border:1px solid #1a3050 !important;border-radius:8px !important;margin-bottom:.4rem !important;}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary{color:#4a6582 !important;font-size:.68rem !important;letter-spacing:.14em !important;text-transform:uppercase !important;font-weight:700 !important;padding:.45rem .6rem !important;}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover{color:#8aa5c0 !important;}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary svg{fill:#4a6582 !important;}
 </style>
 """
 
@@ -3521,48 +3525,61 @@ def main():
         st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
         st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
 
-        # ── Uploader Excel ────────────────────────────────────────────────────
+        # ── Stato file (sempre visibile) ──────────────────────────────────────
         _xl_cache_raw, _xl_cache_date = load_excel_cache()
-        if _xl_cache_date:
-            _xl_hint = (f"💾 Cache: {_xl_cache_date} · carica per aggiornare")
-        else:
-            _xl_hint = "Nessuna cache — carica il file mensile."
-        uploaded = st.file_uploader(
-            "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)",
-            type=["xlsx","xls"],
-            help=_xl_hint,
-        )
-        if _xl_cache_date and uploaded is None:
-            st.caption(f"📂 Excel da cache · {_xl_cache_date}")
-
-        # ── Uploader Factbook ─────────────────────────────────────────────────
-        uploaded_fb = st.file_uploader(
-            "FACTBOOK PDF (prima estrazione)",
-            type=["pdf"],
-            help="Carica il Factbook PDF per estrarre Duration, Rating e Asset "
-                 "Allocation. Dopo la prima estrazione scarica il file Excel "
-                 "e ricaricalo la prossima volta: è più veloce.",
-        )
-        uploaded_fb_xl = st.file_uploader(
-            "DATI FACTBOOK (Excel, dopo prima estrazione)",
-            type=["xlsx","xls"],
-            help="Carica il file Excel scaricato dopo la prima estrazione del "
-                 "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
-        )
-
-        # ── Uploader GP ───────────────────────────────────────────────────────
         _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
+        _fb_cached = bool(load_factbook_auto())
+        _status_parts = []
+        if _xl_cache_date:
+            _status_parts.append(f"📊 Excel · {_xl_cache_date}")
+        if _fb_cached:
+            _status_parts.append("📖 Factbook ✓")
         if _gp_cache_date:
-            _gp_hint = (f"💾 Cache: {_gp_cache_date} · carica per aggiornare")
-        else:
-            _gp_hint = "Nessuna cache — carica il PDF trimestrale."
-        uploaded_gp = st.file_uploader(
-            "GLOBAL PERSPECTIVES PDF",
-            type=["pdf"],
-            help=_gp_hint,
-        )
-        if _gp_cache_date and uploaded_gp is None:
-            st.caption(f"📂 GP da cache · {_gp_cache_date}")
+            _status_parts.append(f"🌐 GP · {_gp_cache_date}")
+        if _status_parts:
+            st.caption("  ·  ".join(_status_parts))
+
+        # ── Uploader a scomparsa ──────────────────────────────────────────────
+        with st.expander("⬆️  CARICA / AGGIORNA FILE", expanded=False):
+            # Excel
+            if _xl_cache_date:
+                _xl_hint = f"💾 Cache: {_xl_cache_date} · carica per aggiornare"
+            else:
+                _xl_hint = "Nessuna cache — carica il file mensile."
+            uploaded = st.file_uploader(
+                "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)",
+                type=["xlsx","xls"],
+                help=_xl_hint,
+                key="up_excel",
+            )
+            # Factbook PDF
+            uploaded_fb = st.file_uploader(
+                "FACTBOOK PDF (prima estrazione)",
+                type=["pdf"],
+                help="Carica il Factbook PDF per estrarre Duration, Rating e Asset "
+                     "Allocation. Dopo la prima estrazione scarica il file Excel "
+                     "e ricaricalo la prossima volta: è più veloce.",
+                key="up_fb_pdf",
+            )
+            # Factbook Excel
+            uploaded_fb_xl = st.file_uploader(
+                "DATI FACTBOOK (Excel, dopo prima estrazione)",
+                type=["xlsx","xls"],
+                help="Carica il file Excel scaricato dopo la prima estrazione del "
+                     "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
+                key="up_fb_xl",
+            )
+            # Global Perspectives
+            if _gp_cache_date:
+                _gp_hint = f"💾 Cache: {_gp_cache_date} · carica per aggiornare"
+            else:
+                _gp_hint = "Nessuna cache — carica il PDF trimestrale."
+            uploaded_gp = st.file_uploader(
+                "GLOBAL PERSPECTIVES PDF",
+                type=["pdf"],
+                help=_gp_hint,
+                key="up_gp_pdf",
+            )
 
         # ── Parsing GP (solo quando cambia file) ─────────────────────────────
         if uploaded_gp is not None:
