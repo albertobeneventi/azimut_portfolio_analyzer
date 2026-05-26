@@ -210,36 +210,29 @@ def save_excel_cache(raw: dict):
 def load_gp_cache() -> tuple:
     """Carica i dati Global Perspectives salvati su disco.
 
-    Returns (gp_data, filename_str, last_updated_str, edition_str)
-    oppure (None, "", "", "").
+    Returns (gp_data, filename_str, last_updated_str) oppure (None, "", "").
     """
     try:
         if GP_CACHE_FILE.exists() and GP_CACHE_FILE.stat().st_size > 10:
             payload = json.loads(GP_CACHE_FILE.read_text(encoding="utf-8-sig"))
             gp_data = payload.get("gp_data")
-            if (gp_data and isinstance(gp_data, dict) and len(gp_data) >= 3
-                    # Validazione struttura: ogni scenario deve avere "funds" come lista
-                    and all(isinstance(v, dict) and isinstance(v.get("funds"), list)
-                            for v in gp_data.values())):
+            if gp_data and isinstance(gp_data, dict) and len(gp_data) >= 3:
                 return (gp_data,
                         payload.get("filename", ""),
-                        payload.get("last_updated", ""),
-                        payload.get("edition", ""))
+                        payload.get("last_updated", ""))
     except Exception:
         pass
-    return None, "", "", ""
+    return None, "", ""
 
 
-def save_gp_cache(gp_data: dict, filename: str = "", edition: str = ""):
+def save_gp_cache(gp_data: dict, filename: str = ""):
     """Salva i dati Global Perspectives su data/gp_cache.json."""
     try:
         GP_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "last_updated": datetime.date.today().isoformat(),
             "filename":     filename,
-            "edition":      edition,
-            "gp_data":      {k: v for k, v in gp_data.items()
-                             if not k.startswith("_")},
+            "gp_data":      gp_data,
         }
         GP_CACHE_FILE.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -247,22 +240,111 @@ def save_gp_cache(gp_data: dict, filename: str = "", edition: str = ""):
         pass
 
 
-# ── UNP/IUNP CATALOG ─────────────────────────────────────────────────────────
-# Caricato da data/unp_catalog.json (Catalogo Prodotti&Servizi Azimut).
-# Per aggiornare: invia il nuovo PDF del catalogo → viene rigenerato il JSON
-# e committato su GitHub senza toccare il codice.
-def _load_unp_catalog() -> dict:
-    try:
-        _p = Path(__file__).parent / "data" / "unp_catalog.json"
-        if _p.exists():
-            _raw = json.loads(_p.read_text(encoding="utf-8-sig"))
-            return {k: tuple(v) for k, v in _raw.items()
-                    if not k.startswith("_") and isinstance(v, list) and len(v) == 2}
-    except Exception:
-        pass
-    return {}
-
-UNP_CATALOG = _load_unp_catalog()
+# ── UNP/IUNP CATALOG (Catalogo Prodotti&Servizi Azimut, settembre 2025) ──────
+# Fonte: DETTAGLIO AZ FUND — valori %UNP e %IUNP36
+# Estratto da pdftotext su tutte le pagine del PDF (93 voci).
+# Nomi fondi esattamente come nel PDF; _normalize_for_unp() gestisce la
+# corrispondenza con i nomi abbreviati dell'Excel (es. "AZ F.1 Bd. ...").
+UNP_CATALOG = {
+    # ── AZ Allocation ─────────────────────────────────────────────────────────
+    "AZ Allocation - Asset Timing 2026":                               (2.29, 1.14),
+    "AZ Allocation - Asset Timing 2028":                               (2.29, 1.14),
+    "AZ Allocation - Balanced Brave":                                  (1.89, 0.94),
+    "AZ Allocation - Balanced FoF":                                    (1.89, 0.94),
+    "AZ Allocation - Balanced Plus":                                   (1.89, 0.94),
+    "AZ Allocation - Escalator 2026":                                  (2.29, 1.14),
+    "AZ Allocation - Escalator 2028":                                  (2.29, 1.14),
+    "AZ Allocation - Escalator 2030":                                  (2.29, 1.14),
+    "AZ Allocation - Flexible Equity":                                 (1.92, 0.96),
+    "AZ Allocation - Global Aggressive":                               (1.89, 0.94),
+    "AZ Allocation - Global Balanced":                                 (1.80, 0.90),
+    "AZ Allocation - Global Conservative":                             (1.61, 0.80),
+    "AZ Allocation - Global Conservative (Classe C)":                  (0.95, 0.47),
+    "AZ Allocation - Italian Trend":                                   (2.01, 1.00),
+    "AZ Allocation - Life Plan 2040":                                  (2.51, 1.25),
+    "AZ Allocation - PIR Italian Excellence 70%":                      (1.89, 0.94),
+    "AZ Allocation - Potential Income Upside 2030":                    (1.67, 0.83),
+    "AZ Allocation - Risk Parity Factors":                             (1.89, 0.94),
+    "AZ Allocation - Trend":                                           (2.01, 1.00),
+    "AZ Allocation - Turkey":                                          (1.89, 0.94),
+    # ── AZ Alternative ────────────────────────────────────────────────────────
+    "AZ Alternative - Capital Enhanced":                               (0.51, 0.25),
+    "AZ Alternative - Commodity":                                      (1.81, 0.90),
+    # ── AZ Bond ───────────────────────────────────────────────────────────────
+    "AZ Bond - Aggregate Bond Euro":                                   (1.10, 0.55),
+    "AZ Bond - Asian Bond":                                            (1.38, 0.69),
+    "AZ Bond - Bond Value":                                            (1.53, 0.76),
+    "AZ Bond - COCO Bonds":                                            (1.53, 0.76),
+    "AZ Bond - Convertible":                                           (1.62, 0.81),
+    "AZ Bond - Enhanced Yield":                                        (0.35, 0.17),
+    "AZ Bond - Euro Corporate":                                        (1.23, 0.61),
+    "AZ Bond - Frontier Markets Debt":                                 (1.62, 0.81),
+    "AZ Bond - Global Macro Bond":                                     (1.29, 0.64),
+    "AZ Bond - High Income FoF":                                       (1.62, 0.81),
+    "AZ Bond - High Yield":                                            (1.47, 0.73),
+    "AZ Bond - High Yield Target 2028 Climate Transition":             (1.53, 0.76),
+    "AZ Bond - High Yield Target 2028 Climate Transition (Classe C)":  (0.52, 0.26),
+    "AZ Bond - Income Dynamic":                                        (0.99, 0.49),
+    "AZ Bond - International FoF":                                     (1.62, 0.81),
+    "AZ Bond - Latin America Bonds":                                   (1.53, 0.76),
+    "AZ Bond - Patriot":                                               (1.36, 0.68),
+    "AZ Bond - Renminbi Opportunities":                                (1.23, 0.61),
+    "AZ Bond - Short Term Investment Grade Climate Transition":        (1.53, 0.76),
+    "AZ Bond - Short Term Investment Grade Climate Transition (Classe C)": (0.43, 0.21),
+    "AZ Bond - Sustainable Hybrid":                                    (1.46, 0.73),
+    "AZ Bond - Target 2025":                                           (1.11, 0.55),
+    "AZ Bond - Target 2026":                                           (1.11, 0.55),
+    "AZ Bond - Target 2028":                                           (1.11, 0.55),
+    "AZ Bond - Target 2029":                                           (1.11, 0.55),
+    "AZ Bond - Target 2029 USD":                                       (1.23, 0.61),
+    "AZ Bond - Target 2031":                                           (1.11, 0.55),
+    "AZ Bond - Total Return Bond":                                     (1.55, 0.77),
+    "AZ Bond - US Dollar Aggregate":                                   (1.24, 0.62),
+    # ── AZ Equity ─────────────────────────────────────────────────────────────
+    "AZ Equity - Al Mal Mena":                                         (2.51, 1.25),
+    "AZ Equity - American Opportunities":                              (2.19, 1.09),
+    "AZ Equity - ASEAN Countries":                                     (2.19, 1.09),
+    "AZ Equity - Best Value":                                          (2.09, 1.04),
+    "AZ Equity - Biotechnology":                                       (2.51, 1.25),
+    "AZ Equity - Borletti Global Lifestyle":                           (2.30, 1.15),
+    "AZ Equity - Brazil Trend":                                        (2.19, 1.09),
+    "AZ Equity - China":                                               (2.19, 1.09),
+    "AZ Equity - Egypt":                                               (2.51, 1.25),
+    "AZ Equity - Emerging Asia FoF":                                   (2.51, 1.25),
+    "AZ Equity - Emerging Markets Technology":                         (2.51, 1.25),
+    "AZ Equity - Escalator":                                           (2.29, 1.14),
+    "AZ Equity - Europe":                                              (2.19, 1.09),
+    "AZ Equity - Food & Agriculture":                                  (2.40, 1.20),
+    "AZ Equity - Global Dividend":                                     (2.51, 1.25),
+    "AZ Equity - Global Emerging FoF":                                 (2.51, 1.25),
+    "AZ Equity - Global ESG":                                          (2.51, 1.25),
+    "AZ Equity - Global FoF":                                          (2.51, 1.25),
+    "AZ Equity - Global Growth":                                       (2.40, 1.20),
+    "AZ Equity - Global Healthcare":                                   (2.40, 1.20),
+    "AZ Equity - Global Infrastructure":                               (2.26, 1.13),
+    "AZ Equity - Global Quality":                                      (2.18, 1.09),
+    "AZ Equity - Global Value FoF":                                    (2.51, 1.25),
+    "AZ Equity - Industrial Revolution 4.0":                           (2.51, 1.25),
+    "AZ Equity - Japan":                                               (2.20, 1.10),
+    "AZ Equity - Mexico":                                              (2.51, 1.25),
+    "AZ Equity - Momentum":                                            (2.19, 1.09),
+    "AZ Equity - Small Cap Europe FoF":                                (2.51, 1.25),
+    "AZ Equity - Special Needs & Inclusion":                           (2.51, 1.25),
+    "AZ Equity - Water & Renewable Resources":                         (2.40, 1.20),
+    "AZ Equity - World Minimum Volatility":                            (2.19, 1.09),
+    # ── AZ Islamic ────────────────────────────────────────────────────────────
+    "AZ Islamic - Global Sukuk":                                       (1.36, 0.68),
+    # ── Azimut Thematic Fund ──────────────────────────────────────────────────
+    "Azimut Thematic Fund - AZ Allocation - Global Goals":             (2.50, 1.25),
+    "Azimut Thematic Fund - AZ Equity - New Generation":               (2.79, 1.39),
+    "Azimut Thematic Fund - AZ Equity - Space":                        (2.79, 1.39),
+    # ── Fondi Economia Reale (sezione separata nel catalogo) ──────────────────
+    "AZ Allocation - Italian Long-Term Opp.":                          (2.73, 1.36),
+    "AZ Allocation - Long Term Credit Opp.":                           (1.94, 0.97),
+    "AZ Allocation - Long-Term Equity Opp.":                           (2.73, 1.36),
+    "AZ Bond - ABS":                                                   (1.23, 0.61),
+    "AZ Equity - Future Opportunities":                                (2.51, 1.25),
+}
 
 # CSS is injected inside main() to keep it within the error-handler scope.
 
@@ -1005,107 +1087,66 @@ _FB_BRANCH    = "master"
 def load_factbook_auto() -> dict:
     """Load factbook data from data/factbook_dati.json (committed in the repo).
     Returns {} when the file is absent or empty.
-    Filtra le chiavi di metadati (last_updated, _*).
     """
+    import json
     try:
         fp = Path(__file__).parent / "data" / "factbook_dati.json"
         if fp.exists() and fp.stat().st_size > 5:
             with open(fp, encoding="utf-8") as fh:
                 data = json.load(fh)
                 if isinstance(data, dict) and data:
-                    return {k: v for k, v in data.items()
-                            if not k.startswith("_")
-                            and k not in ("last_updated", "period")}
+                    return data
     except Exception:
         pass
     return {}
 
 
-def save_factbook_local(fb_data: dict, period: str = ""):
-    """Salva factbook_dati.json in locale con last_updated e (opzionale) period."""
-    try:
-        fp = Path(__file__).parent / "data" / "factbook_dati.json"
-        fp.parent.mkdir(parents=True, exist_ok=True)
-        payload: dict = {"last_updated": datetime.date.today().isoformat()}
-        if period:
-            payload["period"] = period
-        payload.update(fb_data)
-        fp.write_text(json.dumps(payload, ensure_ascii=False, indent=2,
-                                 default=str), encoding="utf-8")
-    except Exception:
-        pass
+def save_factbook_to_repo(fb_data: dict) -> bool:
+    """Commit data/factbook_dati.json to GitHub via the Contents API.
 
+    Requires a Streamlit secret  GITHUB_TOKEN  with 'contents: write'
+    permission (fine-grained PAT) or  repo  scope (classic PAT).
 
-def _save_json_to_repo(repo_path: str, payload: dict, commit_msg: str) -> bool:
-    """Helper generico: salva un file JSON nel repo GitHub via Contents API.
-
-    Richiede il secret Streamlit  GITHUB_TOKEN  con permesso 'contents: write'.
-    Restituisce True se il commit riesce, False per qualsiasi errore.
+    Returns True on success, False on any error.
     """
-    import base64
+    import json, base64
     try:
         token = st.secrets.get("GITHUB_TOKEN", "")
         if not token:
             return False
+
+        content_str = json.dumps(fb_data, ensure_ascii=False, indent=2,
+                                 default=str)
         content_b64 = base64.b64encode(
-            json.dumps(payload, ensure_ascii=False, indent=2,
-                       default=str).encode("utf-8")).decode()
+            content_str.encode("utf-8")).decode()
+
         headers = {
             "Authorization": f"token {token}",
             "Accept": "application/vnd.github.v3+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
-        url = f"https://api.github.com/repos/{_FB_REPO}/contents/{repo_path}"
+        url = (f"https://api.github.com/repos/{_FB_REPO}"
+               f"/contents/{_FB_REPO_PATH}")
+
+        # Need existing SHA to update (not create) the file
         r_get = requests.get(url, headers=headers,
                              params={"ref": _FB_BRANCH}, timeout=10)
-        sha = r_get.json().get("sha") if r_get.status_code == 200 else None
-        body: dict = {"message": commit_msg, "content": content_b64,
-                      "branch": _FB_BRANCH}
+        sha = (r_get.json().get("sha")
+               if r_get.status_code == 200 else None)
+
+        payload: dict = {
+            "message": (f"auto: aggiorna dati factbook "
+                        f"{datetime.date.today().isoformat()}"),
+            "content": content_b64,
+            "branch": _FB_BRANCH,
+        }
         if sha:
-            body["sha"] = sha
-        r_put = requests.put(url, json=body, headers=headers, timeout=20)
+            payload["sha"] = sha
+
+        r_put = requests.put(url, json=payload, headers=headers, timeout=15)
         return r_put.status_code in (200, 201)
     except Exception:
         return False
-
-
-def save_factbook_to_repo(fb_data: dict, period: str = "") -> bool:
-    """Commit data/factbook_dati.json a GitHub."""
-    payload: dict = {"last_updated": datetime.date.today().isoformat()}
-    if period:
-        payload["period"] = period
-    payload.update(fb_data)
-    return _save_json_to_repo(
-        _FB_REPO_PATH, payload,
-        f"auto: aggiorna factbook_dati.json [{datetime.date.today().isoformat()}]")
-
-
-def save_gp_to_repo(gp_data: dict, edition: str = "") -> bool:
-    """Commit data/gp_cache.json a GitHub."""
-    payload = {
-        "last_updated": datetime.date.today().isoformat(),
-        "filename":     "",
-        "edition":      edition,
-        "gp_data":      {k: v for k, v in gp_data.items()
-                         if not k.startswith("_")},
-    }
-    return _save_json_to_repo(
-        "data/gp_cache.json", payload,
-        f"auto: aggiorna gp_cache.json [{edition or datetime.date.today().isoformat()}]")
-
-
-def save_excel_to_repo(raw: dict) -> bool:
-    """Commit data/excel_cache.json a GitHub."""
-    payload: dict = {"last_updated": datetime.date.today().isoformat()}
-    for sname in ("PTF FULL", "PTF SHORT"):
-        df = raw.get(sname)
-        payload[sname] = _df_to_records(df) if df is not None else []
-    fida = raw.get("FIDA")
-    payload["FIDA"] = _df_to_records(fida) if fida is not None else []
-    payload["fida_urls"] = raw.get("fida_urls") or {}
-    return _save_json_to_repo(
-        "data/excel_cache.json", payload,
-        f"auto: aggiorna excel_cache.json [{datetime.date.today().isoformat()}]")
 
 
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
@@ -1497,43 +1538,52 @@ def fetch_all_fund_data(df: pd.DataFrame, fida_urls: dict,
 
 
 # ════════════════════════════════════════════════════════════
-# FONDIONLINE API — Morningstar rating
+# MORNINGSTAR RATINGS — FondiOnline (primario) + lt.morningstar.com (fallback)
 # ════════════════════════════════════════════════════════════
-# FondiOnline exposes a JSON API used by its fund screener page.
-# One HTTP request returns all funds for a company with Rating field.
+# Sorgente primaria: FondiOnline.it — un'unica chiamata JSON restituisce
+# tutti i fondi Azimut con Rating Morningstar.
+# Fallback: lt.morningstar.com — screener/snapshot per ISIN (più lento).
 
-FONDIONLINE_BASE    = "https://www.fondionline.it"
-FO_API_URL          = "https://www.fondionline.it/offers-list"
-FO_AZ_COMPANY_ID    = "0C00001L0E"   # Azimut Investments S.A. (Morningstar ID)
-FONDIONLINE_HDR     = {
+FONDIONLINE_BASE = "https://www.fondionline.it"
+FO_API_URL       = "https://www.fondionline.it/offers-list"
+FO_AZ_COMPANY_ID = "0C00001L0E"   # Azimut Investments S.A. (Morningstar ID)
+FONDIONLINE_HDR  = {
     "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
     "Accept":          "application/json, text/plain, */*",
     "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
     "Referer":         "https://www.fondionline.it/fondi/elenco_prodotti.html",
 }
 
+_MS_LT_BASE = "https://lt.morningstar.com/api/rest.svc/klr5zyak8x"
+_MS_HDR = {
+    "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/124.0.0.0 Safari/537.36",
+    "Accept":          "application/json, text/plain, */*",
+    "Accept-Language": "it-IT,it;q=0.9",
+    "Referer":         "https://lt.morningstar.com/",
+}
+
 
 def _fo_fetch_company_ratings(company_id: str) -> dict:
-    """Fetch all Morningstar ratings for one company via FondiOnline JSON API.
+    """Fetch tutti i rating Azimut via FondiOnline JSON API (una sola chiamata).
 
-    Single HTTP request — returns {ISIN: {"ms_rating": int|None, "fo_url": str|None}}.
-    The API paginates; we request pageSize=1000 to get everything in one shot
-    (Azimut has ~310 funds total).
+    Restituisce {ISIN: {"ms_rating": int|None, "fo_url": str|None}}.
     """
     result: dict = {}
     try:
         r = requests.get(
             FO_API_URL,
             params={
-                "productType":      "OICR",
-                "sortOrder":        "asc",
-                "pageNumber":       1,
-                "pageSize":         1000,
-                "tab":              0,
-                "fundId":           "",
-                "orderBy":          "Name",
+                "productType":       "OICR",
+                "sortOrder":         "asc",
+                "pageNumber":        1,
+                "pageSize":          1000,
+                "tab":               0,
+                "fundId":            "",
+                "orderBy":           "Name",
                 "brandingCompanyId": company_id,
-                "distribution":     -1,
+                "distribution":      -1,
             },
             headers=FONDIONLINE_HDR,
             timeout=15,
@@ -1542,7 +1592,7 @@ def _fo_fetch_company_ratings(company_id: str) -> dict:
             data = r.json()
             for fund in data.get("funds", []):
                 isin   = (fund.get("ISIN") or "").strip()
-                rating = fund.get("Rating")          # "1"…"5" or absent
+                rating = fund.get("Rating")
                 url    = (f"{FONDIONLINE_BASE}/elenco-fondi/{fund['detailsUrl']}"
                           if fund.get("detailsUrl") else None)
                 if isin:
@@ -1555,12 +1605,79 @@ def _fo_fetch_company_ratings(company_id: str) -> dict:
     return result
 
 
+def _ms_rating_screener(isin: str, sess: requests.Session) -> int | None:
+    """Fallback screener lt.morningstar.com: term=ISIN → starRating."""
+    try:
+        r = sess.get(
+            f"{_MS_LT_BASE}/screener",
+            params={
+                "output":             "json",
+                "currencyId":         "EUR",
+                "languageId":         "it-IT",
+                "limit":              5,
+                "securityDataPoints": "SecId,isin,starRating",
+                "filters":            "",
+                "term":               isin,
+                "resultPage":         1,
+            },
+            headers=_MS_HDR,
+            timeout=10,
+        )
+        if r.status_code == 200:
+            for row in r.json().get("rows", []):
+                if str(row.get("isin", "")).strip() == isin:
+                    v = row.get("starRating")
+                    if v is not None:
+                        try:
+                            return int(v)
+                        except (ValueError, TypeError):
+                            pass
+    except Exception:
+        pass
+    return None
+
+
+def _ms_rating_snapshot(isin: str, sess: requests.Session) -> int | None:
+    """Fallback security_details lt.morningstar.com: itype=isin → XML → starRating."""
+    import xml.etree.ElementTree as ET
+    try:
+        r = sess.get(
+            f"{_MS_LT_BASE}/security_details/{isin}",
+            params={"viewId": "MFsnapshot", "currencyId": "EUR",
+                    "itype": "isin", "languageId": "it"},
+            headers=_MS_HDR,
+            timeout=10,
+        )
+        if r.status_code == 200 and r.text.strip():
+            root = ET.fromstring(r.text)
+            for tag in ("starRating", "Rating_MStarOverall",
+                        "StarRatingM255", "mStarRating"):
+                el = root.find(f".//{tag}")
+                if el is not None and el.text:
+                    try:
+                        v = int(el.text.strip())
+                        if 1 <= v <= 5:
+                            return v
+                    except (ValueError, TypeError):
+                        pass
+    except Exception:
+        pass
+    return None
+
+
+def _ms_rating_for_isin(isin: str, sess: requests.Session) -> int | None:
+    """Screener lt.morningstar.com, poi snapshot come secondo fallback."""
+    r = _ms_rating_screener(isin, sess)
+    if r is None:
+        r = _ms_rating_snapshot(isin, sess)
+    return r
+
+
 def fetch_all_ms_ratings(df: pd.DataFrame, fida_df: pd.DataFrame,
                           progress_cb=None) -> dict:
-    """Fetch Morningstar ratings for all portfolio funds via FondiOnline API.
+    """Fetch rating Morningstar: FondiOnline (primario) → lt.morningstar.com (fallback).
 
-    Replaces the old per-page scraping approach with a single JSON API call.
-    Returns {fund_name: {"ms_rating": int_or_None, "fo_url": str_or_None}}.
+    Restituisce {fund_name: {"ms_rating": int|None, "fo_url": str|None}}.
     """
     # 1. Build nome → ISIN map from FIDA sheet
     nome_to_isin: dict = {}
@@ -1572,15 +1689,48 @@ def fetch_all_ms_ratings(df: pd.DataFrame, fida_df: pd.DataFrame,
 
     portfolio_names = list(df["nome"].unique()) if not df.empty else []
 
-    # 2. One API call → ISIN → {ms_rating, fo_url}
+    # 2. Tentativo primario: FondiOnline (1 chiamata per tutti i fondi)
     isin_to_ms = _fo_fetch_company_ratings(FO_AZ_COMPANY_ID)
-    if progress_cb:
-        progress_cb(1.0)
 
-    # 3. Match portfolio funds by ISIN
+    # 3. Fallback lt.morningstar.com per gli ISIN non trovati su FondiOnline
+    isins_needed = {
+        nome: nome_to_isin[nome]
+        for nome in portfolio_names
+        if nome in nome_to_isin
+    }
+    missing_isins = [
+        isin for isin in set(isins_needed.values())
+        if isin not in isin_to_ms
+    ]
+
+    if missing_isins:
+        sess = requests.Session()
+        total = max(len(missing_isins), 1)
+        done  = 0
+
+        def _fetch_one(isin: str):
+            return isin, _ms_rating_for_isin(isin, sess)
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            futures = {pool.submit(_fetch_one, isin): isin for isin in missing_isins}
+            for future in as_completed(futures):
+                try:
+                    isin, rating = future.result()
+                    if rating is not None:
+                        isin_to_ms[isin] = {"ms_rating": rating, "fo_url": None}
+                except Exception:
+                    pass
+                done += 1
+                if progress_cb:
+                    progress_cb(done / total)
+    else:
+        if progress_cb:
+            progress_cb(1.0)
+
+    # 4. Map back to fund names
     results: dict = {}
     for nome in portfolio_names:
-        isin = nome_to_isin.get(nome, "")
+        isin = isins_needed.get(nome, "")
         results[nome] = isin_to_ms.get(isin, {"ms_rating": None, "fo_url": None})
 
     return results
@@ -2697,7 +2847,7 @@ def free_portfolio_ui(data):
     with c2: w = st.number_input("Peso %",0.1,100.0,10.0,0.5,key="sel_w")
     with c3:
         st.markdown("<br>",unsafe_allow_html=True)
-        if st.button("➕ Aggiungi", width='stretch'):
+        if st.button("➕ Aggiungi",use_container_width=True):
             # Strip FIDArating tag "· FN", Morningstar tag "· MN" and macro-cat "  [...]"
             fname = re.split(r'\s+·\s+[FM]\d|\s{2}\[', sel)[0].strip()
             if any(f["nome"]==fname for f in st.session_state.free_ptf):
@@ -2719,7 +2869,7 @@ def free_portfolio_ui(data):
             nw = st.number_input("Peso",0.0,100.0,float(fund["w_input"]),0.5,key=f"fw_{i}",label_visibility="collapsed")
             st.session_state.free_ptf[i]["w_input"] = nw
         with r3:
-            if st.button("🗑️",key=f"del_{i}", width='stretch'):
+            if st.button("🗑️",key=f"del_{i}",use_container_width=True):
                 st.session_state.free_ptf.pop(i); st.rerun()
         total_w += st.session_state.free_ptf[i]["w_input"]
 
@@ -3047,18 +3197,7 @@ def parse_global_perspectives(pdf_bytes: bytes):
             "subcat_weights": sw,
         }
 
-    if not result:
-        return None
-
-    # ── Estrae edizione dalla prima pagina (es. "N° 2 2026") ─────────────────
-    _ed = ""
-    _m_ed = re.search(r'N[°o]\.?\s*(\d+)\s+(\d{4})', pages[0] if pages else "",
-                      re.IGNORECASE)
-    if _m_ed:
-        _ed = f"N° {_m_ed.group(1)} {_m_ed.group(2)}"
-    result["_edition"] = _ed
-
-    return result
+    return result if result else None
 
 
 # ── Module-level badge helpers (used in suggerito_portfolio_ui) ──────────────
@@ -3314,8 +3453,7 @@ _APP_CSS = """
 html,body,[class*="css"]{font-family:'DM Sans',sans-serif;}
 h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stSidebar"]{background:linear-gradient(170deg,#06101e 0%,#0d1f3c 55%,#0a1628 100%);border-right:1px solid #1a3050;}
-[data-testid="stSidebar"] .stRadio > label,[data-testid="stSidebar"] .stSelectbox > label{color:#4a6582 !important;font-size:.68rem !important;letter-spacing:.12em !important;text-transform:uppercase !important;font-weight:600 !important;}
-[data-testid="stSidebar"] .stFileUploader label{color:#7ab8e8 !important;font-size:.72rem !important;letter-spacing:.08em !important;text-transform:uppercase !important;font-weight:700 !important;}
+[data-testid="stSidebar"] .stFileUploader label,[data-testid="stSidebar"] .stRadio > label,[data-testid="stSidebar"] .stSelectbox > label{color:#4a6582 !important;font-size:.68rem !important;letter-spacing:.12em !important;text-transform:uppercase !important;font-weight:600 !important;}
 [data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p{color:#c0cfe0 !important;font-size:.9rem !important;}
 [data-testid="stSidebar"] .stSelectbox>div>div{background:#132035 !important;border:1px solid #243d5a !important;color:#dde6f0 !important;border-radius:6px !important;}
 [data-testid="stSidebar"] .stSelectbox svg{fill:#C9A84C !important;width:22px !important;height:22px !important;opacity:1 !important;}
@@ -3353,10 +3491,6 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stDownloadButton"]>button:hover{box-shadow:0 6px 24px rgba(27,79,187,.55) !important;transform:translateY(-2px) !important;}
 .w-ok{background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#065f46;}
 .w-warn{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:.7rem 1rem;font-size:.84rem;color:#92400e;}
-[data-testid="stSidebar"] [data-testid="stExpander"]{border:1px solid #245580 !important;border-radius:8px !important;background:rgba(12,38,68,0.6) !important;margin-bottom:4px !important;}
-[data-testid="stSidebar"] [data-testid="stExpander"] summary{color:#7ab8e8 !important;font-size:.76rem !important;font-weight:700 !important;letter-spacing:.08em !important;text-transform:uppercase !important;padding:.55rem .75rem !important;}
-[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover{color:#bfdbfe !important;background:rgba(20,60,100,0.5) !important;border-radius:7px !important;cursor:pointer !important;}
-[data-testid="stSidebar"] [data-testid="stExpander"] summary svg{fill:#7ab8e8 !important;}
 </style>
 """
 
@@ -3368,50 +3502,48 @@ def main():
         st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
         st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
 
-        # ── Carica date cache prima di aprire l'expander ──────────────────────
+        # ── Uploader Excel ────────────────────────────────────────────────────
         _xl_cache_raw, _xl_cache_date = load_excel_cache()
-        _gp_cache_data, _gp_cache_fname, _gp_cache_date, _gp_cache_edition = load_gp_cache()
-        _fb_cache_date = ""
-        _fb_cache_period = ""
-        try:
-            _fb_p = Path(__file__).parent / "data" / "factbook_dati.json"
-            if _fb_p.exists() and _fb_p.stat().st_size > 5:
-                import json as _json
-                _fb_meta = _json.loads(_fb_p.read_text(encoding="utf-8-sig"))
-                _fb_cache_date   = _fb_meta.get("last_updated", "")
-                _fb_cache_period = _fb_meta.get("period", "")
-        except Exception:
-            pass
+        if _xl_cache_date:
+            _xl_hint = (f"💾 Cache: {_xl_cache_date} · carica per aggiornare")
+        else:
+            _xl_hint = "Nessuna cache — carica il file mensile."
+        uploaded = st.file_uploader(
+            "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)",
+            type=["xlsx","xls"],
+            help=_xl_hint,
+        )
+        if _xl_cache_date and uploaded is None:
+            st.caption(f"📂 Excel da cache · {_xl_cache_date}")
 
-        # ── Expander uploader — aperto se non c'è nessun cache ───────────────
-        _no_cache = not (_xl_cache_raw or _fb_cache_date or _gp_cache_date)
-        with st.expander("⬆️  Aggiorna file sorgente", expanded=_no_cache):
-            # Excel
-            _xl_hint = (f"💾 Cache: {_xl_cache_date} · carica per aggiornare"
-                        if _xl_cache_date else "Nessuna cache — carica il file mensile.")
-            uploaded = st.file_uploader(
-                "FONDI QUALITÀ",
-                type=["xlsx","xls"],
-                help=_xl_hint,
-            )
-            # Factbook PDF
-            _fb_label_full = ("SCHEDE PRODOTTO" + (f" · {_fb_cache_period}" if _fb_cache_period else ""))
-            _fb_hint = (f"💾 Cache: {_fb_cache_period or _fb_cache_date} · carica per aggiornare"
-                        if _fb_cache_date else "Nessuna cache — carica il Factbook PDF.")
-            uploaded_fb = st.file_uploader(
-                _fb_label_full,
-                type=["pdf"],
-                help=_fb_hint,
-            )
-            # Global Perspectives PDF
-            _gp_label_full = ("GLOBAL PERSPECTIVES" + (f" · {_gp_cache_edition}" if _gp_cache_edition else ""))
-            _gp_hint = (f"💾 Cache: {_gp_cache_edition or _gp_cache_date} · carica per aggiornare"
-                        if _gp_cache_date else "Nessuna cache — carica il PDF trimestrale.")
-            uploaded_gp = st.file_uploader(
-                _gp_label_full,
-                type=["pdf"],
-                help=_gp_hint,
-            )
+        # ── Uploader Factbook ─────────────────────────────────────────────────
+        uploaded_fb = st.file_uploader(
+            "FACTBOOK PDF (prima estrazione)",
+            type=["pdf"],
+            help="Carica il Factbook PDF per estrarre Duration, Rating e Asset "
+                 "Allocation. Dopo la prima estrazione scarica il file Excel "
+                 "e ricaricalo la prossima volta: è più veloce.",
+        )
+        uploaded_fb_xl = st.file_uploader(
+            "DATI FACTBOOK (Excel, dopo prima estrazione)",
+            type=["xlsx","xls"],
+            help="Carica il file Excel scaricato dopo la prima estrazione del "
+                 "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
+        )
+
+        # ── Uploader GP ───────────────────────────────────────────────────────
+        _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
+        if _gp_cache_date:
+            _gp_hint = (f"💾 Cache: {_gp_cache_date} · carica per aggiornare")
+        else:
+            _gp_hint = "Nessuna cache — carica il PDF trimestrale."
+        uploaded_gp = st.file_uploader(
+            "GLOBAL PERSPECTIVES PDF",
+            type=["pdf"],
+            help=_gp_hint,
+        )
+        if _gp_cache_date and uploaded_gp is None:
+            st.caption(f"📂 GP da cache · {_gp_cache_date}")
 
         # ── Parsing GP (solo quando cambia file) ─────────────────────────────
         if uploaded_gp is not None:
@@ -3421,12 +3553,8 @@ def main():
                 if _gp_parsed:
                     st.session_state["_gp_data"]    = _gp_parsed
                     st.session_state["_gp_filename"] = uploaded_gp.name
-                    _gp_edition = _gp_parsed.get("_edition", "")
-                    # Salva su disco locale
-                    save_gp_cache(_gp_parsed, uploaded_gp.name, _gp_edition)
-                    # Salva nel repo GitHub (persiste tra redeploy)
-                    with st.spinner("💾 Salvo GP nel repository…"):
-                        save_gp_to_repo(_gp_parsed, _gp_edition)
+                    # Salva su disco per le sessioni future
+                    save_gp_cache(_gp_parsed, uploaded_gp.name)
                 else:
                     st.session_state.pop("_gp_data", None)
                     st.warning("⚠️ PDF non riconosciuto — verifica che sia un "
@@ -3457,16 +3585,7 @@ def main():
         _n_gp    = 0
         if _gp_loaded_now:
             _gp_ok  = st.session_state["_gp_data"]
-            # Difensivo: se la struttura è corrotta (valori non-dict), pulisci e ignora
-            if not (isinstance(_gp_ok, dict)
-                    and all(isinstance(v, dict) and isinstance(v.get("funds"), list)
-                            for v in _gp_ok.values())):
-                st.session_state.pop("_gp_data", None)
-                st.session_state.pop("_gp_filename", None)
-                _gp_loaded_now = False
-            else:
-                _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values())
-        if _gp_loaded_now:
+            _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values())
             _fd_chk = _fd_now
             _gp_miss = len(set(
                 f["nome"]
@@ -3515,6 +3634,7 @@ def main():
             unsafe_allow_html=True)
 
         # ── Unico tasto Aggiorna Dati ─────────────────────────────────────────
+        # "can update" = Excel disponibile (upload fresco OPPURE cache su disco) + GP
         _has_excel   = bool(uploaded or _xl_cache_raw)
         _can_update  = bool(_has_excel or _gp_loaded_now)
         _is_fetching = any(st.session_state.get(k) for k in (
@@ -3531,8 +3651,8 @@ def main():
                 "<style>@keyframes _aggiorna_pulse{"
                 "0%{opacity:.92}50%{opacity:.55}100%{opacity:.92}}</style>",
                 unsafe_allow_html=True)
-        else:
-            # Tasto sempre visibile — colore dipende dallo stato dati
+        elif _can_update:
+            # Colore tasto: rosso lampeggiante / giallo / verde
             if _all_ok:
                 _btn_bg   = "linear-gradient(135deg,#14532d,#16A34A)"
                 _btn_anim = ""
@@ -3549,6 +3669,7 @@ def main():
                     "0%,100%{opacity:1;box-shadow:0 0 8px 3px #ef444466}"
                     "50%{opacity:.45;box-shadow:0 0 18px 6px #ef4444cc}}"
                 )
+            # Selettori multipli per compatibilità con le versioni di Streamlit
             _btn_sel = (
                 "section[data-testid='stSidebar'] div[data-testid='stButton'] > button,"
                 "section[data-testid='stSidebar'] div[data-testid='stBaseButton-secondary'],"
@@ -3566,22 +3687,23 @@ def main():
                 f"</style>",
                 unsafe_allow_html=True)
             if st.button("📥  Aggiorna Dati",
-                         width='stretch',
+                         use_container_width=True,
                          help="Scarica in sequenza: FondiDoc (FIDArating + rendimenti), "
                               "Morningstar e — se il GP è caricato — dati fondi GP."):
-                if _can_update:
-                    if _has_excel:
-                        st.session_state["_fetch_fd_requested"] = True
-                        st.session_state["_fetch_ms_requested"] = True
-                    if _gp_loaded_now:
-                        st.session_state["_fetch_gp_requested"] = True
-                    st.rerun()
-                else:
-                    st.warning("⬆️ Carica prima il file **FONDI QUALITÀ** (Excel)")
+                if _has_excel:
+                    st.session_state["_fetch_fd_requested"] = True
+                    st.session_state["_fetch_ms_requested"] = True
+                if _gp_loaded_now:
+                    st.session_state["_fetch_gp_requested"] = True
+                st.rerun()  # mostra subito lo stato "in corso" prima che parta lo scarico
+        else:
+            st.caption("⬆️ Carica il file Excel o il PDF Global Perspectives")
 
         st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
         _gp_loaded    = bool(st.session_state.get("_gp_data"))
-        _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO", "🌐  SUGGERITO"]
+        _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO"]
+        if _gp_loaded:
+            _ptf_options.append("🌐  SUGGERITO")
         # Forza index esplicito: evita che st.rerun() resetti la selezione
         _cur_ptf = st.session_state.get("_ptf_choice_radio", _ptf_options[0])
         _ptf_idx = _ptf_options.index(_cur_ptf) if _cur_ptf in _ptf_options else 0
@@ -3666,11 +3788,9 @@ def main():
         _fida_existing = raw.get("fida_urls") or {}
         raw["fida_urls"] = {**_fida_existing, **MANUAL_URL_OVERRIDES}
 
-    # Salva su disco + nel repo GitHub dopo ogni upload
+    # Salva su disco dopo il patch — la cache conterrà sempre gli URL aggiornati
     if uploaded is not None and raw:
         save_excel_cache(raw)
-        with st.spinner("💾 Salvo Excel nel repository…"):
-            save_excel_to_repo(raw)
 
     # Controlla se ci sono dati Excel disponibili (upload o cache)
     _has_raw = bool(raw.get("PTF FULL") is not None
@@ -3706,12 +3826,23 @@ def main():
             _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
                       .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
             if not _df_ms.empty:
-                with st.spinner("⭐ Scarico rating Morningstar da FondiOnline…"):
+                with st.spinner("⭐ Scarico rating Morningstar…"):
                     _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
-                save_ms_cache(_ms_new)
-                st.session_state["_ms_data"] = _ms_new
                 _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
-                st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
+                if _n_found > 0:
+                    # Fetch riuscito → salva e aggiorna cache
+                    save_ms_cache(_ms_new)
+                    st.session_state["_ms_data"] = _ms_new
+                    st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
+                else:
+                    # Fetch fallito → non toccare il cache, usa dati già salvati
+                    _ms_cached = load_ms_cache()
+                    _n_cached  = sum(1 for v in _ms_cached.values() if v.get("ms_rating"))
+                    st.session_state["_ms_data"] = _ms_cached or _ms_new
+                    if _n_cached > 0:
+                        st.warning(f"⭐ Morningstar non raggiungibile — uso cache ({_n_cached} rating)")
+                    else:
+                        st.warning("⭐ Morningstar non raggiungibile — nessun dato in cache")
                 st.rerun()
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
@@ -3736,20 +3867,21 @@ def main():
                 _fd_merged = {**_fd_base, **_gp_new}
                 save_fund_cache(_fd_merged)
                 st.session_state["_scomp_fd"] = _fd_merged
-                # Aggiorna rating Morningstar per i fondi GP tramite ISIN
+                # Aggiorna rating Morningstar per i nuovi fondi GP (best-effort)
                 try:
-                    _isin_to_ms = _fo_fetch_company_ratings(FO_AZ_COMPANY_ID)
-                    if _isin_to_ms:
-                        _ms_existing = st.session_state.get("_ms_data") or load_ms_cache()
-                        _ms_gp_new = {}
-                        for _rn, _fd_v in _gp_new.items():
-                            _isin_v = _fd_v.get("isin", "") if isinstance(_fd_v, dict) else ""
-                            if _isin_v and _isin_v in _isin_to_ms:
-                                _ms_gp_new[_rn] = _isin_to_ms[_isin_v]
-                        if _ms_gp_new:
-                            _ms_merged = {**_ms_existing, **_ms_gp_new}
-                            save_ms_cache(_ms_merged)
-                            st.session_state["_ms_data"] = _ms_merged
+                    _ms_existing = st.session_state.get("_ms_data") or load_ms_cache()
+                    _sess_gp = requests.Session()
+                    _ms_gp_new = {}
+                    for _rn, _fd_v in _gp_new.items():
+                        _isin_v = _fd_v.get("isin", "") if isinstance(_fd_v, dict) else ""
+                        if _isin_v and _rn not in _ms_existing:
+                            _r = _ms_rating_for_isin(_isin_v, _sess_gp)
+                            if _r is not None:
+                                _ms_gp_new[_rn] = {"ms_rating": _r, "fo_url": None}
+                    if _ms_gp_new:
+                        _ms_merged = {**_ms_existing, **_ms_gp_new}
+                        save_ms_cache(_ms_merged)
+                        st.session_state["_ms_data"] = _ms_merged
                 except Exception:
                     pass  # MS update è best-effort
                 st.success(
@@ -3771,31 +3903,15 @@ def main():
 
     if uploaded_fb is not None:
         # First-time (or refresh): parse PDF, auto-save, offer Excel
-        _fb_bytes = uploaded_fb.read()
         with st.spinner("📖 Estraggo dati dal Factbook PDF…"):
-            _new = parse_factbook(_fb_bytes)
+            _new = parse_factbook(uploaded_fb.read())
         if _new:
             factbook_data = _new
             _fb_source = f"PDF ({len(_new)} fondi)"
             st.success(f"✅ Factbook estratto — {len(_new)} fondi trovati")
-            # Estrai periodo dalla prima pagina (es. "Marzo 2026")
-            _fb_period = ""
-            try:
-                import pdfplumber as _plb, io as _fbio
-                _MESI = (r'(Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|'
-                         r'Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)')
-                with _plb.open(_fbio.BytesIO(_fb_bytes)) as _fbpdf:
-                    _pg0 = _fbpdf.pages[0].extract_text() or ""
-                _m_per = re.search(_MESI + r'\s+(\d{4})', _pg0, re.IGNORECASE)
-                if _m_per:
-                    _fb_period = f"{_m_per.group(1).capitalize()} {_m_per.group(2)}"
-            except Exception:
-                pass
-            # Salva localmente con last_updated e period (sempre disponibile)
-            save_factbook_local(_new, period=_fb_period)
-            # Salva nel repo GitHub (persiste tra redeploy)
-            with st.spinner("💾 Salvo Factbook nel repository…"):
-                _saved = save_factbook_to_repo(_new, period=_fb_period)
+            # Auto-save to GitHub repo (needs GITHUB_TOKEN secret)
+            with st.spinner("💾 Salvo dati nel repository…"):
+                _saved = save_factbook_to_repo(_new)
             if _saved:
                 st.info(
                     "🔄 Dati salvati nel repository. "
@@ -3818,6 +3934,16 @@ def main():
         else:
             st.warning("⚠️ Factbook PDF caricato ma nessun dato estratto — "
                        "verrà usato FondiDoc")
+
+    if uploaded_fb_xl is not None:
+        # Manual override: user uploaded a corrected Excel
+        _xl = factbook_from_excel(uploaded_fb_xl.read())
+        if _xl:
+            factbook_data = _xl
+            _fb_source = f"Excel ({len(_xl)} fondi)"
+            st.success(f"✅ Dati Factbook caricati da Excel — {len(_xl)} fondi")
+        else:
+            st.warning("⚠️ Excel Factbook vuoto — uso dati precedenti")
 
     if _is_suggerito:
         _gp_data_main = st.session_state.get("_gp_data", {})
@@ -3923,9 +4049,9 @@ def main():
     col_l,col_r = st.columns([1.15,0.85],gap="large")
     with col_l:
         st.markdown('<p class="sec-title">Allocazione per Fondo</p>',unsafe_allow_html=True)
-        st.plotly_chart(make_fund_pie(df_act,wcol,profile),config={"displayModeBar":False})
+        st.plotly_chart(make_fund_pie(df_act,wcol,profile),use_container_width=True,config={"displayModeBar":False})
         st.markdown('<p class="sec-title">Allocazione per Macro-Categoria</p>',unsafe_allow_html=True)
-        st.plotly_chart(make_macro_bar(df_act,wcol),config={"displayModeBar":False})
+        st.plotly_chart(make_macro_bar(df_act,wcol),use_container_width=True,config={"displayModeBar":False})
     with col_r:
         st.markdown('<p class="sec-title">Composizione del Portafoglio</p>',unsafe_allow_html=True)
         _gruppi = list(df_act["gruppo"].unique())
@@ -4422,7 +4548,7 @@ def main():
                 data=st.session_state["_pdf_bytes_ready"],
                 file_name=st.session_state.get("_pdf_fname_ready", "report.pdf"),
                 mime="application/pdf",
-                width='stretch',
+                use_container_width=True,
                 type="primary",
             )
             st.caption(f"✅ {st.session_state.get('_pdf_lbl','PDF pronto')}")
@@ -4434,10 +4560,10 @@ def main():
                     data=st.session_state["_pdf_bytes_ready"],
                     file_name=st.session_state.get("_pdf_fname_ready", "report.pdf"),
                     mime="application/pdf",
-                    width='stretch',
+                    use_container_width=True,
                 )
                 st.caption("Clicca 'Genera' per aggiornare con i pesi attuali.")
-            if st.button("⚡  Genera PDF", width='stretch', type="primary"):
+            if st.button("⚡  Genera PDF", use_container_width=True, type="primary"):
                 for _k in ("_pdf_bytes_ready", "_pdf_fname_ready", "_pdf_lbl"):
                     st.session_state.pop(_k, None)
                 pb = st.progress(0, text="Scarico dati FondiDoc…")
