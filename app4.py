@@ -3776,12 +3776,23 @@ def main():
             _df_ms = (pd.concat(_sheets_ms, ignore_index=True)
                       .drop_duplicates(subset=["nome"]) if _sheets_ms else pd.DataFrame())
             if not _df_ms.empty:
-                with st.spinner("⭐ Scarico rating Morningstar da lt.morningstar.com…"):
+                with st.spinner("⭐ Scarico rating Morningstar…"):
                     _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
-                save_ms_cache(_ms_new)
-                st.session_state["_ms_data"] = _ms_new
                 _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
-                st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
+                if _n_found > 0:
+                    # Fetch riuscito → salva e aggiorna cache
+                    save_ms_cache(_ms_new)
+                    st.session_state["_ms_data"] = _ms_new
+                    st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
+                else:
+                    # Fetch fallito → non toccare il cache, usa dati già salvati
+                    _ms_cached = load_ms_cache()
+                    _n_cached  = sum(1 for v in _ms_cached.values() if v.get("ms_rating"))
+                    st.session_state["_ms_data"] = _ms_cached or _ms_new
+                    if _n_cached > 0:
+                        st.warning(f"⭐ Morningstar non raggiungibile — uso cache ({_n_cached} rating)")
+                    else:
+                        st.warning("⭐ Morningstar non raggiungibile — nessun dato in cache")
                 st.rerun()
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
@@ -3806,20 +3817,21 @@ def main():
                 _fd_merged = {**_fd_base, **_gp_new}
                 save_fund_cache(_fd_merged)
                 st.session_state["_scomp_fd"] = _fd_merged
-                # Aggiorna rating Morningstar per i fondi GP tramite ISIN
+                # Aggiorna rating Morningstar per i nuovi fondi GP (best-effort)
                 try:
-                    _isin_to_ms = _fo_fetch_company_ratings(FO_AZ_COMPANY_ID)
-                    if _isin_to_ms:
-                        _ms_existing = st.session_state.get("_ms_data") or load_ms_cache()
-                        _ms_gp_new = {}
-                        for _rn, _fd_v in _gp_new.items():
-                            _isin_v = _fd_v.get("isin", "") if isinstance(_fd_v, dict) else ""
-                            if _isin_v and _isin_v in _isin_to_ms:
-                                _ms_gp_new[_rn] = _isin_to_ms[_isin_v]
-                        if _ms_gp_new:
-                            _ms_merged = {**_ms_existing, **_ms_gp_new}
-                            save_ms_cache(_ms_merged)
-                            st.session_state["_ms_data"] = _ms_merged
+                    _ms_existing = st.session_state.get("_ms_data") or load_ms_cache()
+                    _sess_gp = requests.Session()
+                    _ms_gp_new = {}
+                    for _rn, _fd_v in _gp_new.items():
+                        _isin_v = _fd_v.get("isin", "") if isinstance(_fd_v, dict) else ""
+                        if _isin_v and _rn not in _ms_existing:
+                            _r = _ms_rating_for_isin(_isin_v, _sess_gp)
+                            if _r is not None:
+                                _ms_gp_new[_rn] = {"ms_rating": _r, "fo_url": None}
+                    if _ms_gp_new:
+                        _ms_merged = {**_ms_existing, **_ms_gp_new}
+                        save_ms_cache(_ms_merged)
+                        st.session_state["_ms_data"] = _ms_merged
                 except Exception:
                     pass  # MS update è best-effort
                 st.success(
