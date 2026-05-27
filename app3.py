@@ -4382,6 +4382,26 @@ def main():
             if _fi and _fn:
                 _isin_map_ui[_fn] = _fi
 
+    def _qtl_concept_key(name: str) -> str:
+        """Estrae il "nome-concetto" del fondo rimuovendo il prefisso AZ e il suffisso
+        di classe (A/B Cap/Dis EUR ecc.) per poter abbinare classi diverse dello stesso fondo."""
+        n = name.strip()
+        # Rimuove prefisso tipo "AZ F.1 All. " / "AZ F.1 Eq. " / "AZ Allocation - " ecc.
+        n = re.sub(r'^AZ\s+(?:F\.\d+\s+\w+[\. ]+|Fund\s+\d+\s*[-–]\s*|\w+\s*[-–]\s*)', '', n, flags=re.I).strip()
+        # Rimuove suffisso di classe: "A Cap EUR", "B Dis EUR(i)", "A-HU Cap EUR Hdg", ecc.
+        n = re.sub(r'\s+[A-Z](?:-[A-Z0-9]+)?\s+(?:Cap|Dis|Acc|Inc)\b.*$', '', n, flags=re.I).strip()
+        return n.lower()
+
+    # Mappa concetto → url (fallback quando l'ISIN specifico non è in cache)
+    # Usa tutte le classi trovate, così se la classe B è in cache ma la A no, il fondo si linka comunque
+    _qtl_concept_map: dict[str, str] = {}
+    for _ck_nome, _ck_isin in _isin_map_ui.items():
+        _ck_url = _qtl_cache.get(_ck_isin, "")
+        if _ck_url:
+            _ck = _qtl_concept_key(_ck_nome)
+            if _ck and _ck not in _qtl_concept_map:
+                _qtl_concept_map[_ck] = _ck_url
+
     tab1, tab_q, tab2, tab3, tab4 = st.tabs([
         "📊  Scomposizione Az/Obb",
         "🔗  Quantalys",
@@ -4503,8 +4523,15 @@ def main():
                 f"{_qdisp}</a>"
                 if _q_furl else _qdisp
             )
-            # Quantalys URL
+            # Quantalys URL — prima ISIN diretto, poi fallback per nome-concetto
             _qurl = _qtl_cache.get(_qisin, "") if _qisin else ""
+            if not _qurl:
+                # Prova a trovare l'URL tramite un'altra classe dello stesso fondo
+                _qck = _qtl_concept_key(_qnome)
+                _qurl = _qtl_concept_map.get(_qck, "")
+                if not _qurl and _qdisp != _qnome:
+                    _qck2 = _qtl_concept_key(_qdisp)
+                    _qurl = _qtl_concept_map.get(_qck2, "")
             if _qurl:
                 _q_found += 1
                 _qtl_cell = (
