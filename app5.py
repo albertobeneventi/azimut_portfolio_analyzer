@@ -1163,6 +1163,23 @@ def save_factbook_to_repo(fb_data: dict) -> bool:
     )
 
 
+@st.cache_data(ttl=3600)
+def load_quantalys_cache() -> dict:
+    """Load ISIN → Quantalys URL mapping from data/quantalys_cache.json.
+    Returns {} if the file does not exist yet (run build_quantalys_cache.py first).
+    """
+    try:
+        fp = Path(__file__).parent / "data" / "quantalys_cache.json"
+        if fp.exists() and fp.stat().st_size > 5:
+            with open(fp, encoding="utf-8") as fh:
+                data = json.load(fh)
+            # Keep only non-empty URLs
+            return {k: v for k, v in data.items() if v}
+    except Exception:
+        pass
+    return {}
+
+
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
     ws = wb[sheet_name]
     rows = list(ws.iter_rows(values_only=True))
@@ -4354,8 +4371,54 @@ def main():
                     f'text-underline-offset:2px;">{nome}</a>')
         return nome
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    # ── Quantalys cache + ISIN map (used in tab_q) ───────────────────────────
+    _qtl_cache = load_quantalys_cache()   # {ISIN: "https://www.quantalys.it/Fonds/..."}
+    _fida_raw_ui = raw.get("FIDA", pd.DataFrame())
+    _isin_map_ui: dict[str, str] = {}
+    if isinstance(_fida_raw_ui, pd.DataFrame) and not _fida_raw_ui.empty and "isin" in _fida_raw_ui.columns:
+        for _, _fr in _fida_raw_ui.iterrows():
+            _fi = str(_fr.get("isin", "") or "").strip()
+            _fn = str(_fr.get("nome", "") or "").strip()
+            if _fi and _fn:
+                _isin_map_ui[_fn] = _fi
+
+    def _qtl_concept_key(name: str) -> str:
+        """Estrae il "nome-concetto" del fondo rimuovendo il prefisso AZ e il suffisso
+        di classe (A/B Cap/Dis EUR ecc.) per poter abbinare classi diverse dello stesso fondo."""
+        n = name.strip()
+        # Rimuove prefisso tipo "AZ F.1 All. " / "AZ F.1 Eq. " / "AZ Allocation - " ecc.
+        n = re.sub(r'^AZ\s+(?:F\.\d+\s+\w+[\. ]+|Fund\s+\d+\s*[-–]\s*|\w+\s*[-–]\s*)', '', n, flags=re.I).strip()
+        # Rimuove suffisso di classe: "A Cap EUR", "B Dis EUR(i)", "A-HU Cap EUR Hdg", ecc.
+        n = re.sub(r'\s+[A-Z](?:-[A-Z0-9]+)?\s+(?:Cap|Dis|Acc|Inc)\b.*$', '', n, flags=re.I).strip()
+        return n.lower()
+
+    # Mappa concetto → url (fallback quando l'ISIN specifico non è in cache)
+    # Usa tutte le classi trovate, così se la classe B è in cache ma la A no, il fondo si linka comunque
+    _qtl_concept_map: dict[str, str] = {}
+    for _ck_nome, _ck_isin in _isin_map_ui.items():
+        _ck_url = _qtl_cache.get(_ck_isin, "")
+        if _ck_url:
+            _ck = _qtl_concept_key(_ck_nome)
+            if _ck and _ck not in _qtl_concept_map:
+                _qtl_concept_map[_ck] = _ck_url
+
+    # Estendi con ISIN da fida_urls (es. classe A non presente in FIDA):
+    # URL fondidoc.it contengono l'ISIN nel percorso  →  estraiamolo per cercare in _qtl_cache
+    _fidu_isin_re = re.compile(r'/([A-Z]{2}[A-Z0-9]{10})_')
+    for _cu_nome, _cu_fdurl in (raw.get("fida_urls") or {}).items():
+        _cu_m = _fidu_isin_re.search(str(_cu_fdurl))
+        if not _cu_m:
+            continue
+        _cu_isin = _cu_m.group(1)
+        _cu_url  = _qtl_cache.get(_cu_isin, "")
+        if _cu_url:
+            _cu_ck = _qtl_concept_key(_cu_nome)
+            if _cu_ck and _cu_ck not in _qtl_concept_map:
+                _qtl_concept_map[_cu_ck] = _cu_url
+
+    tab1, tab_q, tab2, tab3, tab4 = st.tabs([
         "📊  Scomposizione Az/Obb",
+        "🔗  Quantalys",
         "📈  Rendimenti",
         "⚠️  Rischio",
         "💰  UNP / IUNP",
@@ -4435,6 +4498,100 @@ def main():
                 f" &nbsp;·&nbsp; Cat. FIDA &amp; FIDArating: {_note_fd}"
                 f"{_ms_note}</p>",
                 unsafe_allow_html=True)
+
+    # ── TAB Q — QUANTALYS ────────────────────────────────────────────────────
+    with tab_q:
+        _TH_Q = ("background:#1B4FBB;color:#fff;padding:8px 12px;"
+                 "font-size:.78rem;font-weight:700;white-space:nowrap;")
+        _TC_Q = "padding:7px 12px;border-bottom:1px solid #f1f5f9;font-size:.82rem;"
+
+        _q_hdr = (
+            f"<tr>"
+            f"<th style='{_TH_Q}text-align:left;'>Fondo</th>"
+            f"<th style='{_TH_Q}text-align:center;'>Peso</th>"
+            f"<th style='{_TH_Q}text-align:left;'>ISIN</th>"
+            f"<th style='{_TH_Q}text-align:center;'>Quantalys</th>"
+            f"</tr>"
+        )
+        _q_body = ""
+        _q_found = 0
+        for _, _qr in _df_sorted.iterrows():
+            _qnome = _qr["nome"]
+            _qdisp = (_qr["nome_orig"]
+                      if "nome_orig" in _df_sorted.columns and _qr.get("nome_orig")
+                      else _qnome)
+            _qpeso = f"{_qr[wcol]*100:.1f}%"
+            # ISIN lookup (direct + normalized fallback)
+            _qisin = _isin_map_ui.get(_qnome, "")
+            if not _qisin:
+                _qn_norm = _normalize_for_unp(_qnome)
+                for _ik, _iv in _isin_map_ui.items():
+                    if _normalize_for_unp(_ik) == _qn_norm:
+                        _qisin = _iv
+                        break
+            # Fund name cell — look up URL by internal nome, display with nome_orig if available
+            _q_furl = _fund_url(_qnome)
+            _q_name_cell = (
+                f"<a href='{_q_furl}' target='_blank' rel='noopener noreferrer' "
+                f"style='color:#1B4FBB;text-decoration:underline;text-underline-offset:2px;'>"
+                f"{_qdisp}</a>"
+                if _q_furl else _qdisp
+            )
+            # Quantalys URL — prima ISIN diretto, poi fallback per nome-concetto
+            _qurl = _qtl_cache.get(_qisin, "") if _qisin else ""
+            if not _qurl:
+                # Prova a trovare l'URL tramite un'altra classe dello stesso fondo
+                _qck = _qtl_concept_key(_qnome)
+                _qurl = _qtl_concept_map.get(_qck, "")
+                if not _qurl and _qdisp != _qnome:
+                    _qck2 = _qtl_concept_key(_qdisp)
+                    _qurl = _qtl_concept_map.get(_qck2, "")
+            if _qurl:
+                _q_found += 1
+                _qtl_cell = (
+                    f"<a href='{_qurl}' target='_blank' rel='noopener noreferrer' "
+                    f"style='display:inline-block;padding:3px 12px;background:#1B4FBB;"
+                    f"color:#fff;border-radius:5px;font-size:.77rem;font-weight:600;"
+                    f"text-decoration:none;'>Apri &#x2197;</a>"
+                )
+            elif _qisin:
+                _qtl_cell = "<span style='color:#94A3B8;font-size:.77rem;'>non trovato</span>"
+            else:
+                _qtl_cell = "<span style='color:#CBD5E1;font-size:.77rem;'>nessun ISIN</span>"
+            _qisin_cell = (
+                f"<span style='font-family:monospace;font-size:.78rem;color:#475569;'>{_qisin}</span>"
+                if _qisin else
+                "<span style='color:#CBD5E1;'>—</span>"
+            )
+            _q_body += (
+                f"<tr>"
+                f"<td style='{_TC_Q}font-weight:500;'>{_q_name_cell}</td>"
+                f"<td style='{_TC_Q}text-align:center;color:#1B4FBB;font-weight:600;'>{_qpeso}</td>"
+                f"<td style='{_TC_Q}'>{_qisin_cell}</td>"
+                f"<td style='{_TC_Q}text-align:center;'>{_qtl_cell}</td>"
+                f"</tr>"
+            )
+        if _q_body:
+            st.markdown(
+                f"<div style='overflow-x:auto;border-radius:10px;"
+                f"border:1px solid #e2e8f0;background:#fff;'>"
+                f"<table style='width:100%;border-collapse:collapse;'>"
+                f"<thead>{_q_hdr}</thead><tbody>{_q_body}</tbody>"
+                f"</table></div>",
+                unsafe_allow_html=True)
+            if _qtl_cache:
+                _q_pct = int(_q_found / len(_df_sorted) * 100) if len(_df_sorted) else 0
+                st.markdown(
+                    f"<p style='{_note_style}'>"
+                    f"Link Quantalys disponibili per {_q_found}/{len(_df_sorted)} fondi ({_q_pct}%). "
+                    f"Fonte: <a href='https://www.quantalys.it' target='_blank' "
+                    f"style='color:#94A3B8;'>quantalys.it</a></p>",
+                    unsafe_allow_html=True)
+            else:
+                st.info(
+                    "Cache Quantalys non ancora disponibile. "
+                    "Esegui `python build_quantalys_cache.py` per generarla.",
+                    icon="ℹ️")
 
     # ── TAB 2 — RENDIMENTI ───────────────────────────────────────────────────
     with tab2:
