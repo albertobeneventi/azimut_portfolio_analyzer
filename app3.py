@@ -1905,14 +1905,16 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     SU = S("SU", fontName="Helvetica",       fontSize=10, textColor=rl_colors.HexColor("#64748B"), spaceAfter=4)
     SC = S("SC", fontName="Helvetica-Bold",  fontSize=11, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=14,spaceAfter=8)
     BD = S("BD", fontName="Helvetica",       fontSize=8.5,textColor=rl_colors.HexColor("#1E293B"), leading=13)
-    SM = S("SM", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11)
+    SM  = S("SM",  fontName="Helvetica",      fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11)
+    SMC = S("SMC", fontName="Helvetica",      fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=1)
     FT = S("FT", fontName="Helvetica-Oblique",fontSize=7, textColor=rl_colors.HexColor("#94A3B8"), leading=10)
     FS = S("FS", fontName="Helvetica-Bold",  fontSize=13, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=4,spaceAfter=2)
     FK = S("FK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#64748B"), spaceAfter=2)
     LK = S("LK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1B4FBB"), spaceAfter=2)
     # HDR: sempre bianco+grassetto — per celle intestazione su sfondo scuro
     # (TEXTCOLOR di TableStyle NON sovrascrive il colore dei Paragraph — serve lo stile dedicato)
-    HDR= S("HDR",fontName="Helvetica-Bold",  fontSize=7.5,textColor=rl_colors.white, leading=11)
+    HDR = S("HDR", fontName="Helvetica-Bold", fontSize=7.5,textColor=rl_colors.white, leading=11)
+    HDRC= S("HDRC",fontName="Helvetica-Bold", fontSize=7.5,textColor=rl_colors.white, leading=11, alignment=1)
 
     story = []
     d_act = df[df[wcol]>0.001].copy()
@@ -2150,8 +2152,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         return out
 
     # Paragraph style for portfolio summary row
-    WH = S("WH", fontName="Helvetica-Bold", fontSize=8,
-           textColor=rl_colors.white, leading=11)
+    WH  = S("WH",  fontName="Helvetica-Bold", fontSize=8, textColor=rl_colors.white, leading=11)
+    WHC = S("WHC", fontName="Helvetica-Bold", fontSize=8, textColor=rl_colors.white, leading=11, alignment=1)
 
     def pstyle_w(val):
         """White bold text coloured green/red for portfolio row."""
@@ -2364,16 +2366,19 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     else:
         _ptf_rat_str = "N/D"
 
-    alloc_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
-                 ["Fondo", "ISIN", "Peso", "% Azion.", "% Obbl.",
-                  "Duration", "Rating Medio", "Cat. FIDA", "FIDArating",
-                  "Morningstar"]]
+    _alloc_hdr_items = [
+        ("Fondo",        HDR), ("ISIN",         HDR), ("Peso",   HDR),
+        ("% Azion.",    HDRC), ("% Obbl.",      HDRC),
+        ("Duration",     HDR), ("Rating Medio",  HDR), ("Cat. FIDA", HDR),
+        ("FIDA rating",  HDR), ("Morningstar",   HDR),
+    ]
+    alloc_hdr = [Paragraph(f"<b>{t}</b>", st) for t, st in _alloc_hdr_items]
     alloc_ptf = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph("",                                  WH),
         Paragraph("<b>100%</b>",                       WH),
-        Paragraph(f"<b>{_ptf_az_wtd*100:.1f}%</b>",   WH),
-        Paragraph(f"<b>{_ptf_obb_wtd*100:.1f}%</b>",  WH),
+        Paragraph(f"<b>{_ptf_az_wtd*100:.1f}%</b>",   WHC),
+        Paragraph(f"<b>{_ptf_obb_wtd*100:.1f}%</b>",  WHC),
         Paragraph(f"<b>{_ptf_dur_str}</b>",            WH),
         Paragraph(f"<b>{_ptf_rat_str}</b>",            WH),
         Paragraph("",                                  WH),
@@ -2455,8 +2460,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             Paragraph(_disp_nome2[:48], SM),
             Paragraph(_isin2 or "—",                                     SM),
             Paragraph(f"{_row[wcol]*100:.1f}%",                          SM),
-            Paragraph(f"{_az_s:.1f}%",                                   SM),
-            Paragraph(f"{_obb_s:.1f}%",                                  SM),
+            Paragraph(f"{_az_s:.1f}%",                                   SMC),
+            Paragraph(f"{_obb_s:.1f}%",                                  SMC),
             Paragraph(f"{_dur2:.2f}" if isinstance(_dur2, (int, float)) else "—", SM),
             Paragraph(_rat2 if isinstance(_rat2, str) else "—",           SM),
             Paragraph(_cat2,                                               SM),
@@ -2482,10 +2487,10 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                 ("BACKGROUND", (9, _tr), (9, _tr),
                  rl_colors.HexColor(_bg_hex_ms)))
 
-    # Fondo(3.4) ISIN(2.2) Peso(1.2) %Az(1.5) %Obb(1.3) Dur(1.6) Rat(1.6) Cat(2.1) FIDArtg(1.9) MS(2.2) = 19.0 cm
+    # Fondo(3.4) ISIN(2.6) Peso(1.2) %Az(1.5) %Obb(1.3) Dur(1.6) Rat(1.6) Cat(2.1) FIDArtg(1.5) MS(2.2) = 19.0 cm
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
-        colWidths=[3.4*cm, 2.2*cm, 1.2*cm, 1.5*cm, 1.3*cm, 1.6*cm, 1.6*cm, 2.1*cm, 1.9*cm, 2.2*cm],
+        colWidths=[3.4*cm, 2.6*cm, 1.2*cm, 1.5*cm, 1.3*cm, 1.6*cm, 1.6*cm, 2.1*cm, 1.5*cm, 2.2*cm],
         repeatRows=1,
     )
     alloc_tbl.setStyle(TableStyle([
