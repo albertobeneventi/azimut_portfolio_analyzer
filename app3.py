@@ -1894,7 +1894,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
-                            leftMargin=1.5*cm, rightMargin=1.5*cm,
+                            leftMargin=1.0*cm, rightMargin=1.0*cm,
                             topMargin=1.5*cm, bottomMargin=1.5*cm)
 
     ss = getSampleStyleSheet()
@@ -1917,7 +1917,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story = []
     d_act = df[df[wcol]>0.001].copy()
     n_fondi = len(d_act)
-    PW = 18 * cm   # printable width (A4 21cm - 2×1.5cm margins)
+    PW = 19 * cm   # printable width (A4 21cm - 2×1.0cm margins)
 
     # ISIN da foglio FIDA (fallback per fondi senza URL FondiDoc)
     isin_map = {}
@@ -2482,10 +2482,10 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                 ("BACKGROUND", (9, _tr), (9, _tr),
                  rl_colors.HexColor(_bg_hex_ms)))
 
-    # Fondo(3.8) ISIN(2.2) Peso(1.0) %Az(1.1) %Obb(1.2) Dur(1.6) Rat(1.6) Cat(2.3) FIDArtg(1.4) MS(1.8) = 18.0 cm
+    # Fondo(3.4) ISIN(2.2) Peso(1.2) %Az(1.5) %Obb(1.3) Dur(1.6) Rat(1.6) Cat(2.1) FIDArtg(1.9) MS(2.2) = 19.0 cm
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
-        colWidths=[3.8*cm, 2.2*cm, 1.0*cm, 1.1*cm, 1.2*cm, 1.6*cm, 1.6*cm, 2.3*cm, 1.4*cm, 1.8*cm],
+        colWidths=[3.4*cm, 2.2*cm, 1.2*cm, 1.5*cm, 1.3*cm, 1.6*cm, 1.6*cm, 2.1*cm, 1.9*cm, 2.2*cm],
         repeatRows=1,
     )
     alloc_tbl.setStyle(TableStyle([
