@@ -1163,7 +1163,7 @@ def save_factbook_to_repo(fb_data: dict) -> bool:
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def load_quantalys_cache() -> dict:
     """Load ISIN → Quantalys URL mapping from data/quantalys_cache.json.
     Returns {} if the file does not exist yet (run build_quantalys_cache.py first).
@@ -4390,6 +4390,8 @@ def main():
         n = re.sub(r'^AZ\s+(?:F\.\d+\s+\w+[\. ]+|Fund\s+\d+\s*[-–]\s*|\w+\s*[-–]\s*)', '', n, flags=re.I).strip()
         # Rimuove suffisso di classe: "A Cap EUR", "B Dis EUR(i)", "A-HU Cap EUR Hdg", ecc.
         n = re.sub(r'\s+[A-Z](?:-[A-Z0-9]+)?\s+(?:Cap|Dis|Acc|Inc)\b.*$', '', n, flags=re.I).strip()
+        # Rimuove suffissi tipo "(EUR-hedged)", "(hedged)", "(EUR)" dal nome PDF/portafoglio
+        n = re.sub(r'\s*\([^)]*(?:hedg|eur|usd|gbp|chf)[^)]*\)', '', n, flags=re.I).strip()
         return n.lower()
 
     # Mappa concetto → url (fallback quando l'ISIN specifico non è in cache)
