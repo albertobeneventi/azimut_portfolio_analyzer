@@ -1757,7 +1757,9 @@ def fetch_all_ms_ratings(df: pd.DataFrame, fida_df: pd.DataFrame,
 def make_fund_pie(df, wcol, profile):
     d = df[df[wcol]>0.005].copy()
     d["pct"] = d[wcol]*100
-    labels = d["nome"].apply(lambda x: (x[:38]+"…") if len(x)>38 else x)
+    # Use nome_orig (GP display name) when available, else nome
+    _disp = d["nome_orig"] if "nome_orig" in d.columns else d["nome"]
+    labels = _disp.apply(lambda x: (x[:38]+"…") if len(x)>38 else x)
     fig = go.Figure(go.Pie(
         labels=labels, values=d["pct"],
         marker=dict(colors=d["color"].tolist(), line=dict(color="#fff",width=2.5)),
@@ -1887,7 +1889,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                  ptf_name: str, fund_data: dict = None,
                  fida_df: pd.DataFrame = None,
                  factbook_data: dict = None,
-                 cache_date: str = "") -> bytes:
+                 cache_date: str = "",
+                 print_unp: bool = False) -> bytes:
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -1993,7 +1996,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # Costruisci le celle della legenda
     leg_items = []
     for _, r in d_leg.iterrows():
-        _rn = r["nome"]
+        _rn      = r["nome"]                               # Excel key (for URL/data lookup)
+        _rn_disp = r.get("nome_orig") or _rn               # GP name if available (for label)
         # 1) MANUAL direct  2) MANUAL fuzzy (vince su fida_urls)  3) cache fuzzy
         _fd = fund_data or {}
         url = MANUAL_URL_OVERRIDES.get(_rn, "")
@@ -2014,7 +2018,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                     if isinstance(_fv, dict) and _sk in _fk.lower() and _fv.get("url"):
                         url = _fv["url"]
                         break
-        name_s = (_rn[:24] + "…") if len(_rn) > 24 else _rn
+        name_s = (_rn_disp[:24] + "…") if len(_rn_disp) > 24 else _rn_disp
         pct_s  = f"{r[wcol]*100:.1f}%"
         if url:
             lbl = Paragraph(
@@ -2361,11 +2365,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _ptf_rat_str = "N/D"
 
     alloc_hdr = [Paragraph(f"<b>{t}</b>", HDR) for t in
-                 ["Fondo", "Peso", "% Azionario", "% Obbligazionario",
+                 ["Fondo", "ISIN", "Peso", "% Azionario", "% Obbligazionario",
                   "Duration", "Rating Medio", "Cat. FIDA", "FIDArating",
                   "Morningstar"]]
     alloc_ptf = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
+        Paragraph("",                                  WH),
         Paragraph("<b>100%</b>",                       WH),
         Paragraph(f"<b>{_ptf_az_wtd*100:.1f}%</b>",   WH),
         Paragraph(f"<b>{_ptf_obb_wtd*100:.1f}%</b>",  WH),
@@ -2437,8 +2442,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _ms2    = _ms_pdf.get(_row["nome"], {}).get("ms_rating")
         _fida_vals.append(str(_fida2).strip())
         _ms_vals.append(str(_ms2).strip() if _ms2 is not None else "—")
+        _isin2 = isin_map.get(_row["nome"], "")
+        if not _isin2:
+            # Normalised fallback: look up isin_map by normalised name
+            _n2 = _normalize_for_unp(_row["nome"])
+            for _ik, _iv in isin_map.items():
+                if _normalize_for_unp(_ik) == _n2:
+                    _isin2 = _iv
+                    break
+        _disp_nome2 = _row.get("nome_orig") or _row["nome"]
         alloc_fund_rows.append([
-            Paragraph(_row["nome"][:48], SM),
+            Paragraph(_disp_nome2[:48], SM),
+            Paragraph(_isin2 or "—",                                     SM),
             Paragraph(f"{_row[wcol]*100:.1f}%",                          SM),
             Paragraph(f"{_az_s:.1f}%",                                   SM),
             Paragraph(f"{_obb_s:.1f}%",                                  SM),
@@ -2449,26 +2464,28 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             _ms_para(_ms2),
         ])
 
-    # Build per-row BACKGROUND commands for FIDArating (col 7) and Morningstar (col 8).
+    # Build per-row BACKGROUND commands for FIDArating (col 8) and Morningstar (col 9).
+    # (ISIN column inserted at position 1 shifts FIDArating 7→8, Morningstar 8→9)
     _fida_bg_cmds = []
     for _fi, _fv in enumerate(_fida_vals):
         _bg_hex = _FIDA_BG_HEX.get(_fv)
         if _bg_hex:
             _tr = _fi + 2   # row 0=hdr, 1=ptf summary, 2+=fund rows
             _fida_bg_cmds.append(
-                ("BACKGROUND", (7, _tr), (7, _tr),
+                ("BACKGROUND", (8, _tr), (8, _tr),
                  rl_colors.HexColor(_bg_hex)))
     for _mi, _mv in enumerate(_ms_vals):
         _bg_hex_ms = _MS_BG_HEX.get(_mv)
         if _bg_hex_ms:
             _tr = _mi + 2
             _fida_bg_cmds.append(
-                ("BACKGROUND", (8, _tr), (8, _tr),
+                ("BACKGROUND", (9, _tr), (9, _tr),
                  rl_colors.HexColor(_bg_hex_ms)))
 
+    # Fondo(3.8) ISIN(1.8) Peso(1.0) %Az(1.2) %Obb(1.4) Dur(1.3) Rat(1.6) Cat(2.3) FIDArtg(1.4) MS(2.2) = 18.0 cm
     alloc_tbl = Table(
         [alloc_hdr, alloc_ptf] + alloc_fund_rows,
-        colWidths=[4.5*cm, 1.1*cm, 1.3*cm, 1.5*cm, 1.4*cm, 1.8*cm, 2.8*cm, 1.5*cm, 2.1*cm],
+        colWidths=[3.8*cm, 1.8*cm, 1.0*cm, 1.2*cm, 1.4*cm, 1.3*cm, 1.6*cm, 2.3*cm, 1.4*cm, 2.2*cm],
         repeatRows=1,
     )
     alloc_tbl.setStyle(TableStyle([
@@ -2507,100 +2524,101 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     story.append(Spacer(1, 14))
 
-    # ── UNP / IUNP TABLE ─────────────────────────────────────
-    # Pre-compute per-fund UNP/IUNP and portfolio weighted average
-    _fund_unp: dict = {}
-    _wtd_unp = _wtd_iunp = _cov_w = 0.0
-    for _, _row in d_sorted.iterrows():
-        _u, _iu = lookup_unp(_row["nome"])
-        _fund_unp[_row["nome"]] = (_u, _iu)
-        if _u is not None:
-            _w = _row[wcol]
-            _wtd_unp  += _u  * _w
-            _wtd_iunp += _iu * _w
-            _cov_w    += _w
+    if print_unp:
+        # ── UNP / IUNP TABLE ─────────────────────────────────────
+        # Pre-compute per-fund UNP/IUNP and portfolio weighted average
+        _fund_unp: dict = {}
+        _wtd_unp = _wtd_iunp = _cov_w = 0.0
+        for _, _row in d_sorted.iterrows():
+            _u, _iu = lookup_unp(_row["nome"])
+            _fund_unp[_row["nome"]] = (_u, _iu)
+            if _u is not None:
+                _w = _row[wcol]
+                _wtd_unp  += _u  * _w
+                _wtd_iunp += _iu * _w
+                _cov_w    += _w
 
-    if _cov_w > 0.01:
-        _ptf_unp_str  = f"{_wtd_unp  / _cov_w:.2f}%"
-        _ptf_iunp_str = f"{_wtd_iunp / _cov_w:.2f}%"
-    else:
-        _ptf_unp_str = _ptf_iunp_str = "N/D"
+        if _cov_w > 0.01:
+            _ptf_unp_str  = f"{_wtd_unp  / _cov_w:.2f}%"
+            _ptf_iunp_str = f"{_wtd_iunp / _cov_w:.2f}%"
+        else:
+            _ptf_unp_str = _ptf_iunp_str = "N/D"
 
-    unp_hdr_row = [Paragraph(f"<b>{t}</b>", HDR) for t in
-                   ["Fondo", "Peso", "%UNP", "%IUNP36", "FIDArating", "Morningstar"]]
-    unp_ptf_row = [
-        Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
-        Paragraph("<b>100%</b>", WH),
-        Paragraph(f"<b>{_ptf_unp_str}</b>",  WH),
-        Paragraph(f"<b>{_ptf_iunp_str}</b>", WH),
-        Paragraph("", WH),
-        Paragraph("", WH),
-    ]
-    unp_fund_rows = []
-    _unp_fida_vals: list = []
-    _unp_ms_vals:   list = []
-    for _, _row in d_sorted.iterrows():
-        _u, _iu   = _fund_unp[_row["nome"]]
-        _fd_ov_u  = (fund_data or {}).get(_row["nome"], {}).get("overview", {})
-        _fida_u   = str(_fd_ov_u.get("fida_rating") or "—").strip()
-        _ms_u     = _ms_pdf.get(_row["nome"], {}).get("ms_rating")
-        _unp_fida_vals.append(_fida_u)
-        _unp_ms_vals.append(str(_ms_u).strip() if _ms_u is not None else "—")
-        unp_fund_rows.append([
-            Paragraph(_row["nome"][:50], SM),
-            Paragraph(f"{_row[wcol]*100:.1f}%", SM),
-            Paragraph(f"{_u:.2f}%"  if _u  is not None else "—", SM),
-            Paragraph(f"{_iu:.2f}%" if _iu is not None else "—", SM),
-            _fida_para(_fida_u),
-            _ms_para(_ms_u),
-        ])
+        unp_hdr_row = [Paragraph(f"<b>{t}</b>", HDR) for t in
+                       ["Fondo", "Peso", "%UNP", "%IUNP36", "FIDArating", "Morningstar"]]
+        unp_ptf_row = [
+            Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
+            Paragraph("<b>100%</b>", WH),
+            Paragraph(f"<b>{_ptf_unp_str}</b>",  WH),
+            Paragraph(f"<b>{_ptf_iunp_str}</b>", WH),
+            Paragraph("", WH),
+            Paragraph("", WH),
+        ]
+        unp_fund_rows = []
+        _unp_fida_vals: list = []
+        _unp_ms_vals:   list = []
+        for _, _row in d_sorted.iterrows():
+            _u, _iu   = _fund_unp[_row["nome"]]
+            _fd_ov_u  = (fund_data or {}).get(_row["nome"], {}).get("overview", {})
+            _fida_u   = str(_fd_ov_u.get("fida_rating") or "—").strip()
+            _ms_u     = _ms_pdf.get(_row["nome"], {}).get("ms_rating")
+            _unp_fida_vals.append(_fida_u)
+            _unp_ms_vals.append(str(_ms_u).strip() if _ms_u is not None else "—")
+            unp_fund_rows.append([
+                Paragraph(_row["nome"][:50], SM),
+                Paragraph(f"{_row[wcol]*100:.1f}%", SM),
+                Paragraph(f"{_u:.2f}%"  if _u  is not None else "—", SM),
+                Paragraph(f"{_iu:.2f}%" if _iu is not None else "—", SM),
+                _fida_para(_fida_u),
+                _ms_para(_ms_u),
+            ])
 
-    # Per-cell background for FIDArating (col 4) and Morningstar (col 5)
-    _unp_bg_cmds: list = []
-    for _fi, _fv in enumerate(_unp_fida_vals):
-        _bh = _FIDA_BG_HEX.get(_fv)
-        if _bh:
-            _unp_bg_cmds.append(("BACKGROUND", (4, _fi+2), (4, _fi+2), rl_colors.HexColor(_bh)))
-    for _mi, _mv in enumerate(_unp_ms_vals):
-        _bh = _MS_BG_HEX.get(_mv)
-        if _bh:
-            _unp_bg_cmds.append(("BACKGROUND", (5, _mi+2), (5, _mi+2), rl_colors.HexColor(_bh)))
+        # Per-cell background for FIDArating (col 4) and Morningstar (col 5)
+        _unp_bg_cmds: list = []
+        for _fi, _fv in enumerate(_unp_fida_vals):
+            _bh = _FIDA_BG_HEX.get(_fv)
+            if _bh:
+                _unp_bg_cmds.append(("BACKGROUND", (4, _fi+2), (4, _fi+2), rl_colors.HexColor(_bh)))
+        for _mi, _mv in enumerate(_unp_ms_vals):
+            _bh = _MS_BG_HEX.get(_mv)
+            if _bh:
+                _unp_bg_cmds.append(("BACKGROUND", (5, _mi+2), (5, _mi+2), rl_colors.HexColor(_bh)))
 
-    unp_tbl = Table(
-        [unp_hdr_row, unp_ptf_row] + unp_fund_rows,
-        colWidths=[6.0*cm, 1.5*cm, 2.0*cm, 2.0*cm, 2.0*cm, 4.5*cm],
-        repeatRows=1,
-    )
-    unp_tbl.setStyle(TableStyle([
-        ("BACKGROUND",     (0,0), (-1,0),  rl_colors.HexColor("#0D1B2A")),
-        ("TEXTCOLOR",      (0,0), (-1,0),  rl_colors.white),
-        ("FONTNAME",       (0,0), (-1,0),  "Helvetica-Bold"),
-        ("BACKGROUND",     (0,1), (-1,1),  rl_colors.HexColor("#1B4332")),
-        ("LINEBELOW",      (0,1), (-1,1),  2, rl_colors.HexColor("#C9A84C")),
-        ("FONTSIZE",       (0,0), (-1,-1), 8),
-        ("PADDING",        (0,0), (-1,-1), 5),
-        ("ROWBACKGROUNDS", (0,2), (-1,-1),
-         [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
-        ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-        ("ALIGN",          (1,0), (-1,-1), "CENTER"),
-        ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
-        *_unp_bg_cmds,
-    ]))
+        unp_tbl = Table(
+            [unp_hdr_row, unp_ptf_row] + unp_fund_rows,
+            colWidths=[6.0*cm, 1.5*cm, 2.0*cm, 2.0*cm, 2.0*cm, 4.5*cm],
+            repeatRows=1,
+        )
+        unp_tbl.setStyle(TableStyle([
+            ("BACKGROUND",     (0,0), (-1,0),  rl_colors.HexColor("#0D1B2A")),
+            ("TEXTCOLOR",      (0,0), (-1,0),  rl_colors.white),
+            ("FONTNAME",       (0,0), (-1,0),  "Helvetica-Bold"),
+            ("BACKGROUND",     (0,1), (-1,1),  rl_colors.HexColor("#1B4332")),
+            ("LINEBELOW",      (0,1), (-1,1),  2, rl_colors.HexColor("#C9A84C")),
+            ("FONTSIZE",       (0,0), (-1,-1), 8),
+            ("PADDING",        (0,0), (-1,-1), 5),
+            ("ROWBACKGROUNDS", (0,2), (-1,-1),
+             [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
+            ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+            ("ALIGN",          (1,0), (-1,-1), "CENTER"),
+            ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
+            *_unp_bg_cmds,
+        ]))
 
-    NOTE_U = S("NTU", fontName="Helvetica-Oblique", fontSize=6.5,
-               textColor=rl_colors.HexColor("#94A3B8"), leading=9)
-    story.append(KeepTogether([
-        Paragraph("UNP e IUNP dei Fondi in Portafoglio", SC),
-        unp_tbl,
-        Spacer(1, 6),
-        Paragraph(
-            "◆ UNP (Utile Netto di Portafoglio): commissione annua netta percepita dal consulente. "
-            "IUNP36: indice UNP calcolato su orizzonte triennale. "
-            "Fonte: Catalogo Prodotti & Servizi Azimut, settembre 2025. "
-            "La riga Portafoglio è la media ponderata per peso dei fondi per cui il dato è disponibile. "
-            "Il simbolo — indica che il fondo non è presente nel catalogo.",
-            NOTE_U),
-    ]))
+        NOTE_U = S("NTU", fontName="Helvetica-Oblique", fontSize=6.5,
+                   textColor=rl_colors.HexColor("#94A3B8"), leading=9)
+        story.append(KeepTogether([
+            Paragraph("UNP e IUNP dei Fondi in Portafoglio", SC),
+            unp_tbl,
+            Spacer(1, 6),
+            Paragraph(
+                "◆ UNP (Utile Netto di Portafoglio): commissione annua netta percepita dal consulente. "
+                "IUNP36: indice UNP calcolato su orizzonte triennale. "
+                "Fonte: Catalogo Prodotti & Servizi Azimut, settembre 2025. "
+                "La riga Portafoglio è la media ponderata per peso dei fondi per cui il dato è disponibile. "
+                "Il simbolo — indica che il fondo non è presente nel catalogo.",
+                NOTE_U),
+        ]))
 
     story.append(PageBreak())
 
@@ -3269,6 +3287,14 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
 
     sw = gp_scenario.get("subcat_weights", {})
 
+    # Pre-build normalised lookup for extra_urls so GP names (e.g. "AZ Bond -
+    # Paesi emergenti") match abbreviated Excel keys (e.g. "AZ F.1 Bd. Paesi
+    # Emg A Cap EUR") even when the substring check would fail.
+    _extra_urls_norm: dict = {}
+    for _eu_k, _eu_v in (extra_urls or {}).items():
+        if _eu_v:
+            _extra_urls_norm[_normalize_for_unp(_eu_k)] = _eu_v
+
     # Group funds by subcategory, preserving parse order
     subcat_funds: dict = {}
     for f in funds:
@@ -3351,12 +3377,13 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
             short = re.sub(r'^AZ\s+(?:Allocation|Bond|Equity)\s*[-–]\s*',
                            '', fname, flags=re.I).strip()
 
-            # URL lookup: override manuale → cache → extra_urls → fuzzy
+            # URL lookup: override manuale → cache → extra_urls → normalised → fuzzy
             url_sg = (
                 MANUAL_URL_OVERRIDES.get(fname, "")
                 or _fd_entry.get("url", "")
                 or (extra_urls or {}).get(resolved, "")
                 or (extra_urls or {}).get(fname, "")
+                or _extra_urls_norm.get(_normalize_for_unp(fname), "")
             )
             if not url_sg and _skey_f:
                 for _k, _eu in (extra_urls or {}).items():
@@ -3434,6 +3461,7 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                         break
         records.append({
             "nome":      nome,
+            "nome_orig": f["nome"],   # GP-format name for display in composition panel
             "categoria": f["categoria"],
             "gruppo":    f["gruppo"],
             "macro_cat": get_macro(f["categoria"]),
@@ -4112,7 +4140,7 @@ def main():
                     f'<div class="fund-row">'
                     f'<div class="fund-dot" style="background:{r["color"]};"></div>'
                     f'<div style="flex:1;min-width:0;">'
-                    f'<div class="fund-name">{r["nome"]}</div>'
+                    f'<div class="fund-name">{r.get("nome_orig") or r["nome"]}</div>'
                     f'<div class="fund-cat">'
                     f'{r["categoria"][:48]+"…" if r["categoria"] and len(r["categoria"])>48 else (r["categoria"] or "—")}'
                     f'</div></div>'
@@ -4556,8 +4584,16 @@ def main():
     fida_df  = raw.get("FIDA", pd.DataFrame())
     _is_free = "LIBERO" in ptf_choice
 
+    # ── Opzioni PDF ───────────────────────────────────────────────────────────
+    _print_unp = st.checkbox(
+        "Includi tabella UNP/IUNP nel PDF",
+        value=False,
+        key="_pdf_print_unp",
+        help="Aggiunge una tabella con i dati UNP e IUNP per ogni fondo (commissioni nette consulente).",
+    )
+
     # ── Cache key: invalidate when portfolio/profile/fund-data changes ──────
-    _pdf_cache_key = (f"{_ptf_key}|{len(df_act)}|{len(_fd_live)}"
+    _pdf_cache_key = (f"{_ptf_key}|{len(df_act)}|{len(_fd_live)}|unp{int(_print_unp)}"
                       + (f"|{hash(tuple(sorted(df_act['nome'].tolist())))}"
                          if _is_free else ""))
 
@@ -4571,7 +4607,7 @@ def main():
                 _pdf_auto = generate_pdf(
                     df_act, wcol, profile, ptf_label, _fd_live,
                     fida_df=fida_df, factbook_data=factbook_data,
-                    cache_date=cache_date)
+                    cache_date=cache_date, print_unp=_print_unp)
                 st.session_state["_pdf_bytes_ready"]  = _pdf_auto
                 st.session_state["_pdf_fname_ready"]  = _fname_auto
                 st.session_state["_pdf_lbl"]          = (
@@ -4617,7 +4653,7 @@ def main():
                     pdf_bytes = generate_pdf(
                         df_act, wcol, profile, ptf_label, fund_data,
                         fida_df=fida_df, factbook_data=factbook_data,
-                        cache_date=cache_date)
+                        cache_date=cache_date, print_unp=_print_unp)
                     fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
                              f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
                     st.session_state["_pdf_bytes_ready"]  = pdf_bytes
