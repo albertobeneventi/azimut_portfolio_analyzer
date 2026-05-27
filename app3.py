@@ -4402,6 +4402,20 @@ def main():
             if _ck and _ck not in _qtl_concept_map:
                 _qtl_concept_map[_ck] = _ck_url
 
+    # Estendi con ISIN da fida_urls (es. classe A non presente in FIDA):
+    # URL fondidoc.it contengono l'ISIN nel percorso  →  estraiamolo per cercare in _qtl_cache
+    _fidu_isin_re = re.compile(r'/([A-Z]{2}[A-Z0-9]{10})_')
+    for _cu_nome, _cu_fdurl in (raw.get("fida_urls") or {}).items():
+        _cu_m = _fidu_isin_re.search(str(_cu_fdurl))
+        if not _cu_m:
+            continue
+        _cu_isin = _cu_m.group(1)
+        _cu_url  = _qtl_cache.get(_cu_isin, "")
+        if _cu_url:
+            _cu_ck = _qtl_concept_key(_cu_nome)
+            if _cu_ck and _cu_ck not in _qtl_concept_map:
+                _qtl_concept_map[_cu_ck] = _cu_url
+
     tab1, tab_q, tab2, tab3, tab4 = st.tabs([
         "📊  Scomposizione Az/Obb",
         "🔗  Quantalys",
