@@ -4319,13 +4319,11 @@ def main():
             return None
         return entry.get(key)
 
-    # Unisce fund_cache (bundled, contiene i fondi del portafoglio suggerito)
-    # con i dati live fetchati in sessione (portafoglio caricato dall'utente).
-    # cached_fd come base → _scomp_fd sovrascrive/aggiunge chiavi più recenti.
-    _fd_live = {**cached_fd, **(st.session_state.get("_scomp_fd") or {})}
+    # Prefer live FondiDoc data fetched in this session over on-disk cache
+    _fd_live = st.session_state.get("_scomp_fd") or cached_fd
 
-    # Morningstar ratings — merge cache disco + dati live sessione
-    _ms_live = {**load_ms_cache(), **(st.session_state.get("_ms_data") or {})}
+    # Morningstar ratings — from this session or from disk cache
+    _ms_live = st.session_state.get("_ms_data") or load_ms_cache()
 
     # Morningstar color scale (amber/gold palette)
     _MS_COL = {5: "#78350F", 4: "#92400E", 3: "#B45309", 2: "#475569", 1: "#94A3B8"}
