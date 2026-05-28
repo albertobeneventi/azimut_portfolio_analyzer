@@ -3941,7 +3941,10 @@ def main():
                     st.session_state["_fetch_ms_requested"] = True
                 if _gp_loaded_now:
                     st.session_state["_fetch_gp_requested"] = True
-                st.rerun()  # mostra subito lo stato "in corso" prima che parta lo scarico
+                # NON chiamare st.rerun() qui: il click del bottone causa già un
+                # rerun naturale in cui i file uploader rimangono visibili.
+                # Il rerun programmato pulisce i widget; lo faremo una sola volta
+                # alla fine, dopo tutti i fetch.
         else:
             st.caption("⬆️ Carica il file Excel o il PDF Global Perspectives")
 
@@ -4012,7 +4015,8 @@ def main():
             and not st.session_state.get("_gp_fetch_done")):
         st.session_state["_gp_fetch_done"] = True
         st.session_state["_fetch_gp_requested"] = True
-        st.rerun()
+        # NON rerun qui: il fetch GP verrà eseguito nel blocco principale
+        # sotto, nello stesso render, senza svuotare i file uploader.
 
     # ── Invalidate cached PDF when portfolio type or profile changes ──────────
     _ptf_key = f"{ptf_choice}|{profile}"
@@ -4059,7 +4063,14 @@ def main():
         st.info("⬅️ **Carica il file Excel** nella barra laterale per iniziare.")
         return
 
-    # ── Sidebar-triggered FondiDoc / MS fetch (only when Excel is loaded) ───────
+    # ── Fetch FondiDoc / Morningstar / GP — tutti in un unico render ────────────
+    # Strategia: eseguiamo tutti i fetch richiesti in SEQUENZA nello stesso render,
+    # poi chiamiamo st.rerun() UNA SOLA VOLTA alla fine. In questo modo i file
+    # uploader rimangono visibili per tutta la durata del caricamento; il singolo
+    # rerun finale aggiorna la sidebar (contatori, stato cache) senza azzerare
+    # i widget più volte di quanto necessario.
+    _fetch_ran = False
+
     if _has_raw:
         if st.session_state.pop("_fetch_fd_requested", False):
             _fida_urls_all = raw.get("fida_urls", {})
@@ -4072,27 +4083,21 @@ def main():
                 def _upd_fd(v): _pb_fd.progress(v, text=f"FondiDoc: {int(v*100)}%…")
                 _fd_new = fetch_all_fund_data(_df_all, _fida_urls_all, _upd_fd)
                 _pb_fd.empty()
-                # Merge con il cache esistente: i fondi Excel aggiornati
-                # sovrascrivono il cache, ma i fondi GP aggiunti manualmente
-                # (non nell'Excel) vengono preservati anziché eliminati.
-                # Se fetch fallisce su un fondo (_fd_new[k]={}), non perdere
-                # l'analysis già presente nel cache.
                 _fd_base_existing = load_fund_cache()[0]
                 _fd_merged_new = dict(_fd_base_existing)
                 for _fk, _fv in _fd_new.items():
                     if _fv and (_fv.get("analysis") or not _fd_merged_new.get(_fk, {}).get("analysis")):
                         _fd_merged_new[_fk] = _fv
                     elif _fv and not _fv.get("analysis") and _fd_merged_new.get(_fk, {}).get("analysis"):
-                        # Nuovo dato senza analysis: aggiorna url/isin ma preserva analysis
                         _upd2 = dict(_fd_merged_new[_fk])
                         if _fv.get("url"):  _upd2["url"]  = _fv["url"]
                         if _fv.get("isin"): _upd2["isin"] = _fv["isin"]
                         _fd_merged_new[_fk] = _upd2
                     elif not _fv:
-                        pass  # fetch fallito: mantieni versione cache
+                        pass
                 save_fund_cache(_fd_merged_new)
                 st.session_state["_scomp_fd"] = _fd_merged_new
-                st.rerun()
+                _fetch_ran = True
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
 
@@ -4107,12 +4112,10 @@ def main():
                     _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
                 _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
                 if _n_found > 0:
-                    # Fetch riuscito → salva e aggiorna cache
                     save_ms_cache(_ms_new)
                     st.session_state["_ms_data"] = _ms_new
                     st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
                 else:
-                    # Fetch fallito → non toccare il cache, usa dati già salvati
                     _ms_cached = load_ms_cache()
                     _n_cached  = sum(1 for v in _ms_cached.values() if v.get("ms_rating"))
                     st.session_state["_ms_data"] = _ms_cached or _ms_new
@@ -4120,11 +4123,10 @@ def main():
                         st.warning(f"⭐ Morningstar non raggiungibile — uso cache ({_n_cached} rating)")
                     else:
                         st.warning("⭐ Morningstar non raggiungibile — nessun dato in cache")
-                st.rerun()
+                _fetch_ran = True
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
     else:
-        # Drain any stale fetch flags so they don't fire unexpectedly
         st.session_state.pop("_fetch_fd_requested", None)
         st.session_state.pop("_fetch_ms_requested", None)
 
@@ -4140,15 +4142,10 @@ def main():
             _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp, quick_urls=_quick)
             _pb_gp.empty()
             if _gp_new:
-                # Merge FondiDoc data into cache e save.
-                # IMPORTANTE: fetch_gp_urls_missing restituisce spesso solo
-                # {"url": "..."} senza analysis. Non sovrascrivere una voce
-                # già ricca di analysis con una URL-only.
                 _fd_merged = dict(_fd_base)
                 for _gk, _gv in _gp_new.items():
                     _existing = _fd_merged.get(_gk, {})
                     if _existing.get("analysis") and not (_gv or {}).get("analysis"):
-                        # Preserva analysis esistente — aggiorna solo url/isin
                         _upd = dict(_existing)
                         if (_gv or {}).get("url"):  _upd["url"]  = _gv["url"]
                         if (_gv or {}).get("isin"): _upd["isin"] = _gv["isin"]
@@ -4157,7 +4154,6 @@ def main():
                         _fd_merged[_gk] = _gv
                 save_fund_cache(_fd_merged)
                 st.session_state["_scomp_fd"] = _fd_merged
-                # Aggiorna rating Morningstar per i nuovi fondi GP (best-effort)
                 try:
                     _ms_existing = st.session_state.get("_ms_data") or load_ms_cache()
                     _sess_gp = requests.Session()
@@ -4173,7 +4169,7 @@ def main():
                         save_ms_cache(_ms_merged)
                         st.session_state["_ms_data"] = _ms_merged
                 except Exception:
-                    pass  # MS update è best-effort
+                    pass
                 st.success(
                     f"✅ Trovati dati FondiDoc per "
                     f"{len(_gp_new)}/{len(_gp_new)} fondi GP")
@@ -4181,9 +4177,14 @@ def main():
                 st.warning(
                     "⚠️ Nessun dato trovato su FondiDoc per i fondi GP. "
                     "Potrebbe essere un problema di rete o di nomi.")
-            # Fetch completato: non ripetere finché non arriva un nuovo PDF
             st.session_state["_gp_fetch_done"] = True
-            st.rerun()
+            _fetch_ran = True
+
+    # ── Unico rerun finale dopo tutti i fetch ─────────────────────────────────
+    # Aggiorna sidebar (contatori, stato cache) senza svuotare i file uploader
+    # più volte. I file rimangono visibili durante l'intero caricamento.
+    if _fetch_ran:
+        st.rerun()
 
     # ── Factbook data ──────────────────────────────────────────────────────────
     # Priority:
