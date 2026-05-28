@@ -68,6 +68,12 @@ FONDIDOC_HEADERS = {
     "Accept": "text/html,application/xhtml+xml",
     "Accept-Language": "en-US,en;q=0.9,it;q=0.8",
 }
+# ISIN mancanti nel foglio FIDA dell'Excel.
+# Aggiungere qui i fondi per cui l'Excel non riporta l'ISIN ma è noto.
+MANUAL_ISIN_OVERRIDES: dict[str, str] = {
+    "AZ Equity - Global Infrastructure": "LU1621767737",
+}
+
 # Override for one fund whose FIDA sheet hyperlink points to class B
 # Aggiungere qui i fondi assenti da FondiDoc o con URL errati.
 MANUAL_URL_OVERRIDES = {
@@ -1271,13 +1277,6 @@ def load_morningstar_cache() -> dict:
     except Exception:
         pass
     return {}
-
-
-# Fondi per cui l'Excel non riporta l'ISIN: mappa nome normalizzato → ISIN
-# così il lookup Morningstar funziona anche senza ISIN nel foglio Excel.
-_MS_ISIN_BY_NAME: dict[str, str] = {
-    _normalize_for_unp("AZ Equity - Global Infrastructure"): "LU1621767737",
-}
 
 
 @st.cache_data(ttl=3600)
@@ -4896,6 +4895,8 @@ def main():
             _fn = str(_fr.get("nome", "") or "").strip()
             if _fi and _fn:
                 _isin_map_ui[_fn] = _fi
+    # Aggiungi ISIN mancanti dall'Excel (override manuale)
+    _isin_map_ui.update(MANUAL_ISIN_OVERRIDES)
 
     def _qtl_concept_key(name: str) -> str:
         """Estrae il "nome-concetto" del fondo rimuovendo il prefisso AZ e il suffisso
@@ -5084,9 +5085,8 @@ def main():
                 _qtl_cell = "<span style='color:#94A3B8;font-size:.77rem;'>non trovato</span>"
             else:
                 _qtl_cell = "<span style='color:#CBD5E1;font-size:.77rem;'>nessun ISIN</span>"
-            # Morningstar URL — lookup per ISIN; fallback per nome se ISIN mancante
-            _qisin_ms = _qisin or _MS_ISIN_BY_NAME.get(_normalize_for_unp(_qnome), "")
-            _msurl = _ms_cache.get(_qisin_ms, "") if _qisin_ms else ""
+            # Morningstar URL — lookup diretto per ISIN
+            _msurl = _ms_cache.get(_qisin, "") if _qisin else ""
             if _msurl:
                 _ms_found += 1
                 _ms_cell = (
@@ -5095,7 +5095,7 @@ def main():
                     f"color:#fff;border-radius:5px;font-size:.77rem;font-weight:600;"
                     f"text-decoration:none;'>Apri &#x2197;</a>"
                 )
-            elif _qisin_ms:
+            elif _qisin:
                 _ms_cell = "<span style='color:#94A3B8;font-size:.77rem;'>non trovato</span>"
             else:
                 _ms_cell = "<span style='color:#CBD5E1;font-size:.77rem;'>nessun ISIN</span>"
