@@ -1180,6 +1180,19 @@ def load_quantalys_cache() -> dict:
     return {}
 
 
+@st.cache_data(ttl=3600)
+def load_quantalys_ratings() -> dict:
+    """Load ISIN → {score, globes} from data/quantalys_ratings.json."""
+    try:
+        fp = Path(__file__).parent / "data" / "quantalys_ratings.json"
+        if fp.exists() and fp.stat().st_size > 5:
+            with open(fp, encoding="utf-8") as fh:
+                return json.load(fh)
+    except Exception:
+        pass
+    return {}
+
+
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
     ws = wb[sheet_name]
     rows = list(ws.iter_rows(values_only=True))
@@ -4371,8 +4384,32 @@ def main():
                     f'text-underline-offset:2px;">{nome}</a>')
         return nome
 
-    # ── Quantalys cache + ISIN map (used in tab_q) ───────────────────────────
-    _qtl_cache = load_quantalys_cache()   # {ISIN: "https://www.quantalys.it/Fonds/..."}
+    # ── Quantalys cache + ratings + ISIN map ────────────────────────────────
+    _qtl_cache   = load_quantalys_cache()    # {ISIN: "https://www.quantalys.it/Fonds/..."}
+    _qtl_ratings = load_quantalys_ratings()  # {ISIN: {"score": 87, "globes": 5}}
+
+    def _qtl_rating_html(isin: str) -> str:
+        """Restituisce HTML con score e globi Quantalys per una riga della tabella."""
+        v = _qtl_ratings.get(isin)
+        if not v:
+            return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+        score  = v.get("score")
+        globes = v.get("globes")
+        if score is None:
+            return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+        if globes:
+            _glob_col = {1:"#EF4444",2:"#F97316",3:"#EAB308",4:"#22C55E",5:"#1B4FBB"}.get(globes,"#64748B")
+            stars = (f"<span style='color:{_glob_col};font-size:.9rem;letter-spacing:1px;'>"
+                     f"{'★'*globes}{'☆'*(5-globes)}</span>")
+        else:
+            stars = ""
+        score_col = ("#1B4FBB" if score >= 80 else "#22C55E" if score >= 60
+                     else "#EAB308" if score >= 40 else "#EF4444")
+        score_html = (f"<span style='font-size:.75rem;font-weight:700;color:{score_col};"
+                      f"background:#F1F5F9;border-radius:3px;padding:1px 4px;'>{score}</span>")
+        tooltip = f"Score {score}/100" + (f" · {globes} globi" if globes else "")
+        return (f"<span title='{tooltip}'>{stars}"
+                f"{'<br>' if stars else ''}{score_html}</span>")
     _fida_raw_ui = raw.get("FIDA", pd.DataFrame())
     _isin_map_ui: dict[str, str] = {}
     if isinstance(_fida_raw_ui, pd.DataFrame) and not _fida_raw_ui.empty and "isin" in _fida_raw_ui.columns:
@@ -4437,6 +4474,7 @@ def main():
             f"<th style='{_TH}text-align:left;'>Cat. FIDA</th>"
             f"<th style='{_TH}text-align:center;'>FIDArating</th>"
             f"<th style='{_TH}text-align:center;'>Morningstar</th>"
+            f"<th style='{_TH}text-align:center;'>Quantalys</th>"
             f"</tr>"
         )
         _tbl_body = ""
@@ -4467,6 +4505,14 @@ def main():
             )
             _ms_r = _ms_live.get(_tr["nome"], {}).get("ms_rating")
             _ms_cell = _ms_badge_html(_ms_r)
+            # Quantalys rating — stesso lookup ISIN del tab_q
+            _tr_isin = _isin_map_ui.get(_tr["nome"], "")
+            if not _tr_isin:
+                _tr_n = re.sub(r'[^a-z0-9]', '', _tr["nome"].lower())
+                for _ik, _iv in _isin_map_ui.items():
+                    if re.sub(r'[^a-z0-9]', '', _ik.lower()) == _tr_n:
+                        _tr_isin = _iv; break
+            _qtl_r_cell = _qtl_rating_html(_tr_isin)
             _tbl_body += (
                 f"<tr>"
                 f"<td style='{_TC}font-weight:500;'>{_fund_link(_tr['nome'])}</td>"
@@ -4479,6 +4525,7 @@ def main():
                 f"<td style='{_TC}color:#64748B;'>{_cat}</td>"
                 f"<td style='{_TC}text-align:center;'>{_fida_cell}</td>"
                 f"<td style='{_TC}text-align:center;'>{_ms_cell}</td>"
+                f"<td style='{_TC}text-align:center;'>{_qtl_r_cell}</td>"
                 f"</tr>"
             )
         if _tbl_body:
