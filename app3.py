@@ -3383,10 +3383,16 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
     # Per-scenario session-state key so weights reset when switching scenarios
     ss_key = f"_sg_w_{sc_name}"
     if ss_key not in st.session_state:
-        # Initialise with equal-weight defaults from the scenario
-        st.session_state[ss_key] = {
-            f["nome"]: round(f["weight"] * 100, 1) for f in funds
-        }
+        # Distribuisce il peso suggerito di ogni sottocategoria equamente tra i
+        # suoi fondi (es. alloc_balanced 25% / 6 fondi = 4,2% ciascuno).
+        _init_w: dict = {}
+        for _sc_k, _sc_fs in subcat_funds.items():
+            _sc_pct = sw.get(_sc_k, 0.0)
+            _n = len(_sc_fs)
+            _per = round(_sc_pct / _n, 1) if _n else 0.0
+            for _fnd in _sc_fs:
+                _init_w[_fnd["nome"]] = _per
+        st.session_state[ss_key] = _init_w
     ww: dict = st.session_state[ss_key]
 
     # ── Page header ───────────────────────────────────────────────────────────
@@ -3513,7 +3519,9 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                     f"{_qtl_rating_cell(_sg_isin, _qtlr)}</div>",
                     unsafe_allow_html=True)
             with c5:
-                default_w = float(ww.get(fname, round(f["weight"] * 100, 1)))
+                _n_sc = len(subcat_funds.get(f["subcat"], [f]))
+                _fb_w = round(sw.get(f["subcat"], 0.0) / _n_sc, 1)
+                default_w = float(ww.get(fname, _fb_w))
                 new_w = st.number_input(
                     "w", min_value=0.0, max_value=100.0,
                     value=default_w, step=0.5,
@@ -3525,19 +3533,50 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
         st.markdown("<hr style='margin:.25rem 0 0 0;border-color:#f1f5f9;'>",
                     unsafe_allow_html=True)
 
+    # ── Sezione Private Markets (peso suggerito, nessun fondo) ────────────────
+    _pm_pct = 0
+    _gp_info = gp_scenario.get("info", "")
+    _pm_m = re.search(r'Private\s+Markets\s+(\d+)%', _gp_info, re.IGNORECASE)
+    if _pm_m:
+        _pm_pct = int(_pm_m.group(1))
+    else:
+        _pm_pct = max(0, round(100 - sum(sw.values())))
+    if _pm_pct > 0:
+        st.markdown(
+            f"<div style='background:linear-gradient(90deg,#3D2B1F,#5C3D2E);"
+            f"color:#fff;padding:.45rem 1rem;border-radius:6px;margin-top:.7rem;"
+            f"display:flex;align-items:center;gap:.8rem;'>"
+            f"<span style='font-weight:700;font-size:.88rem;flex:1;'>"
+            f"Private Markets</span>"
+            f"<span style='background:#C9A84C;color:#0D1B2A;padding:2px 9px;"
+            f"border-radius:4px;font-size:.73rem;font-weight:700;white-space:nowrap;'>"
+            f"Peso suggerito: {_pm_pct}%</span></div>",
+            unsafe_allow_html=True)
+        st.markdown(
+            "<p style='font-size:.82rem;color:#475569;font-weight:500;"
+            "padding:.5rem .2rem .1rem .4rem;margin:0;'>"
+            "I fondi Private Markets (ELTIF, RAIF, Demos, …) non sono inclusi "
+            "nel portafoglio liquido — peso da considerare separatamente.</p>",
+            unsafe_allow_html=True)
+        st.markdown("<hr style='margin:.4rem 0 0 0;border-color:#f1f5f9;'>",
+                    unsafe_allow_html=True)
+
     # ── Total weight indicator ────────────────────────────────────────────────
-    total_w = sum(ww.get(f["nome"], 0.0) for f in funds)
-    diff    = abs(total_w - 100.0)
+    # Il target è la somma dei pesi liquidi (esclude private markets)
+    _liq_tgt = float(sum(sw.get(k, 0) for k in subcat_funds)) or 100.0
+    total_w  = sum(ww.get(f["nome"], 0.0) for f in funds)
+    diff     = abs(total_w - _liq_tgt)
     st.markdown("<br>", unsafe_allow_html=True)
     if diff < 0.15:
         st.markdown(
             f'<div class="w-ok">✅ Somma pesi: <b>{total_w:.1f}%</b>'
             f' — Portafoglio pronto!</div>', unsafe_allow_html=True)
     else:
-        left = 100.0 - total_w
+        left = _liq_tgt - total_w
         st.markdown(
             f'<div class="w-warn">⚠️ Somma pesi: <b>{total_w:.1f}%</b>'
-            f' ({"mancano" if left>0 else "eccedono"} {abs(left):.1f}%)</div>',
+            f' ({"mancano" if left>0 else "eccedono"} {abs(left):.1f}%'
+            f' al target {_liq_tgt:.0f}%)</div>',
             unsafe_allow_html=True)
 
     if diff > 1.0:
