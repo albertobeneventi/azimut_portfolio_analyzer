@@ -2811,7 +2811,7 @@ def free_portfolio_ui(data):
     st.markdown('<p class="sec-title">Costruttore Portafoglio Libero</p>',unsafe_allow_html=True)
 
     # ── FIDArating filter ─────────────────────────────────────────────────────
-    _fd_live_free = st.session_state.get("_scomp_fd", {})
+    _fd_live_free = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
     # Build rating map: fund_name → "5"/"4"/"3"/"2"/"1"/"—"
     _fr_map = {
         r["nome"]: (str(_fd_live_free.get(r["nome"], {})
@@ -2887,15 +2887,17 @@ def free_portfolio_ui(data):
         st.warning("⚠️ Nessun fondo corrisponde ai filtri selezionati.")
         fida_filtered = fida  # fallback: show all
 
-    # Build option labels: include FIDArating and Morningstar badges
+    # Build option labels: include FIDArating, Morningstar badges and ISIN (for search)
     def _fund_option(r):
         fr   = _fr_map.get(r["nome"], "—")
         ms_r = _ms_fr_map.get(r["nome"], "—")
         ftag = f" · F{fr}"   if fr   != "—" else ""
         mtag = f" · M{ms_r}" if ms_r != "—" else ""
+        isin = str(r.get("isin", "") or "").strip()
+        isin_tag = f"  {isin}" if isin else ""
         if r["macro_cat"] != "Altro":
-            return f"{r['nome']}{ftag}{mtag}  [{r['macro_cat']}]"
-        return f"{r['nome']}{ftag}{mtag}"
+            return f"{r['nome']}{ftag}{mtag}  [{r['macro_cat']}]{isin_tag}"
+        return f"{r['nome']}{ftag}{mtag}{isin_tag}"
 
     options = fida_filtered.apply(_fund_option, axis=1).tolist()
 
@@ -2907,7 +2909,7 @@ def free_portfolio_ui(data):
             "🔍  Seleziona / cerca fondo:",
             options=options,
             max_selections=1,
-            placeholder="Digita per cercare, es. «comm», «glob», «targ»…",
+            placeholder="Digita nome o ISIN, es. «glob», «LU0346»…",
             key="sel_fund_ms",
         )
         sel = _sel_list[0] if _sel_list else (options[0] if options else "")
@@ -2915,8 +2917,8 @@ def free_portfolio_ui(data):
     with c3:
         st.markdown("<br>",unsafe_allow_html=True)
         if st.button("➕ Aggiungi",use_container_width=True):
-            # Strip FIDArating tag "· FN", Morningstar tag "· MN" and macro-cat "  [...]"
-            fname = re.split(r'\s+·\s+[FM]\d|\s{2}\[', sel)[0].strip()
+            # Strip FIDArating "· FN", Morningstar "· MN", macro-cat "  [...]", ISIN "  LU..."
+            fname = re.split(r'\s+·\s+[FM]\d|\s{2}\[|\s{2}[A-Z]{2}[A-Z0-9]{10}', sel)[0].strip()
             if any(f["nome"]==fname for f in st.session_state.free_ptf):
                 st.toast("⚠️ Fondo già presente!",icon="⚠️")
             else:
