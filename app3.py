@@ -3877,15 +3877,34 @@ def main():
                 with st.spinner("📄 Parsing Global Perspectives…"):
                     _gp_parsed = parse_global_perspectives(uploaded_gp.read())
                 if _gp_parsed:
+                    # ── Edizione: prima tenta dal testo PDF, poi dal nome file ──
+                    _ed = _gp_parsed.get("_edition", "")
+                    if not _ed:
+                        # Fallback: AzimutGlobalPerspectives_ITA_032026.01.pdf
+                        # Pattern _MMAAAA → mese+anno → trimestre
+                        _fn_m = re.search(r'_(\d{2})(\d{4})', uploaded_gp.name)
+                        if _fn_m:
+                            _mo_n = int(_fn_m.group(1))
+                            _yr_n = _fn_m.group(2)
+                            _q_n  = ("Q1" if _mo_n <= 3 else
+                                     "Q2" if _mo_n <= 6 else
+                                     "Q3" if _mo_n <= 9 else "Q4")
+                            _ed = f"{_q_n} {_yr_n}"
+                        else:
+                            # Fallback 2: Q1_2026 o Q1-2026 nel nome
+                            _fn_q = re.search(
+                                r'Q([1-4])[\s_\-]*(20\d{2})', uploaded_gp.name,
+                                re.IGNORECASE)
+                            if _fn_q:
+                                _ed = f"Q{_fn_q.group(1)} {_fn_q.group(2)}"
+                    if _ed:
+                        _gp_parsed["_edition"] = _ed
+                        st.session_state["_gp_doc_edition"] = _ed
                     st.session_state["_gp_data"]    = _gp_parsed
                     st.session_state["_gp_filename"] = uploaded_gp.name
-                    # Salva edizione (es. "Q2 2025") se presente nel PDF
-                    _ed = _gp_parsed.get("_edition", "")
-                    if _ed:
-                        st.session_state["_gp_doc_edition"] = _ed
                     # Nuovo PDF → il fetch FondiDoc va rifatto
                     st.session_state.pop("_gp_fetch_done", None)
-                    # Salva su disco per le sessioni future
+                    # Salva su disco per le sessioni future (include _edition)
                     save_gp_cache(_gp_parsed, uploaded_gp.name)
                 else:
                     st.session_state.pop("_gp_data", None)
@@ -3896,8 +3915,16 @@ def main():
             if not st.session_state.get("_gp_data") and _gp_cache_data:
                 st.session_state["_gp_data"]    = _gp_cache_data
                 st.session_state["_gp_filename"] = _gp_cache_fname
-                # Ripristina edizione dalla cache
+                # Ripristina edizione: dalla cache, o dal nome file in cache
                 _ed_c = _gp_cache_data.get("_edition", "")
+                if not _ed_c and _gp_cache_fname:
+                    _fn_mc = re.search(r'_(\d{2})(\d{4})', _gp_cache_fname)
+                    if _fn_mc:
+                        _mo_c = int(_fn_mc.group(1))
+                        _q_c  = ("Q1" if _mo_c <= 3 else
+                                 "Q2" if _mo_c <= 6 else
+                                 "Q3" if _mo_c <= 9 else "Q4")
+                        _ed_c = f"{_q_c} {_fn_mc.group(2)}"
                 if _ed_c and "_gp_doc_edition" not in st.session_state:
                     st.session_state["_gp_doc_edition"] = _ed_c
             elif st.session_state.get("_gp_filename") and not _gp_cache_data:
