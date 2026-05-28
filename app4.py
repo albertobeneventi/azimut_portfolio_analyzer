@@ -85,6 +85,24 @@ MANUAL_URL_OVERRIDES = {
     # AZ Bond - CoCo Bonds (senza hedging — nome alternativo nei portafogli)
     "AZ Bond - CoCo Bonds":
         "https://www.fondidoc.it/d/Index/FIDFM857/LU2622195423_az-f1-bd-coco-bonds-a-az-fund-cap-eur",
+    # ── Fondi GP presenti nel portafoglio suggerito ma assenti dall'Excel ────
+    # Aggiunti per garantire link nel PDF e dati analisi nel tab Rischio
+    "AZ F.1 All. Balanced Plus A Cap EUR":
+        "https://www.fondidoc.it/d/Index/FDM03292/LU3081370317_az-f1-all-balanced-plus-a-cap-eur",
+    "AZ F.1 Bd Total Return Bond A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZF1BNDC/LU2168561392_az-f1-bd-total-return-bond-a-cap-eur",
+    "AZ F.1 Eq. Global Emerging FoF A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZ1278/LU1225037040_az-f1-eq-global-emerging-fof-a-cap-eur",
+    "AZ F.1 Eq. Future Opportunities A Cap EUR":
+        "https://www.fondidoc.it/d/Index/G1U16575/LU2332973481_az-f1-eq-future-opportunities-a-cap-eur",
+    "AZ F.1 Eq. Global Growth A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZFGGSA/LU0804221488_az-f1-eq-global-growth-a-cap-eur",
+    "AZ F.1 Eq. World Minimum Volatility A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZFABAAZ/LU0262757098_az-f1-eq-world-minimum-volatility-a-cap-eur",
+    "AZ F.1 Eq. Global Value FoF A Cap EUR":
+        "https://www.fondidoc.it/d/Index/FDFM4094/LU2622203623_az-f1-eq-global-value-fof-a-cap-eur",
+    "AZ F.1 Eq. Small Cap Europe FoF A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZSEUAAZ/LU0262753857_az-f1-eq-small-cap-europe-fof-a-cap-eur",
 }
 
 # ── GITHUB REPO PERSISTENCE ──────────────────────────────────────────────────
@@ -1180,6 +1198,19 @@ def load_quantalys_cache() -> dict:
     return {}
 
 
+@st.cache_data(ttl=3600)
+def load_quantalys_ratings() -> dict:
+    """Load ISIN → {score, globes} from data/quantalys_ratings.json."""
+    try:
+        fp = Path(__file__).parent / "data" / "quantalys_ratings.json"
+        if fp.exists() and fp.stat().st_size > 5:
+            with open(fp, encoding="utf-8") as fh:
+                return json.load(fh)
+    except Exception:
+        pass
+    return {}
+
+
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
     ws = wb[sheet_name]
     rows = list(ws.iter_rows(values_only=True))
@@ -1450,6 +1481,8 @@ def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
     # Include fondi assenti dal cache E fondi in cache ma senza URL
     missing: dict = {}   # resolved_name → pdf_name
     for sc_data in gp_data.values():
+        if not isinstance(sc_data, dict):
+            continue
         for f in sc_data.get("funds", []):
             pdf_name = f["nome"]
             res_name = _resolve_nome_for_fd(pdf_name, existing_cache)
@@ -2012,12 +2045,15 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     pie_img = RLImage(pie_buf, width=PIE_W, height=PIE_W)
     d_leg   = d_act[d_act[wcol] > 0.005].sort_values(wcol, ascending=False)
 
+    # Quantalys cache per fallback URL (ISIN → pagina fondo)
+    _pdf_qtl = load_quantalys_cache()
+
     # Costruisci le celle della legenda
     leg_items = []
     for _, r in d_leg.iterrows():
         _rn      = r["nome"]                               # Excel key (for URL/data lookup)
         _rn_disp = r.get("nome_orig") or _rn               # GP name if available (for label)
-        # 1) MANUAL direct  2) MANUAL fuzzy (vince su fida_urls)  3) cache fuzzy
+        # 1) MANUAL direct  2) MANUAL fuzzy (vince su fida_urls)  3) FondiDoc cache
         _fd = fund_data or {}
         url = MANUAL_URL_OVERRIDES.get(_rn, "")
         if not url:
@@ -2029,7 +2065,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                     if _msk and _msk in _sk and _mu:
                         url = _mu
                         break
-            # 3) FondiDoc cache direct e fuzzy
+            # 3) FondiDoc cache: direct poi fuzzy su _rn
             if not url:
                 url = _fd.get(_rn, {}).get("url", "")
             if not url and _sk:
@@ -2037,6 +2073,23 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                     if isinstance(_fv, dict) and _sk in _fk.lower() and _fv.get("url"):
                         url = _fv["url"]
                         break
+            # 4) Fuzzy su nome_orig (GP name) se diverso dal nome risolto
+            if not url and _rn_disp and _rn_disp != _rn:
+                _sk2 = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', _rn_disp, flags=re.I).strip().lower()
+                if _sk2:
+                    for _fk, _fv in _fd.items():
+                        if isinstance(_fv, dict) and _sk2 in _fk.lower() and _fv.get("url"):
+                            url = _fv["url"]
+                            break
+            # 5) ISIN → pagina Quantalys (ultimo fallback)
+            if not url:
+                _isin_fb = isin_map.get(_rn, "") or isin_map.get(_rn_disp, "")
+                if not _isin_fb and _sk:
+                    for _ik, _iv in isin_map.items():
+                        if _sk in _ik.lower():
+                            _isin_fb = _iv; break
+                if _isin_fb:
+                    url = _pdf_qtl.get(_isin_fb, "")
         name_s = (_rn_disp[:24] + "…") if len(_rn_disp) > 24 else _rn_disp
         pct_s  = f"{r[wcol]*100:.1f}%"
         if url:
@@ -2165,7 +2218,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                     pass
         out = {}
         for k in keys_list:
-            out[k] = f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "N/D"
+            out[k] = f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "-"
         return out
 
     # Paragraph style for portfolio summary row
@@ -2202,12 +2255,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     ptf_perf_row = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph(f"<b>100%</b>", WH),
-        pstyle_w(ptf_p.get("ytd","N/D")),
-        pstyle_w(ptf_p.get("perf_1y","N/D")),
-        pstyle_w(ptf_p.get("perf_3y","N/D")),
-        pstyle_w(ptf_p.get("perf_5y","N/D")),
-        Paragraph(ptf_p.get("vol_1y","N/D"), WH),
-        Paragraph(ptf_p.get("sharpe_1y","N/D"), WH),
+        pstyle_w(ptf_p.get("ytd","-")),
+        pstyle_w(ptf_p.get("perf_1y","-")),
+        pstyle_w(ptf_p.get("perf_3y","-")),
+        pstyle_w(ptf_p.get("perf_5y","-")),
+        Paragraph(ptf_p.get("vol_1y","-"), WH),
+        Paragraph(ptf_p.get("sharpe_1y","-"), WH),
     ]
 
     perf_rows = [perf_hdr, ptf_perf_row]
@@ -2217,7 +2270,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ana = fd.get("analysis", {})
         def gv(key, nome=row["nome"]):
             # Return factbook value (for return metrics) or FondiDoc value
-            return get_fb(nome, key) or ana.get(key, "N/D")
+            return get_fb(nome, key) or ana.get(key, "-")
         perf_rows.append([
             Paragraph(row["nome"][:48], SM),
             Paragraph(f"<b>{row[wcol]*100:.1f}%</b>", SM),
@@ -2274,19 +2327,19 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     ptf_risk_row = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph("<b>100%</b>", WH),
-        Paragraph(ptf_r.get("vol_1y","N/D"),     WH),
-        Paragraph(ptf_r.get("vol_3y","N/D"),     WH),
-        Paragraph(ptf_r.get("vol_5y","N/D"),     WH),
-        Paragraph(ptf_r.get("neg_vol_1y","N/D"), WH),
-        Paragraph(ptf_r.get("sharpe_3y","N/D"),  WH),
-        Paragraph(ptf_r.get("sortino_1y","N/D"), WH),
+        Paragraph(ptf_r.get("vol_1y","-"),     WH),
+        Paragraph(ptf_r.get("vol_3y","-"),     WH),
+        Paragraph(ptf_r.get("vol_5y","-"),     WH),
+        Paragraph(ptf_r.get("neg_vol_1y","-"), WH),
+        Paragraph(ptf_r.get("sharpe_3y","-"),  WH),
+        Paragraph(ptf_r.get("sortino_1y","-"), WH),
     ]
 
     risk_rows = [risk_hdr, ptf_risk_row]
     for _, row in d_sorted.iterrows():
         fd  = (fund_data or {}).get(row["nome"], {})
         ana = fd.get("analysis", {})
-        def gv_r(k): return ana.get(k,"N/D")
+        def gv_r(k): return ana.get(k,"-")
         risk_rows.append([
             Paragraph(row["nome"][:48], SM),
             Paragraph(f"{row[wcol]*100:.1f}%", SM),
@@ -2376,12 +2429,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             _ptf_rat_den += _w * _obb
 
     _ptf_dur_str = (f"{_ptf_dur_num / _ptf_dur_den:.2f}"
-                    if _ptf_dur_den > 0.001 else "N/D")
+                    if _ptf_dur_den > 0.001 else "-")
     if _ptf_rat_den > 0.001:
         _ri = max(1, min(22, round(_ptf_rat_num / _ptf_rat_den)))
-        _ptf_rat_str = RATING_INVERSE.get(_ri, "N/D")
+        _ptf_rat_str = RATING_INVERSE.get(_ri, "-")
     else:
-        _ptf_rat_str = "N/D"
+        _ptf_rat_str = "-"
 
     _alloc_hdr_items = [
         ("Fondo",        HDR), ("ISIN",         HDR), ("Peso",   HDR),
@@ -2564,7 +2617,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             _ptf_unp_str  = f"{_wtd_unp  / _cov_w:.2f}%"
             _ptf_iunp_str = f"{_wtd_iunp / _cov_w:.2f}%"
         else:
-            _ptf_unp_str = _ptf_iunp_str = "N/D"
+            _ptf_unp_str = _ptf_iunp_str = "-"
 
         unp_hdr_row = [Paragraph(f"<b>{t}</b>", HDR) for t in
                        ["Fondo", "Peso", "%UNP", "%IUNP36", "FIDArating", "Morningstar"]]
@@ -2663,11 +2716,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ov  = fd.get("overview",  {})
         ana = fd.get("analysis",  {})
 
-        def gv(k,src=ana,fallback="N/D"): return src.get(k,fallback)
+        def gv(k,src=ana,fallback="-"): return src.get(k,fallback)
 
-        srri_str = f"SRRI {gv('srri',ov,'—')}/7" if gv('srri',ov) != "N/D" else ""
-        nav_str  = f"NAV {gv('nav')} € ({gv('last_update')})" if gv('nav') != "N/D" else ""
-        rating_s = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("N/D","—") else ""
+        srri_str = f"SRRI {gv('srri',ov,'—')}/7" if gv('srri',ov) != "-" else ""
+        nav_str  = f"NAV {gv('nav')} € ({gv('last_update')})" if gv('nav') != "-" else ""
+        rating_s = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("-","—") else ""
         meta_extra = "  ·  ".join(x for x in [srri_str, rating_s, nav_str] if x)
         isin = fd.get("isin", "") or isin_map.get(row["nome"], "")
         isin_str = f"  ·  ISIN: <b>{isin}</b>" if isin else ""
@@ -2798,7 +2851,7 @@ def free_portfolio_ui(data):
     st.markdown('<p class="sec-title">Costruttore Portafoglio Libero</p>',unsafe_allow_html=True)
 
     # ── FIDArating filter ─────────────────────────────────────────────────────
-    _fd_live_free = st.session_state.get("_scomp_fd", {})
+    _fd_live_free = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
     # Build rating map: fund_name → "5"/"4"/"3"/"2"/"1"/"—"
     _fr_map = {
         r["nome"]: (str(_fd_live_free.get(r["nome"], {})
@@ -2874,15 +2927,17 @@ def free_portfolio_ui(data):
         st.warning("⚠️ Nessun fondo corrisponde ai filtri selezionati.")
         fida_filtered = fida  # fallback: show all
 
-    # Build option labels: include FIDArating and Morningstar badges
+    # Build option labels: include FIDArating, Morningstar badges and ISIN (for search)
     def _fund_option(r):
         fr   = _fr_map.get(r["nome"], "—")
         ms_r = _ms_fr_map.get(r["nome"], "—")
         ftag = f" · F{fr}"   if fr   != "—" else ""
         mtag = f" · M{ms_r}" if ms_r != "—" else ""
+        isin = str(r.get("isin", "") or "").strip()
+        isin_tag = f"  {isin}" if isin else ""
         if r["macro_cat"] != "Altro":
-            return f"{r['nome']}{ftag}{mtag}  [{r['macro_cat']}]"
-        return f"{r['nome']}{ftag}{mtag}"
+            return f"{r['nome']}{ftag}{mtag}  [{r['macro_cat']}]{isin_tag}"
+        return f"{r['nome']}{ftag}{mtag}{isin_tag}"
 
     options = fida_filtered.apply(_fund_option, axis=1).tolist()
 
@@ -2894,7 +2949,7 @@ def free_portfolio_ui(data):
             "🔍  Seleziona / cerca fondo:",
             options=options,
             max_selections=1,
-            placeholder="Digita per cercare, es. «comm», «glob», «targ»…",
+            placeholder="Digita nome o ISIN, es. «glob», «LU0346»…",
             key="sel_fund_ms",
         )
         sel = _sel_list[0] if _sel_list else (options[0] if options else "")
@@ -2902,8 +2957,8 @@ def free_portfolio_ui(data):
     with c3:
         st.markdown("<br>",unsafe_allow_html=True)
         if st.button("➕ Aggiungi",use_container_width=True):
-            # Strip FIDArating tag "· FN", Morningstar tag "· MN" and macro-cat "  [...]"
-            fname = re.split(r'\s+·\s+[FM]\d|\s{2}\[', sel)[0].strip()
+            # Strip FIDArating "· FN", Morningstar "· MN", macro-cat "  [...]", ISIN "  LU..."
+            fname = re.split(r'\s+·\s+[FM]\d|\s{2}\[|\s{2}[A-Z]{2}[A-Z0-9]{10}', sel)[0].strip()
             if any(f["nome"]==fname for f in st.session_state.free_ptf):
                 st.toast("⚠️ Fondo già presente!",icon="⚠️")
             else:
@@ -3251,6 +3306,35 @@ def parse_global_perspectives(pdf_bytes: bytes):
             "subcat_weights": sw,
         }
 
+    # ── 5. Estrai edizione / trimestre dalla prima pagina ────────────────────────
+    if result:
+        _gp_edition = ""
+        _cover = pages[0] if pages else ""
+        # Cerca "Q1 2025" / "Q2 2026" ecc.
+        _em = re.search(r'\bQ([1-4])\s*(20\d{2})\b', _cover)
+        if _em:
+            _gp_edition = f"Q{_em.group(1)} {_em.group(2)}"
+        if not _gp_edition:
+            # Cerca "1° Trimestre 2025" o "Trimestre 1 2025"
+            _em = re.search(r'(\d)\s*[°o]?\s*[Tt]rimestre\s*(20\d{2})', _cover)
+            if not _em:
+                _em = re.search(r'[Tt]rimestre\s+(\d)\s*(20\d{2})', _cover)
+            if _em:
+                _qmap = {"1": "Q1", "2": "Q2", "3": "Q3", "4": "Q4"}
+                _gp_edition = f"{_qmap.get(_em.group(1), 'Q?')} {_em.group(2)}"
+        if not _gp_edition:
+            # Cerca "Edizione N" o "Edition N"
+            _em = re.search(r'[Ee]dizione\s+(\d+)', _cover)
+            if _em:
+                _gp_edition = f"Ed. {_em.group(1)}"
+        if not _gp_edition:
+            # Ultimo tentativo: prime 400 chars del testo completo (copertina)
+            _em = re.search(r'\bQ([1-4])\s*(20\d{2})\b', full[:400])
+            if _em:
+                _gp_edition = f"Q{_em.group(1)} {_em.group(2)}"
+        if _gp_edition:
+            result["_edition"] = _gp_edition
+
     return result if result else None
 
 
@@ -3278,6 +3362,29 @@ def _ms_badge_gp(ms_r) -> str:
     _col = _MS_COL_GP.get(v, "#64748B")
     return (f"<span style='color:{_col};font-weight:700;"
             f"font-size:.8rem;'>{filled}</span>")
+
+def _qtl_rating_cell(isin: str, ratings: dict) -> str:
+    """Restituisce HTML del rating Quantalys (stelle + score) per un dato ISIN."""
+    v = ratings.get(isin) if isin else None
+    if not v:
+        return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+    score  = v.get("score")
+    globes = v.get("globes")
+    if score is None:
+        return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+    if globes:
+        _gc = {1:"#EF4444",2:"#F97316",3:"#EAB308",4:"#22C55E",5:"#1B4FBB"}.get(globes,"#64748B")
+        stars = (f"<span style='color:{_gc};font-size:.85rem;letter-spacing:1px;'>"
+                 f"{'★'*globes}{'☆'*(5-globes)}</span>")
+    else:
+        stars = ""
+    sc_col = ("#1B4FBB" if score >= 80 else "#22C55E" if score >= 60
+              else "#EAB308" if score >= 40 else "#EF4444")
+    sc_html = (f"<span style='font-size:.7rem;font-weight:700;color:{sc_col};"
+               f"background:#F1F5F9;border-radius:3px;padding:1px 4px;'>{score}</span>")
+    tip = f"Score {score}/100" + (f" · {globes} globi" if globes else "")
+    return f"<span title='{tip}'>{stars}{'<br>' if stars else ''}{sc_html}</span>"
+
 
 # Sub-category display names (Italian labels)
 _SUBCAT_DISPLAY = {
@@ -3325,10 +3432,16 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
     # Per-scenario session-state key so weights reset when switching scenarios
     ss_key = f"_sg_w_{sc_name}"
     if ss_key not in st.session_state:
-        # Initialise with equal-weight defaults from the scenario
-        st.session_state[ss_key] = {
-            f["nome"]: round(f["weight"] * 100, 1) for f in funds
-        }
+        # Distribuisce il peso suggerito di ogni sottocategoria equamente tra i
+        # suoi fondi (es. alloc_balanced 25% / 6 fondi = 4,2% ciascuno).
+        _init_w: dict = {}
+        for _sc_k, _sc_fs in subcat_funds.items():
+            _sc_pct = sw.get(_sc_k, 0.0)
+            _n = len(_sc_fs)
+            _per = round(_sc_pct / _n, 1) if _n else 0.0
+            for _fnd in _sc_fs:
+                _init_w[_fnd["nome"]] = _per
+        st.session_state[ss_key] = _init_w
     ww: dict = st.session_state[ss_key]
 
     # ── Page header ───────────────────────────────────────────────────────────
@@ -3340,8 +3453,11 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
         "aggiorna automaticamente quando la somma raggiunge 100 %."
     )
 
+    # ── Carica ratings Quantalys ──────────────────────────────────────────────
+    _qtlr = load_quantalys_ratings()   # {ISIN: {"score": N, "globes": N}}
+
     # ── Column headers (only once, above all subcategories) ───────────────────
-    _h1, _h2, _h3, _h4 = st.columns([4.5, 1.2, 1.2, 1.4])
+    _h1, _h2, _h3, _h4, _h5 = st.columns([4.5, 1.2, 1.2, 1.2, 1.4])
     _h1.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
                  "text-transform:uppercase;letter-spacing:.08em;'>Fondo</span>",
                  unsafe_allow_html=True)
@@ -3352,6 +3468,9 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                  "text-transform:uppercase;letter-spacing:.08em;'>Morningstar</span>",
                  unsafe_allow_html=True)
     _h4.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>Quantalys</span>",
+                 unsafe_allow_html=True)
+    _h5.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
                  "text-transform:uppercase;letter-spacing:.08em;'>Peso %</span>",
                  unsafe_allow_html=True)
     st.markdown("<hr style='margin:.15rem 0 .3rem 0;border-color:#e2e8f0;'>",
@@ -3420,7 +3539,15 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                 if url_sg else
                 f'<span style="font-size:.84rem;font-weight:500;color:#1e293b;">{short}</span>'
             )
-            c1, c2, c3, c4 = st.columns([4.5, 1.2, 1.2, 1.4])
+            # Estrai ISIN dall'URL FondiDoc (formato: .../ISIN_nome-fondo)
+            _sg_isin = ""
+            _sg_url_chk = url_sg or _fd_entry.get("url", "")
+            if _sg_url_chk:
+                _sg_m = re.search(r'/([A-Z]{2}[A-Z0-9]{10})[_/]', _sg_url_chk)
+                if _sg_m:
+                    _sg_isin = _sg_m.group(1)
+
+            c1, c2, c3, c4, c5 = st.columns([4.5, 1.2, 1.2, 1.2, 1.4])
             with c1:
                 st.markdown(
                     f"<div style='padding:.55rem 0 .3rem 0;'>{name_html}</div>",
@@ -3436,7 +3563,14 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                     f"{_ms_badge_gp(ms_r)}</div>",
                     unsafe_allow_html=True)
             with c4:
-                default_w = float(ww.get(fname, round(f["weight"] * 100, 1)))
+                st.markdown(
+                    f"<div style='padding:.5rem 0 .25rem 0;'>"
+                    f"{_qtl_rating_cell(_sg_isin, _qtlr)}</div>",
+                    unsafe_allow_html=True)
+            with c5:
+                _n_sc = len(subcat_funds.get(f["subcat"], [f]))
+                _fb_w = round(sw.get(f["subcat"], 0.0) / _n_sc, 1)
+                default_w = float(ww.get(fname, _fb_w))
                 new_w = st.number_input(
                     "w", min_value=0.0, max_value=100.0,
                     value=default_w, step=0.5,
@@ -3448,19 +3582,59 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
         st.markdown("<hr style='margin:.25rem 0 0 0;border-color:#f1f5f9;'>",
                     unsafe_allow_html=True)
 
+    # ── Sezione Private Markets (peso suggerito, nessun fondo) ────────────────
+    _pm_pct = 0
+    _gp_info = gp_scenario.get("info", "")
+    _pm_m = re.search(r'Private\s+Markets\s+(\d+)%', _gp_info, re.IGNORECASE)
+    if _pm_m:
+        _pm_pct = int(_pm_m.group(1))
+    else:
+        _pm_pct = max(0, round(100 - sum(sw.values())))
+    if _pm_pct > 0:
+        st.markdown(
+            f"<div style='background:linear-gradient(90deg,#3D2B1F,#5C3D2E);"
+            f"color:#fff;padding:.45rem 1rem;border-radius:6px;margin-top:.7rem;"
+            f"display:flex;align-items:center;gap:.8rem;'>"
+            f"<span style='font-weight:700;font-size:.88rem;flex:1;'>"
+            f"Private Markets</span>"
+            f"<span style='background:#C9A84C;color:#0D1B2A;padding:2px 9px;"
+            f"border-radius:4px;font-size:.73rem;font-weight:700;white-space:nowrap;'>"
+            f"Peso suggerito: {_pm_pct}%</span></div>",
+            unsafe_allow_html=True)
+        st.markdown(
+            "<p style='font-size:.82rem;color:#475569;font-weight:500;"
+            "padding:.5rem .2rem .1rem .4rem;margin:0;'>"
+            "I fondi Private Markets (ELTIF, RAIF, Demos, …) non sono inclusi "
+            "nel portafoglio liquido — peso da considerare separatamente.</p>",
+            unsafe_allow_html=True)
+        st.markdown("<hr style='margin:.4rem 0 0 0;border-color:#f1f5f9;'>",
+                    unsafe_allow_html=True)
+
     # ── Total weight indicator ────────────────────────────────────────────────
-    total_w = sum(ww.get(f["nome"], 0.0) for f in funds)
-    diff    = abs(total_w - 100.0)
+    # Accetta sia somma=pesi_liquidi (es. 70%) che somma=100%
+    # (il secondo caso: l'utente ha incluso il peso PM nei fondi liquidi)
+    _liq_tgt  = float(sum(sw.get(k, 0) for k in subcat_funds)) or 100.0
+    total_w   = sum(ww.get(f["nome"], 0.0) for f in funds)
+    diff_liq  = abs(total_w - _liq_tgt)
+    diff_full = abs(total_w - 100.0)
+    diff      = min(diff_liq, diff_full)
     st.markdown("<br>", unsafe_allow_html=True)
     if diff < 0.15:
         st.markdown(
             f'<div class="w-ok">✅ Somma pesi: <b>{total_w:.1f}%</b>'
             f' — Portafoglio pronto!</div>', unsafe_allow_html=True)
     else:
-        left = 100.0 - total_w
+        # Mostra la distanza dal target più vicino
+        if diff_liq <= diff_full:
+            left = _liq_tgt - total_w
+            tgt_lbl = f"target liquido {_liq_tgt:.0f}%"
+        else:
+            left = 100.0 - total_w
+            tgt_lbl = "target 100%"
         st.markdown(
             f'<div class="w-warn">⚠️ Somma pesi: <b>{total_w:.1f}%</b>'
-            f' ({"mancano" if left>0 else "eccedono"} {abs(left):.1f}%)</div>',
+            f' ({"mancano" if left>0 else "eccedono"} {abs(left):.1f}%'
+            f' al {tgt_lbl})</div>',
             unsafe_allow_html=True)
 
     if diff > 1.0:
@@ -3581,8 +3755,26 @@ def main():
             "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)",
             type=["xlsx","xls"],
             help=_xl_hint,
+            key="uploader_xl",
         )
-        if _xl_cache_date and uploaded is None:
+        if uploaded is not None:
+            # Salva bytes + nome in session_state immediatamente (sopravvivono
+            # a qualsiasi rerun successivo, anche programmativo)
+            _xl_bytes_snap = uploaded.getvalue()
+            if _xl_bytes_snap:
+                st.session_state["_xl_pending_bytes"] = _xl_bytes_snap
+                st.session_state["_xl_loaded_name"]   = uploaded.name
+        elif st.session_state.get("_xl_loaded_name"):
+            # Il widget è vuoto (Streamlit lo svuota su ogni rerun naturale)
+            # ma il file era stato caricato in questa sessione → mostra badge
+            st.markdown(
+                f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
+                f"font-size:.78rem;color:#86efac;'>"
+                f"✅&nbsp;<b>{st.session_state['_xl_loaded_name']}</b>"
+                f"&nbsp;·&nbsp;attivo in sessione</div>",
+                unsafe_allow_html=True)
+        elif _xl_cache_date:
             st.caption(f"📂 Excel da cache · {_xl_cache_date}")
 
         # ── Uploader Factbook ─────────────────────────────────────────────────
@@ -3592,13 +3784,58 @@ def main():
             help="Carica il Factbook PDF per estrarre Duration, Rating e Asset "
                  "Allocation. Dopo la prima estrazione scarica il file Excel "
                  "e ricaricalo la prossima volta: è più veloce.",
+            key="uploader_fb",
         )
+        if uploaded_fb is not None:
+            _fb_bytes_snap = uploaded_fb.getvalue()
+            if _fb_bytes_snap:
+                st.session_state["_fb_pending_bytes"] = _fb_bytes_snap
+                st.session_state["_fb_loaded_name"]   = uploaded_fb.name
+        elif st.session_state.get("_fb_loaded_name"):
+            _fb_dt_str   = st.session_state.get("_fb_doc_date", "")
+            _fb_dt_extra = (f"&nbsp;·&nbsp;📅&nbsp;{_fb_dt_str}"
+                            if _fb_dt_str else "")
+            st.markdown(
+                f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
+                f"font-size:.78rem;color:#86efac;'>"
+                f"✅&nbsp;<b>{st.session_state['_fb_loaded_name']}</b>"
+                f"{_fb_dt_extra}"
+                f"&nbsp;·&nbsp;attivo in sessione</div>",
+                unsafe_allow_html=True)
+
         uploaded_fb_xl = st.file_uploader(
             "DATI FACTBOOK (Excel, dopo prima estrazione)",
             type=["xlsx","xls"],
             help="Carica il file Excel scaricato dopo la prima estrazione del "
                  "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
+            key="uploader_fb_xl",
         )
+        if uploaded_fb_xl is not None:
+            _fb_xl_bytes_snap = uploaded_fb_xl.getvalue()
+            if _fb_xl_bytes_snap:
+                st.session_state["_fb_xl_pending_bytes"] = _fb_xl_bytes_snap
+                st.session_state["_fb_xl_loaded_name"]   = uploaded_fb_xl.name
+        elif st.session_state.get("_fb_xl_loaded_name"):
+            st.markdown(
+                f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
+                f"font-size:.78rem;color:#86efac;'>"
+                f"✅&nbsp;<b>{st.session_state['_fb_xl_loaded_name']}</b>"
+                f"&nbsp;·&nbsp;attivo in sessione</div>",
+                unsafe_allow_html=True)
+
+        # Caption con la data di riferimento del Factbook.
+        # Al primo render di sessione legge direttamente il JSON su disco
+        # (la sidebar gira prima del main content che normalmente lo salva).
+        _fb_doc_date_sb = st.session_state.get("_fb_doc_date", "")
+        if not _fb_doc_date_sb:
+            _fb_auto_q = load_factbook_auto()
+            _fb_doc_date_sb = (_fb_auto_q or {}).get("_ref_date", "")
+            if _fb_doc_date_sb:
+                st.session_state["_fb_doc_date"] = _fb_doc_date_sb
+        if _fb_doc_date_sb:
+            st.caption(f"📅 Factbook al {_fb_doc_date_sb}")
 
         # ── Uploader GP ───────────────────────────────────────────────────────
         _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
@@ -3610,9 +3847,31 @@ def main():
             "GLOBAL PERSPECTIVES PDF",
             type=["pdf"],
             help=_gp_hint,
+            key="uploader_gp",
         )
-        if _gp_cache_date and uploaded_gp is None:
-            st.caption(f"📂 GP da cache · {_gp_cache_date}")
+        if uploaded_gp is not None:
+            st.session_state["_gp_loaded_name"] = uploaded_gp.name
+        if uploaded_gp is None:
+            # Prendi edizione da session_state (render successivi) oppure
+            # direttamente dalla cache su disco (primo render di sessione)
+            _gp_ed_str = (st.session_state.get("_gp_doc_edition")
+                          or (_gp_cache_data or {}).get("_edition", ""))
+            if _gp_cache_date:
+                _gp_cap = f"📂 GP da cache · {_gp_cache_date}"
+                if _gp_ed_str:
+                    _gp_cap += f" · {_gp_ed_str}"
+                st.caption(_gp_cap)
+            elif st.session_state.get("_gp_loaded_name"):
+                _gp_ed_extra = (f"&nbsp;·&nbsp;📅&nbsp;{_gp_ed_str}"
+                                if _gp_ed_str else "")
+                st.markdown(
+                    f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                    f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
+                    f"font-size:.78rem;color:#86efac;'>"
+                    f"✅&nbsp;<b>{st.session_state['_gp_loaded_name']}</b>"
+                    f"{_gp_ed_extra}"
+                    f"&nbsp;·&nbsp;attivo in sessione</div>",
+                    unsafe_allow_html=True)
 
         # ── Parsing GP (solo quando cambia file) ─────────────────────────────
         if uploaded_gp is not None:
@@ -3620,11 +3879,34 @@ def main():
                 with st.spinner("📄 Parsing Global Perspectives…"):
                     _gp_parsed = parse_global_perspectives(uploaded_gp.read())
                 if _gp_parsed:
+                    # ── Edizione: prima tenta dal testo PDF, poi dal nome file ──
+                    _ed = _gp_parsed.get("_edition", "")
+                    if not _ed:
+                        # Fallback: AzimutGlobalPerspectives_ITA_032026.01.pdf
+                        # Pattern _MMAAAA → mese+anno → trimestre
+                        _fn_m = re.search(r'_(\d{2})(\d{4})', uploaded_gp.name)
+                        if _fn_m:
+                            _mo_n = int(_fn_m.group(1))
+                            _yr_n = _fn_m.group(2)
+                            _q_n  = ("Q1" if _mo_n <= 3 else
+                                     "Q2" if _mo_n <= 6 else
+                                     "Q3" if _mo_n <= 9 else "Q4")
+                            _ed = f"{_q_n} {_yr_n}"
+                        else:
+                            # Fallback 2: Q1_2026 o Q1-2026 nel nome
+                            _fn_q = re.search(
+                                r'Q([1-4])[\s_\-]*(20\d{2})', uploaded_gp.name,
+                                re.IGNORECASE)
+                            if _fn_q:
+                                _ed = f"Q{_fn_q.group(1)} {_fn_q.group(2)}"
+                    if _ed:
+                        _gp_parsed["_edition"] = _ed
+                        st.session_state["_gp_doc_edition"] = _ed
                     st.session_state["_gp_data"]    = _gp_parsed
                     st.session_state["_gp_filename"] = uploaded_gp.name
                     # Nuovo PDF → il fetch FondiDoc va rifatto
                     st.session_state.pop("_gp_fetch_done", None)
-                    # Salva su disco per le sessioni future
+                    # Salva su disco per le sessioni future (include _edition)
                     save_gp_cache(_gp_parsed, uploaded_gp.name)
                 else:
                     st.session_state.pop("_gp_data", None)
@@ -3635,10 +3917,23 @@ def main():
             if not st.session_state.get("_gp_data") and _gp_cache_data:
                 st.session_state["_gp_data"]    = _gp_cache_data
                 st.session_state["_gp_filename"] = _gp_cache_fname
+                # Ripristina edizione: dalla cache, o dal nome file in cache
+                _ed_c = _gp_cache_data.get("_edition", "")
+                if not _ed_c and _gp_cache_fname:
+                    _fn_mc = re.search(r'_(\d{2})(\d{4})', _gp_cache_fname)
+                    if _fn_mc:
+                        _mo_c = int(_fn_mc.group(1))
+                        _q_c  = ("Q1" if _mo_c <= 3 else
+                                 "Q2" if _mo_c <= 6 else
+                                 "Q3" if _mo_c <= 9 else "Q4")
+                        _ed_c = f"{_q_c} {_fn_mc.group(2)}"
+                if _ed_c and "_gp_doc_edition" not in st.session_state:
+                    st.session_state["_gp_doc_edition"] = _ed_c
             elif st.session_state.get("_gp_filename") and not _gp_cache_data:
                 # Cache rimossa manualmente → pulisci session state
-                st.session_state.pop("_gp_data",     None)
-                st.session_state.pop("_gp_filename",  None)
+                st.session_state.pop("_gp_data",        None)
+                st.session_state.pop("_gp_filename",     None)
+                st.session_state.pop("_gp_doc_edition",  None)
 
         # ── Card stato dati ───────────────────────────────────────────────────
         st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
@@ -3656,11 +3951,13 @@ def main():
         _n_gp    = 0
         if _gp_loaded_now:
             _gp_ok  = st.session_state["_gp_data"]
-            _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values())
+            _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values()
+                         if isinstance(v, dict) and "funds" in v)
             _fd_chk = _fd_now
             _gp_miss = len(set(
                 f["nome"]
                 for sc in _gp_ok.values()
+                if isinstance(sc, dict) and "funds" in sc
                 for f in sc.get("funds", [])
                 if not (
                     _fd_chk.get(_resolve_nome_for_fd(f["nome"], _fd_chk), {}).get("url", "")
@@ -3783,7 +4080,10 @@ def main():
                     st.session_state["_fetch_ms_requested"] = True
                 if _gp_loaded_now:
                     st.session_state["_fetch_gp_requested"] = True
-                st.rerun()  # mostra subito lo stato "in corso" prima che parta lo scarico
+                # NON chiamare st.rerun() qui: il click del bottone causa già un
+                # rerun naturale in cui i file uploader rimangono visibili.
+                # Il rerun programmato pulisce i widget; lo faremo una sola volta
+                # alla fine, dopo tutti i fetch.
         else:
             st.caption("⬆️ Carica il file Excel o il PDF Global Perspectives")
 
@@ -3792,12 +4092,20 @@ def main():
         _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO"]
         if _gp_loaded:
             _ptf_options.append("🌐  SUGGERITO")
-        # Forza index esplicito: evita che st.rerun() resetti la selezione
-        _cur_ptf = st.session_state.get("_ptf_choice_radio", _ptf_options[0])
-        _ptf_idx = _ptf_options.index(_cur_ptf) if _cur_ptf in _ptf_options else 0
+        # _ptf_type è la selezione persistente: NON è legata al widget radio
+        # quindi non viene mai svuotata dal rerun che avviene prima del render
+        # del radio (es. Aggiorna Dati chiama st.rerun() prima della riga del radio).
+        # _ptf_choice_radio (widget key) può essere persa in quel rerun;
+        # _ptf_type resta e fornisce il fallback corretto per il parametro index.
+        _ptf_saved = st.session_state.get("_ptf_type", _ptf_options[0])
+        if _ptf_saved not in _ptf_options:
+            _ptf_saved = _ptf_options[0]
+        _ptf_idx = _ptf_options.index(_ptf_saved)
         ptf_choice = st.radio("TIPO PORTAFOGLIO", _ptf_options,
                               index=_ptf_idx,
                               key="_ptf_choice_radio")
+        # Aggiorna la selezione persistente ad ogni render
+        st.session_state["_ptf_type"] = ptf_choice
 
         if "LIBERO" not in ptf_choice and "free_ptf" in st.session_state:
             del st.session_state["free_ptf"]
@@ -3812,7 +4120,8 @@ def main():
 
         # ── Scenario — sotto SUGGERITO ────────────────────────────────────────
         if "SUGGERITO" in ptf_choice:
-            _gp_keys = list(st.session_state.get("_gp_data", {}).keys())
+            _gp_keys = [k for k in st.session_state.get("_gp_data", {}).keys()
+                        if not k.startswith("_")]
             _SC_LABELS = {
                 "Base": "⚖️  Scenario Base",
                 "Bear": "🐻  Scenario Bear",
@@ -3846,7 +4155,8 @@ def main():
             and not st.session_state.get("_gp_fetch_done")):
         st.session_state["_gp_fetch_done"] = True
         st.session_state["_fetch_gp_requested"] = True
-        st.rerun()
+        # NON rerun qui: il fetch GP verrà eseguito nel blocco principale
+        # sotto, nello stesso render, senza svuotare i file uploader.
 
     # ── Invalidate cached PDF when portfolio type or profile changes ──────────
     _ptf_key = f"{ptf_choice}|{profile}"
@@ -3858,10 +4168,14 @@ def main():
     st.markdown(f"""<div class="az-header"><div class="az-eyebrow">AZIMUT INVESTMENTS · AAS EMILIA ROMAGNA MARCHE UMBRIA</div><div class="az-rule"></div><div class="az-title">{ptf_label}</div><div class="az-meta">{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()} &nbsp;·&nbsp; {datetime.date.today().strftime('%d %B %Y')}</div></div>""",unsafe_allow_html=True)
 
     # ── Carica dati Excel (file fresco → salva cache; altrimenti usa cache) ─────
-    if uploaded is not None:
+    # _xl_pending_bytes: bytes salvati subito nella sidebar quando il file è stato
+    # caricato. Usati come fallback se un rerun programmativo ha svuotato il widget.
+    _xl_pending = st.session_state.pop("_xl_pending_bytes", None)
+    _xl_fresh_bytes = (uploaded.getvalue() if uploaded is not None else _xl_pending)
+
+    if _xl_fresh_bytes is not None:
         with st.spinner("⏳ Caricamento dati…"):
-            file_bytes = uploaded.read()
-            raw = parse_excel(file_bytes)
+            raw = parse_excel(_xl_fresh_bytes)
         _xl_from_cache = False
     elif _xl_cache_raw is not None:
         raw = _xl_cache_raw
@@ -3878,7 +4192,7 @@ def main():
         raw["fida_urls"] = {**_fida_existing, **MANUAL_URL_OVERRIDES}
 
     # Salva su disco dopo il patch — la cache conterrà sempre gli URL aggiornati
-    if uploaded is not None and raw:
+    if _xl_fresh_bytes is not None and raw:
         save_excel_cache(raw)
 
     # Controlla se ci sono dati Excel disponibili (upload o cache)
@@ -3889,7 +4203,14 @@ def main():
         st.info("⬅️ **Carica il file Excel** nella barra laterale per iniziare.")
         return
 
-    # ── Sidebar-triggered FondiDoc / MS fetch (only when Excel is loaded) ───────
+    # ── Fetch FondiDoc / Morningstar / GP — tutti in un unico render ────────────
+    # Strategia: eseguiamo tutti i fetch richiesti in SEQUENZA nello stesso render,
+    # poi chiamiamo st.rerun() UNA SOLA VOLTA alla fine. In questo modo i file
+    # uploader rimangono visibili per tutta la durata del caricamento; il singolo
+    # rerun finale aggiorna la sidebar (contatori, stato cache) senza azzerare
+    # i widget più volte di quanto necessario.
+    _fetch_ran = False
+
     if _has_raw:
         if st.session_state.pop("_fetch_fd_requested", False):
             _fida_urls_all = raw.get("fida_urls", {})
@@ -3902,9 +4223,21 @@ def main():
                 def _upd_fd(v): _pb_fd.progress(v, text=f"FondiDoc: {int(v*100)}%…")
                 _fd_new = fetch_all_fund_data(_df_all, _fida_urls_all, _upd_fd)
                 _pb_fd.empty()
-                save_fund_cache(_fd_new)
-                st.session_state["_scomp_fd"] = _fd_new
-                st.rerun()
+                _fd_base_existing = load_fund_cache()[0]
+                _fd_merged_new = dict(_fd_base_existing)
+                for _fk, _fv in _fd_new.items():
+                    if _fv and (_fv.get("analysis") or not _fd_merged_new.get(_fk, {}).get("analysis")):
+                        _fd_merged_new[_fk] = _fv
+                    elif _fv and not _fv.get("analysis") and _fd_merged_new.get(_fk, {}).get("analysis"):
+                        _upd2 = dict(_fd_merged_new[_fk])
+                        if _fv.get("url"):  _upd2["url"]  = _fv["url"]
+                        if _fv.get("isin"): _upd2["isin"] = _fv["isin"]
+                        _fd_merged_new[_fk] = _upd2
+                    elif not _fv:
+                        pass
+                save_fund_cache(_fd_merged_new)
+                st.session_state["_scomp_fd"] = _fd_merged_new
+                _fetch_ran = True
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
 
@@ -3919,12 +4252,10 @@ def main():
                     _ms_new = fetch_all_ms_ratings(_df_ms, _fida_df)
                 _n_found = sum(1 for v in _ms_new.values() if v.get("ms_rating"))
                 if _n_found > 0:
-                    # Fetch riuscito → salva e aggiorna cache
                     save_ms_cache(_ms_new)
                     st.session_state["_ms_data"] = _ms_new
                     st.success(f"⭐ Morningstar: {_n_found}/{len(_ms_new)} rating trovati")
                 else:
-                    # Fetch fallito → non toccare il cache, usa dati già salvati
                     _ms_cached = load_ms_cache()
                     _n_cached  = sum(1 for v in _ms_cached.values() if v.get("ms_rating"))
                     st.session_state["_ms_data"] = _ms_cached or _ms_new
@@ -3932,11 +4263,10 @@ def main():
                         st.warning(f"⭐ Morningstar non raggiungibile — uso cache ({_n_cached} rating)")
                     else:
                         st.warning("⭐ Morningstar non raggiungibile — nessun dato in cache")
-                st.rerun()
+                _fetch_ran = True
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
     else:
-        # Drain any stale fetch flags so they don't fire unexpectedly
         st.session_state.pop("_fetch_fd_requested", None)
         st.session_state.pop("_fetch_ms_requested", None)
 
@@ -3952,11 +4282,18 @@ def main():
             _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp, quick_urls=_quick)
             _pb_gp.empty()
             if _gp_new:
-                # Merge FondiDoc data into cache and save
-                _fd_merged = {**_fd_base, **_gp_new}
+                _fd_merged = dict(_fd_base)
+                for _gk, _gv in _gp_new.items():
+                    _existing = _fd_merged.get(_gk, {})
+                    if _existing.get("analysis") and not (_gv or {}).get("analysis"):
+                        _upd = dict(_existing)
+                        if (_gv or {}).get("url"):  _upd["url"]  = _gv["url"]
+                        if (_gv or {}).get("isin"): _upd["isin"] = _gv["isin"]
+                        _fd_merged[_gk] = _upd
+                    else:
+                        _fd_merged[_gk] = _gv
                 save_fund_cache(_fd_merged)
                 st.session_state["_scomp_fd"] = _fd_merged
-                # Aggiorna rating Morningstar per i nuovi fondi GP (best-effort)
                 try:
                     _ms_existing = st.session_state.get("_ms_data") or load_ms_cache()
                     _sess_gp = requests.Session()
@@ -3972,7 +4309,7 @@ def main():
                         save_ms_cache(_ms_merged)
                         st.session_state["_ms_data"] = _ms_merged
                 except Exception:
-                    pass  # MS update è best-effort
+                    pass
                 st.success(
                     f"✅ Trovati dati FondiDoc per "
                     f"{len(_gp_new)}/{len(_gp_new)} fondi GP")
@@ -3980,9 +4317,14 @@ def main():
                 st.warning(
                     "⚠️ Nessun dato trovato su FondiDoc per i fondi GP. "
                     "Potrebbe essere un problema di rete o di nomi.")
-            # Fetch completato: non ripetere finché non arriva un nuovo PDF
             st.session_state["_gp_fetch_done"] = True
-            st.rerun()
+            _fetch_ran = True
+
+    # ── Unico rerun finale dopo tutti i fetch ─────────────────────────────────
+    # Aggiorna sidebar (contatori, stato cache) senza svuotare i file uploader
+    # più volte. I file rimangono visibili durante l'intero caricamento.
+    if _fetch_ran:
+        st.rerun()
 
     # ── Factbook data ──────────────────────────────────────────────────────────
     # Priority:
@@ -3992,10 +4334,14 @@ def main():
     factbook_data: dict = load_factbook_auto()
     _fb_source = f"repository ({len(factbook_data)} fondi)" if factbook_data else ""
 
-    if uploaded_fb is not None:
+    _fb_pending  = st.session_state.pop("_fb_pending_bytes",    None)
+    _fb_xl_pending = st.session_state.pop("_fb_xl_pending_bytes", None)
+    _fb_fresh_bytes = (uploaded_fb.getvalue() if uploaded_fb is not None
+                       else _fb_pending)
+    if _fb_fresh_bytes is not None:
         # First-time (or refresh): parse PDF, auto-save, offer Excel
         with st.spinner("📖 Estraggo dati dal Factbook PDF…"):
-            _new = parse_factbook(uploaded_fb.read())
+            _new = parse_factbook(_fb_fresh_bytes)
         if _new:
             factbook_data = _new
             _fb_source = f"PDF ({len(_new)} fondi)"
@@ -4026,15 +4372,23 @@ def main():
             st.warning("⚠️ Factbook PDF caricato ma nessun dato estratto — "
                        "verrà usato FondiDoc")
 
-    if uploaded_fb_xl is not None:
+    _fb_xl_fresh_bytes = (uploaded_fb_xl.getvalue() if uploaded_fb_xl is not None
+                          else _fb_xl_pending)
+    if _fb_xl_fresh_bytes is not None:
         # Manual override: user uploaded a corrected Excel
-        _xl = factbook_from_excel(uploaded_fb_xl.read())
+        _xl = factbook_from_excel(_fb_xl_fresh_bytes)
         if _xl:
             factbook_data = _xl
             _fb_source = f"Excel ({len(_xl)} fondi)"
             st.success(f"✅ Dati Factbook caricati da Excel — {len(_xl)} fondi")
         else:
             st.warning("⚠️ Excel Factbook vuoto — uso dati precedenti")
+
+    # Salva data di riferimento del Factbook in session_state
+    # (viene mostrata nella sidebar accanto all'uploader)
+    _fb_ref_date = (factbook_data or {}).get("_ref_date", "")
+    if _fb_ref_date:
+        st.session_state["_fb_doc_date"] = _fb_ref_date
 
     if _is_suggerito:
         _gp_data_main = st.session_state.get("_gp_data", {})
@@ -4262,7 +4616,7 @@ def main():
 
     def _perf_val_col(raw) -> str:
         """Wrap a performance string in green/red HTML span."""
-        s = str(raw) if raw is not None else "N/D"
+        s = str(raw) if raw is not None else "-"
         try:
             v   = float(s.replace("%", "").replace(",", ".").strip())
             col = "#1A7A4A" if v > 0 else ("#C0392B" if v < 0 else "#475569")
@@ -4270,13 +4624,46 @@ def main():
         except Exception:
             return f"<span style='color:#94A3B8;'>{s}</span>"
 
+    def _get_ana(nome: str) -> dict:
+        """Restituisce il dict 'analysis' cercando prima il nome diretto,
+        poi con fuzzy GP→FIDA (serve per i fondi del portafoglio suggerito
+        il cui nome non è stato risolto in chiave FIDA).
+
+        Quando _fd_live è la sessione live (Excel caricato) potrebbe non
+        contenere fondi GP del portafoglio suggerito: in quel caso usa
+        cached_fd (fund_cache.json bundled) come fallback aggiuntivo."""
+        def _lookup(src: dict) -> dict | None:
+            e = src.get(nome)
+            if not e:
+                res = _resolve_nome_for_fd(nome, src)
+                e = src.get(res)
+            if not e and nome:
+                _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', nome,
+                             flags=re.I).strip().lower()
+                if _sk:
+                    for _fk, _fv in src.items():
+                        if isinstance(_fv, dict) and _sk in _fk.lower():
+                            e = _fv; break
+            return e
+
+        entry = _lookup(_fd_live)
+        # Fallback su cached_fd se:
+        #  - entry è None (fondo non trovato nel live)
+        #  - OPPURE entry esiste ma senza 'analysis' (URL/overview presenti
+        #    ma fetch analisi fallito — es. dopo "Aggiorna Dati" per fondi GP)
+        if not (entry or {}).get("analysis") and _fd_live is not cached_fd:
+            entry_c = _lookup(cached_fd)
+            if (entry_c or {}).get("analysis"):
+                entry = entry_c
+        return (entry or {}).get("analysis", {})
+
     def _perf_wavg(keys: list) -> dict:
         """Weighted average of performance/risk metrics across active funds."""
         totals = {k: 0.0 for k in keys}
         cov_w  = {k: 0.0 for k in keys}
         for _, _row in df_act.iterrows():
             _w   = _row[wcol]
-            _ana = _fd_live.get(_row["nome"], {}).get("analysis", {})
+            _ana = _get_ana(_row["nome"])
             for k in keys:
                 raw = _fb_metric(_row["nome"], k) or _ana.get(k, "")
                 try:
@@ -4285,7 +4672,7 @@ def main():
                     cov_w[k]  += _w
                 except Exception:
                     pass
-        return {k: (f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "N/D")
+        return {k: (f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "-")
                 for k in keys}
 
     def _html_table(hdr_cols: list, ptf_row: list, fund_rows: list) -> str:
@@ -4371,8 +4758,32 @@ def main():
                     f'text-underline-offset:2px;">{nome}</a>')
         return nome
 
-    # ── Quantalys cache + ISIN map (used in tab_q) ───────────────────────────
-    _qtl_cache = load_quantalys_cache()   # {ISIN: "https://www.quantalys.it/Fonds/..."}
+    # ── Quantalys cache + ratings + ISIN map ────────────────────────────────
+    _qtl_cache   = load_quantalys_cache()    # {ISIN: "https://www.quantalys.it/Fonds/..."}
+    _qtl_ratings = load_quantalys_ratings()  # {ISIN: {"score": 87, "globes": 5}}
+
+    def _qtl_rating_html(isin: str) -> str:
+        """Restituisce HTML con score e globi Quantalys per una riga della tabella."""
+        v = _qtl_ratings.get(isin)
+        if not v:
+            return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+        score  = v.get("score")
+        globes = v.get("globes")
+        if score is None:
+            return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+        if globes:
+            _glob_col = {1:"#EF4444",2:"#F97316",3:"#EAB308",4:"#22C55E",5:"#1B4FBB"}.get(globes,"#64748B")
+            stars = (f"<span style='color:{_glob_col};font-size:.9rem;letter-spacing:1px;'>"
+                     f"{'★'*globes}{'☆'*(5-globes)}</span>")
+        else:
+            stars = ""
+        score_col = ("#1B4FBB" if score >= 80 else "#22C55E" if score >= 60
+                     else "#EAB308" if score >= 40 else "#EF4444")
+        score_html = (f"<span style='font-size:.75rem;font-weight:700;color:{score_col};"
+                      f"background:#F1F5F9;border-radius:3px;padding:1px 4px;'>{score}</span>")
+        tooltip = f"Score {score}/100" + (f" · {globes} globi" if globes else "")
+        return (f"<span title='{tooltip}'>{stars}"
+                f"{'<br>' if stars else ''}{score_html}</span>")
     _fida_raw_ui = raw.get("FIDA", pd.DataFrame())
     _isin_map_ui: dict[str, str] = {}
     if isinstance(_fida_raw_ui, pd.DataFrame) and not _fida_raw_ui.empty and "isin" in _fida_raw_ui.columns:
@@ -4437,6 +4848,7 @@ def main():
             f"<th style='{_TH}text-align:left;'>Cat. FIDA</th>"
             f"<th style='{_TH}text-align:center;'>FIDArating</th>"
             f"<th style='{_TH}text-align:center;'>Morningstar</th>"
+            f"<th style='{_TH}text-align:center;'>Quantalys</th>"
             f"</tr>"
         )
         _tbl_body = ""
@@ -4467,6 +4879,14 @@ def main():
             )
             _ms_r = _ms_live.get(_tr["nome"], {}).get("ms_rating")
             _ms_cell = _ms_badge_html(_ms_r)
+            # Quantalys rating — stesso lookup ISIN del tab_q
+            _tr_isin = _isin_map_ui.get(_tr["nome"], "")
+            if not _tr_isin:
+                _tr_n = re.sub(r'[^a-z0-9]', '', _tr["nome"].lower())
+                for _ik, _iv in _isin_map_ui.items():
+                    if re.sub(r'[^a-z0-9]', '', _ik.lower()) == _tr_n:
+                        _tr_isin = _iv; break
+            _qtl_r_cell = _qtl_rating_html(_tr_isin)
             _tbl_body += (
                 f"<tr>"
                 f"<td style='{_TC}font-weight:500;'>{_fund_link(_tr['nome'])}</td>"
@@ -4479,6 +4899,7 @@ def main():
                 f"<td style='{_TC}color:#64748B;'>{_cat}</td>"
                 f"<td style='{_TC}text-align:center;'>{_fida_cell}</td>"
                 f"<td style='{_TC}text-align:center;'>{_ms_cell}</td>"
+                f"<td style='{_TC}text-align:center;'>{_qtl_r_cell}</td>"
                 f"</tr>"
             )
         if _tbl_body:
@@ -4600,19 +5021,19 @@ def main():
         _p_hdr   = ["Fondo", "Peso", "YTD", "1 Anno", "3 Anni", "5 Anni",
                     "Vol. 1A", "Sharpe 1A"]
         _p_ptf   = [_ptf_row_label, "100%",
-                    _ptf_p.get("ytd",      "N/D"),
-                    _ptf_p.get("perf_1y",  "N/D"),
-                    _ptf_p.get("perf_3y",  "N/D"),
-                    _ptf_p.get("perf_5y",  "N/D"),
-                    _ptf_p.get("vol_1y",   "N/D"),
-                    _ptf_p.get("sharpe_1y","N/D")]
+                    _ptf_p.get("ytd",      "-"),
+                    _ptf_p.get("perf_1y",  "-"),
+                    _ptf_p.get("perf_3y",  "-"),
+                    _ptf_p.get("perf_5y",  "-"),
+                    _ptf_p.get("vol_1y",   "-"),
+                    _ptf_p.get("sharpe_1y","-")]
         _p_funds = []
         for _, _pr in _df_sorted.iterrows():
             _np  = _pr["nome"]
-            _ana = _fd_live.get(_np, {}).get("analysis", {})
+            _ana = _get_ana(_np)
             def _gp(k, _n=_np, _a=_ana):
                 v = _fb_metric(_n, k) or _a.get(k, "") or ""
-                return str(v) if v else "N/D"
+                return str(v) if v else "-"
             _p_funds.append([
                 _fund_link(_np),
                 f"{_pr[wcol]*100:.1f}%",
@@ -4636,18 +5057,18 @@ def main():
         _r_hdr   = ["Fondo", "Peso", "Vol. 1A", "Vol. 3A", "Vol. 5A",
                     "Vol. Neg. 1A", "Sharpe 3A", "Sortino 1A"]
         _r_ptf   = [_ptf_row_label, "100%",
-                    _ptf_r.get("vol_1y",     "N/D"),
-                    _ptf_r.get("vol_3y",     "N/D"),
-                    _ptf_r.get("vol_5y",     "N/D"),
-                    _ptf_r.get("neg_vol_1y", "N/D"),
-                    _ptf_r.get("sharpe_3y",  "N/D"),
-                    _ptf_r.get("sortino_1y", "N/D")]
+                    _ptf_r.get("vol_1y",     "-"),
+                    _ptf_r.get("vol_3y",     "-"),
+                    _ptf_r.get("vol_5y",     "-"),
+                    _ptf_r.get("neg_vol_1y", "-"),
+                    _ptf_r.get("sharpe_3y",  "-"),
+                    _ptf_r.get("sortino_1y", "-")]
         _r_funds = []
         for _, _rr in _df_sorted.iterrows():
             _nr  = _rr["nome"]
-            _ana = _fd_live.get(_nr, {}).get("analysis", {})
+            _ana = _get_ana(_nr)
             def _gr(k, _a=_ana):
-                return str(_a.get(k, "") or "") or "N/D"
+                return str(_a.get(k, "") or "") or "-"
             _r_funds.append([
                 _fund_link(_nr),
                 f"{_rr[wcol]*100:.1f}%",
@@ -4701,8 +5122,8 @@ def main():
                 _fida_cell_u,
                 _ms_cell_u,
             ])
-        _ptf_unp  = f"{_u_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
-        _ptf_iunp = f"{_iu_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
+        _ptf_unp  = f"{_u_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "-"
+        _ptf_iunp = f"{_iu_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "-"
         st.markdown(
             _html_table(
                 ["Fondo", "Peso", "%UNP", "%IUNP36", "FIDArating", "Morningstar"],
