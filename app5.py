@@ -2025,12 +2025,15 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     pie_img = RLImage(pie_buf, width=PIE_W, height=PIE_W)
     d_leg   = d_act[d_act[wcol] > 0.005].sort_values(wcol, ascending=False)
 
+    # Quantalys cache per fallback URL (ISIN → pagina fondo)
+    _pdf_qtl = load_quantalys_cache()
+
     # Costruisci le celle della legenda
     leg_items = []
     for _, r in d_leg.iterrows():
         _rn      = r["nome"]                               # Excel key (for URL/data lookup)
         _rn_disp = r.get("nome_orig") or _rn               # GP name if available (for label)
-        # 1) MANUAL direct  2) MANUAL fuzzy (vince su fida_urls)  3) cache fuzzy
+        # 1) MANUAL direct  2) MANUAL fuzzy (vince su fida_urls)  3) FondiDoc cache
         _fd = fund_data or {}
         url = MANUAL_URL_OVERRIDES.get(_rn, "")
         if not url:
@@ -2042,7 +2045,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                     if _msk and _msk in _sk and _mu:
                         url = _mu
                         break
-            # 3) FondiDoc cache direct e fuzzy
+            # 3) FondiDoc cache: direct poi fuzzy su _rn
             if not url:
                 url = _fd.get(_rn, {}).get("url", "")
             if not url and _sk:
@@ -2050,6 +2053,23 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                     if isinstance(_fv, dict) and _sk in _fk.lower() and _fv.get("url"):
                         url = _fv["url"]
                         break
+            # 4) Fuzzy su nome_orig (GP name) se diverso dal nome risolto
+            if not url and _rn_disp and _rn_disp != _rn:
+                _sk2 = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', _rn_disp, flags=re.I).strip().lower()
+                if _sk2:
+                    for _fk, _fv in _fd.items():
+                        if isinstance(_fv, dict) and _sk2 in _fk.lower() and _fv.get("url"):
+                            url = _fv["url"]
+                            break
+            # 5) ISIN → pagina Quantalys (ultimo fallback)
+            if not url:
+                _isin_fb = isin_map.get(_rn, "") or isin_map.get(_rn_disp, "")
+                if not _isin_fb and _sk:
+                    for _ik, _iv in isin_map.items():
+                        if _sk in _ik.lower():
+                            _isin_fb = _iv; break
+                if _isin_fb:
+                    url = _pdf_qtl.get(_isin_fb, "")
         name_s = (_rn_disp[:24] + "…") if len(_rn_disp) > 24 else _rn_disp
         pct_s  = f"{r[wcol]*100:.1f}%"
         if url:
