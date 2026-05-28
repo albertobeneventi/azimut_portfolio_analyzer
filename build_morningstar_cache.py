@@ -38,6 +38,7 @@ _MS_RE = re.compile(
 #   "ISIN": "https://www.morningstar.it/it/funds/snapshot/snapshot.aspx?id=<ID>"
 #
 MANUAL_OVERRIDES: dict[str, str] = {
+    "LU3081792221": "https://global.morningstar.com/it/investimenti/fondi/0P0001XRB9/quote",  # AZ F.1 All. Escalator 2030 A Cap EUR
     # Esempio:
     # "LU2168564065": "https://www.morningstar.it/it/funds/snapshot/snapshot.aspx?id=XXXXXXXX",
 }
