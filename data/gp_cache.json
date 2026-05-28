@@ -1,7 +1,6 @@
 {
-  "last_updated": "2026-05-26",
-  "filename": "",
-  "edition": "N° 2 2026",
+  "last_updated": "2026-05-28",
+  "filename": "AzimutGlobalPerspectives_ITA_032026.01.pdf",
   "gp_data": {
     "Base": {
       "info": "Equity 32% · Bond 38% · Private Markets 30%",
@@ -659,6 +658,7 @@
         "equity_dev": 3,
         "equity_em": 4
       }
-    }
+    },
+    "_edition": "N° 2 - 2026"
   }
 }
