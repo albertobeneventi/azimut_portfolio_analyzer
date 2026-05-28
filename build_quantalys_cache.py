@@ -31,6 +31,16 @@ _QT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ── URL corretti manualmente (DuckDuckGo aveva trovato pagine sbagliate) ──────
+# Aggiungere qui ogni ISIN per cui la ricerca automatica restituisce un URL
+# errato. Questi valori hanno sempre la precedenza sulla cache e sulla ricerca.
+#
+#   "ISIN": "https://www.quantalys.it/Fonds/<id_corretto>"
+#
+MANUAL_OVERRIDES: dict[str, str] = {
+    "LU2168564065": "https://www.quantalys.it/Fonds/926528",   # AZ F.1 All. Trend A Cap EUR
+}
+
 
 def canonical_url(numeric_id: str) -> str:
     return f"https://www.quantalys.it/Fonds/{numeric_id}"
@@ -76,9 +86,19 @@ def main():
             existing = json.load(f)
         print(f"Loaded existing cache: {len(existing)} entries")
 
+    # Applica sempre gli override manuali (sovrascrivono eventuali URL errati)
+    overridden = []
+    for isin, url in MANUAL_OVERRIDES.items():
+        if existing.get(isin) != url:
+            existing[isin] = url
+            overridden.append(isin)
+    if overridden:
+        print(f"Override manuali applicati: {overridden}")
+
     pairs = load_isins()
     print(f"Total ISINs to process: {len(pairs)}")
 
+    # Salta gli ISIN già in cache (inclusi quelli con override manuale)
     todo = [(n, isin) for n, isin in pairs if isin not in existing]
     print(f"Remaining to search: {len(todo)}")
 
@@ -92,6 +112,13 @@ def main():
     try:
         for i, (nome, isin) in enumerate(todo, 1):
             print(f"[{i:3d}/{len(todo)}] {isin}  {nome[:50]}", end=" ... ", flush=True)
+            # Usa override manuale se disponibile, senza chiamare DuckDuckGo
+            if isin in MANUAL_OVERRIDES:
+                url = MANUAL_OVERRIDES[isin]
+                print(f"OVERRIDE {url}")
+                existing[isin] = url
+                found += 1
+                continue
             url = search_quantalys(isin)
             if url:
                 existing[isin] = url
