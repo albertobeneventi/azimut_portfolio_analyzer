@@ -4695,7 +4695,9 @@ def main():
     _FIDA_BG  = {5: "#166534", 4: "#15803d", 3: "#22c55e"}
 
     # Source note labels (reused in all tab footers)
-    _note_fb  = ("Factbook AZ Investments" if factbook_data
+    _fb_ref_date = (factbook_data or {}).get("_ref_date", "")
+    _note_fb  = (f"Factbook AZ Investments al {_fb_ref_date}" if _fb_ref_date
+                 else "Factbook AZ Investments" if factbook_data
                  else "n.d. — carica il Factbook PDF nella barra laterale")
     if st.session_state.get("_scomp_fd"):
         _note_fd = "FondiDoc live (questa sessione)"
