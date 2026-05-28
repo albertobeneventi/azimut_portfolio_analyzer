@@ -3425,6 +3425,17 @@ def parse_global_perspectives(pdf_bytes: bytes):
                 _qmap = {"1": "Q1", "2": "Q2", "3": "Q3", "4": "Q4"}
                 _gp_edition = f"{_qmap.get(_em.group(1), 'Q?')} {_em.group(2)}"
         if not _gp_edition:
+            # Cerca "N° 2" / "N. 2" / "Nr. 2" seguito da anno
+            _em = re.search(r'N[°o\.r]*\s*(\d+)\D{0,10}(20\d{2})', _cover, re.IGNORECASE)
+            if _em:
+                _gp_edition = f"N° {_em.group(1)} - {_em.group(2)}"
+        if not _gp_edition:
+            # Cerca "N° 2" / "N. 2" senza anno esplicito vicino (anno su riga separata)
+            _em_n = re.search(r'N[°o\.r]*\s*(\d+)', _cover, re.IGNORECASE)
+            _em_y = re.search(r'\b(20\d{2})\b', _cover)
+            if _em_n and _em_y:
+                _gp_edition = f"N° {_em_n.group(1)} - {_em_y.group(1)}"
+        if not _gp_edition:
             # Cerca "Edizione N" o "Edition N"
             _em = re.search(r'[Ee]dizione\s+(\d+)', _cover)
             if _em:
@@ -3965,10 +3976,10 @@ def main():
             _gp_ed_str = (st.session_state.get("_gp_doc_edition")
                           or (_gp_cache_data or {}).get("_edition", ""))
             if _gp_cache_date:
-                _gp_cap_extra = f" &nbsp;·&nbsp; {_gp_ed_str}" if _gp_ed_str else ""
+                _gp_label = f"<b>{_gp_ed_str}</b>" if _gp_ed_str else f"<b>{_gp_cache_date}</b>"
                 st.markdown(f"<div style='font-size:.76rem;color:#7DD3FC;margin:-4px 0 6px 0;"
                             f"padding:3px 8px;background:#0c2236;border-radius:4px;"
-                            f"border-left:3px solid #3b82f6;'>📂 GP in cache &nbsp;·&nbsp; <b>{_gp_cache_date}</b>{_gp_cap_extra}</div>",
+                            f"border-left:3px solid #3b82f6;'>📂 GP in cache &nbsp;·&nbsp; {_gp_label}</div>",
                             unsafe_allow_html=True)
             elif st.session_state.get("_gp_loaded_name"):
                 _gp_ed_extra = (f"&nbsp;·&nbsp;📅&nbsp;{_gp_ed_str}"
