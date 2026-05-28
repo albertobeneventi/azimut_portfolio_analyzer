@@ -4436,10 +4436,14 @@ def main():
             return e
 
         entry = _lookup(_fd_live)
-        # Se non trovato in _fd_live (es. sessione live senza fondi GP)
-        # prova il cache bundled come fallback
-        if not entry and _fd_live is not cached_fd:
-            entry = _lookup(cached_fd)
+        # Fallback su cached_fd se:
+        #  - entry è None (fondo non trovato nel live)
+        #  - OPPURE entry esiste ma senza 'analysis' (URL/overview presenti
+        #    ma fetch analisi fallito — es. dopo "Aggiorna Dati" per fondi GP)
+        if not (entry or {}).get("analysis") and _fd_live is not cached_fd:
+            entry_c = _lookup(cached_fd)
+            if (entry_c or {}).get("analysis"):
+                entry = entry_c
         return (entry or {}).get("analysis", {})
 
     def _perf_wavg(keys: list) -> dict:
