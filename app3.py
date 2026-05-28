@@ -3363,10 +3363,16 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
     # Per-scenario session-state key so weights reset when switching scenarios
     ss_key = f"_sg_w_{sc_name}"
     if ss_key not in st.session_state:
-        # Initialise with equal-weight defaults from the scenario
-        st.session_state[ss_key] = {
-            f["nome"]: round(f["weight"] * 100, 1) for f in funds
-        }
+        # Distribuisce il peso suggerito della sottocategoria equamente tra i
+        # fondi che la compongono (es. 25% / 6 fondi = 4,2% ciascuno).
+        _init_w: dict = {}
+        for _sc_k, _sc_fs in subcat_funds.items():
+            _sc_tot = sw.get(_sc_k, 0.0)
+            _n = len(_sc_fs)
+            _per = round(_sc_tot / _n, 1) if _n else 0.0
+            for _fnd in _sc_fs:
+                _init_w[_fnd["nome"]] = _per
+        st.session_state[ss_key] = _init_w
     ww: dict = st.session_state[ss_key]
 
     # ── Page header ───────────────────────────────────────────────────────────
