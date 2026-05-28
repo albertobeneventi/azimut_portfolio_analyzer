@@ -4045,8 +4045,13 @@ def main():
                 def _upd_fd(v): _pb_fd.progress(v, text=f"FondiDoc: {int(v*100)}%…")
                 _fd_new = fetch_all_fund_data(_df_all, _fida_urls_all, _upd_fd)
                 _pb_fd.empty()
-                save_fund_cache(_fd_new)
-                st.session_state["_scomp_fd"] = _fd_new
+                # Merge con il cache esistente: i fondi Excel aggiornati
+                # sovrascrivono il cache, ma i fondi GP aggiunti manualmente
+                # (non nell'Excel) vengono preservati anziché eliminati.
+                _fd_base_existing = load_fund_cache()[0]
+                _fd_merged_new = {**_fd_base_existing, **_fd_new}
+                save_fund_cache(_fd_merged_new)
+                st.session_state["_scomp_fd"] = _fd_merged_new
                 st.rerun()
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
