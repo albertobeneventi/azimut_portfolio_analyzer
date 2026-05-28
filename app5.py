@@ -38,7 +38,7 @@ from reportlab.lib.units import cm
 
 # ── PAGE CONFIG ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="Azimut | Analisi Portafoglio — AAS Emilia Romagna Marche Umbria",
+    page_title="Azimut | Demo Analisi",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -68,6 +68,14 @@ FONDIDOC_HEADERS = {
     "Accept": "text/html,application/xhtml+xml",
     "Accept-Language": "en-US,en;q=0.9,it;q=0.8",
 }
+# ISIN mancanti nel foglio FIDA dell'Excel.
+# Aggiungere qui i fondi per cui l'Excel non riporta l'ISIN ma è noto.
+MANUAL_ISIN_OVERRIDES: dict[str, str] = {
+    "AZ Equity - Global Infrastructure":    "LU1621767737",
+    "AZ Bond - CoCo Bonds (EUR-hedged)":    "LU2622195936",
+    "AZ Bond - Convertible Bond":           "LU1422848470",
+}
+
 # Override for one fund whose FIDA sheet hyperlink points to class B
 # Aggiungere qui i fondi assenti da FondiDoc o con URL errati.
 MANUAL_URL_OVERRIDES = {
@@ -719,6 +727,65 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             for page_idx, page in enumerate(pdf.pages):
 
+                # ── A0: Tabella Bond & Performance (pagine riepilogative) ─────
+                # Struttura: [Nome fondo | YTM% | Rating | Duration | Freq. cedola]
+                # Trigger: almeno una riga ha "YTM" e "Duration" come intestazioni
+                for tbl in (page.extract_tables() or []):
+                    _cells_flat = [str(c or '').strip().upper()
+                                   for row in tbl for c in row]
+                    _has_ytm = any('YTM' in c or 'YIELD' in c for c in _cells_flat)
+                    _has_dur = any('DURATION' in c for c in _cells_flat)
+                    if not (_has_ytm and _has_dur):
+                        continue
+                    # Trova indici colonne dall'header
+                    _hdr_row = next(
+                        (r for r in tbl
+                         if any('YTM' in str(c or '').upper() or 'YIELD' in str(c or '').upper()
+                                for c in r)),
+                        None)
+                    if _hdr_row is None:
+                        continue
+                    _hdr_u = [str(c or '').upper() for c in _hdr_row]
+                    _ci_ytm  = next((i for i, h in enumerate(_hdr_u)
+                                     if 'YTM' in h or 'YIELD' in h), None)
+                    _ci_rat  = next((i for i, h in enumerate(_hdr_u)
+                                     if 'RATING' in h), None)
+                    _ci_dur  = next((i for i, h in enumerate(_hdr_u)
+                                     if 'DURATION' in h), None)
+                    for _brow in tbl:
+                        _b0 = str(_brow[0] or '').replace('\n', ' ').strip()
+                        if not re.match(r'^AZ\s', _b0, re.IGNORECASE):
+                            continue
+                        _bnorm = _normalize_for_unp(_b0)
+                        _bnorm = _FUND_ALIASES.get(_bnorm, _bnorm)
+                        if not _bnorm:
+                            continue
+                        if _bnorm not in _metrics:
+                            _metrics[_bnorm] = {}
+                        # YTM
+                        if _ci_ytm is not None and _ci_ytm < len(_brow):
+                            _yt_s = str(_brow[_ci_ytm] or '').replace('%','').replace(',','.').strip()
+                            try:
+                                _yt_v = round(float(_yt_s), 2)
+                                if 'ytm' not in _metrics[_bnorm]:
+                                    _metrics[_bnorm]['ytm'] = _yt_v
+                            except ValueError:
+                                pass
+                        # Rating
+                        if _ci_rat is not None and _ci_rat < len(_brow):
+                            _rat_s = str(_brow[_ci_rat] or '').strip().upper()
+                            if _rat_s and _rat_s in RATING_SCALE and 'credit_rating' not in _metrics[_bnorm]:
+                                _metrics[_bnorm]['credit_rating'] = _rat_s
+                        # Duration
+                        if _ci_dur is not None and _ci_dur < len(_brow):
+                            _dur_s = str(_brow[_ci_dur] or '').replace(',','.').strip()
+                            try:
+                                _dur_v = round(float(_dur_s), 2)
+                                if 0 < _dur_v < 40 and 'duration' not in _metrics[_bnorm]:
+                                    _metrics[_bnorm]['duration'] = _dur_v
+                            except ValueError:
+                                pass
+
                 # ── A: structured table extraction (best-case) ────────────
                 for tbl in (page.extract_tables() or []):
                     for row in tbl:
@@ -1192,6 +1259,22 @@ def load_quantalys_cache() -> dict:
             with open(fp, encoding="utf-8") as fh:
                 data = json.load(fh)
             # Keep only non-empty URLs
+            return {k: v for k, v in data.items() if v}
+    except Exception:
+        pass
+    return {}
+
+
+@st.cache_data(ttl=3600)
+def load_morningstar_cache() -> dict:
+    """Load ISIN → Morningstar URL mapping from data/morningstar_cache.json.
+    Returns {} if the file does not exist yet (run build_morningstar_cache.py first).
+    """
+    try:
+        fp = Path(__file__).parent / "data" / "morningstar_cache.json"
+        if fp.exists() and fp.stat().st_size > 5:
+            with open(fp, encoding="utf-8") as fh:
+                data = json.load(fh)
             return {k: v for k, v in data.items() if v}
     except Exception:
         pass
@@ -3761,7 +3844,7 @@ def main():
         st.session_state["_session_needs_update"] = True
     _ms_with_rating = 0   # default; updated inside sidebar block below
     with st.sidebar:
-        st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;font-style:italic;margin-top:4px;line-height:1.3;'>Demo Analisi</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
         st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
 
         # ── Uploader Excel ────────────────────────────────────────────────────
@@ -4620,7 +4703,9 @@ def main():
     _FIDA_BG  = {5: "#166534", 4: "#15803d", 3: "#22c55e"}
 
     # Source note labels (reused in all tab footers)
-    _note_fb  = ("Factbook AZ Investments" if factbook_data
+    _fb_ref_date = (factbook_data or {}).get("_ref_date", "")
+    _note_fb  = (f"Factbook AZ Investments al {_fb_ref_date}" if _fb_ref_date
+                 else "Factbook AZ Investments" if factbook_data
                  else "n.d. — carica il Factbook PDF nella barra laterale")
     if st.session_state.get("_scomp_fd"):
         _note_fd = "FondiDoc live (questa sessione)"
@@ -4780,6 +4865,7 @@ def main():
     # ── Quantalys cache + ratings + ISIN map ────────────────────────────────
     _qtl_cache   = load_quantalys_cache()    # {ISIN: "https://www.quantalys.it/Fonds/..."}
     _qtl_ratings = load_quantalys_ratings()  # {ISIN: {"score": 87, "globes": 5}}
+    _ms_cache    = load_morningstar_cache()  # {ISIN: "https://www.morningstar.it/..."}
 
     def _qtl_rating_html(isin: str) -> str:
         """Restituisce HTML con score e globi Quantalys per una riga della tabella."""
@@ -4811,6 +4897,8 @@ def main():
             _fn = str(_fr.get("nome", "") or "").strip()
             if _fi and _fn:
                 _isin_map_ui[_fn] = _fi
+    # Aggiungi ISIN mancanti dall'Excel (override manuale)
+    _isin_map_ui.update(MANUAL_ISIN_OVERRIDES)
 
     def _qtl_concept_key(name: str) -> str:
         """Estrae il "nome-concetto" del fondo rimuovendo il prefisso AZ e il suffisso
@@ -4848,7 +4936,7 @@ def main():
 
     tab1, tab_q, tab2, tab3, tab4 = st.tabs([
         "📊  Scomposizione Az/Obb",
-        "🔗  Quantalys",
+        "🔗  Quantalys · Morningstar",
         "📈  Rendimenti",
         "⚠️  Rischio",
         "💰  UNP / IUNP",
@@ -4951,10 +5039,12 @@ def main():
             f"<th style='{_TH_Q}text-align:center;'>Peso</th>"
             f"<th style='{_TH_Q}text-align:left;'>ISIN</th>"
             f"<th style='{_TH_Q}text-align:center;'>Quantalys</th>"
+            f"<th style='{_TH_Q}text-align:center;background:#c2410c;'>Morningstar</th>"
             f"</tr>"
         )
         _q_body = ""
         _q_found = 0
+        _ms_found = 0
         for _, _qr in _df_sorted.iterrows():
             _qnome = _qr["nome"]
             _qdisp = (_qr["nome_orig"]
@@ -4980,7 +5070,6 @@ def main():
             # Quantalys URL — prima ISIN diretto, poi fallback per nome-concetto
             _qurl = _qtl_cache.get(_qisin, "") if _qisin else ""
             if not _qurl:
-                # Prova a trovare l'URL tramite un'altra classe dello stesso fondo
                 _qck = _qtl_concept_key(_qnome)
                 _qurl = _qtl_concept_map.get(_qck, "")
                 if not _qurl and _qdisp != _qnome:
@@ -4998,6 +5087,20 @@ def main():
                 _qtl_cell = "<span style='color:#94A3B8;font-size:.77rem;'>non trovato</span>"
             else:
                 _qtl_cell = "<span style='color:#CBD5E1;font-size:.77rem;'>nessun ISIN</span>"
+            # Morningstar URL — lookup diretto per ISIN
+            _msurl = _ms_cache.get(_qisin, "") if _qisin else ""
+            if _msurl:
+                _ms_found += 1
+                _ms_cell = (
+                    f"<a href='{_msurl}' target='_blank' rel='noopener noreferrer' "
+                    f"style='display:inline-block;padding:3px 12px;background:#c2410c;"
+                    f"color:#fff;border-radius:5px;font-size:.77rem;font-weight:600;"
+                    f"text-decoration:none;'>Apri &#x2197;</a>"
+                )
+            elif _qisin:
+                _ms_cell = "<span style='color:#94A3B8;font-size:.77rem;'>non trovato</span>"
+            else:
+                _ms_cell = "<span style='color:#CBD5E1;font-size:.77rem;'>nessun ISIN</span>"
             _qisin_cell = (
                 f"<span style='font-family:monospace;font-size:.78rem;color:#475569;'>{_qisin}</span>"
                 if _qisin else
@@ -5009,6 +5112,7 @@ def main():
                 f"<td style='{_TC_Q}text-align:center;color:#1B4FBB;font-weight:600;'>{_qpeso}</td>"
                 f"<td style='{_TC_Q}'>{_qisin_cell}</td>"
                 f"<td style='{_TC_Q}text-align:center;'>{_qtl_cell}</td>"
+                f"<td style='{_TC_Q}text-align:center;'>{_ms_cell}</td>"
                 f"</tr>"
             )
         if _q_body:
@@ -5019,15 +5123,26 @@ def main():
                 f"<thead>{_q_hdr}</thead><tbody>{_q_body}</tbody>"
                 f"</table></div>",
                 unsafe_allow_html=True)
+            _note_parts = []
             if _qtl_cache:
                 _q_pct = int(_q_found / len(_df_sorted) * 100) if len(_df_sorted) else 0
+                _note_parts.append(
+                    f"Quantalys: {_q_found}/{len(_df_sorted)} fondi ({_q_pct}%) · "
+                    f"<a href='https://www.quantalys.it' target='_blank' "
+                    f"style='color:#94A3B8;'>quantalys.it</a>"
+                )
+            if _ms_cache:
+                _ms_pct = int(_ms_found / len(_df_sorted) * 100) if len(_df_sorted) else 0
+                _note_parts.append(
+                    f"Morningstar: {_ms_found}/{len(_df_sorted)} fondi ({_ms_pct}%) · "
+                    f"<a href='https://www.morningstar.it' target='_blank' "
+                    f"style='color:#94A3B8;'>morningstar.it</a>"
+                )
+            if _note_parts:
                 st.markdown(
-                    f"<p style='{_note_style}'>"
-                    f"Link Quantalys disponibili per {_q_found}/{len(_df_sorted)} fondi ({_q_pct}%). "
-                    f"Fonte: <a href='https://www.quantalys.it' target='_blank' "
-                    f"style='color:#94A3B8;'>quantalys.it</a></p>",
+                    f"<p style='{_note_style}'>{' &nbsp;|&nbsp; '.join(_note_parts)}</p>",
                     unsafe_allow_html=True)
-            else:
+            if not _qtl_cache:
                 st.info(
                     "Cache Quantalys non ancora disponibile. "
                     "Esegui `python build_quantalys_cache.py` per generarla.",
