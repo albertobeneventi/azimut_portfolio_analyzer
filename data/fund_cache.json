@@ -866,7 +866,26 @@
       }
     },
     "AZ Bond - Convertible Bond": {
-      "url": "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg"
+      "url": "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg",
+      "isin": "LU1422848470",
+      "analysis": {
+        "ytd": "5.78%",
+        "perf_1y": "12.32%",
+        "perf_3y": "16.91%",
+        "perf_5y": "7.13%",
+        "vol_1y": "8.51%",
+        "vol_3y": "7.70%",
+        "vol_5y": "7.84%",
+        "neg_vol_1y": "4.66%",
+        "neg_vol_3y": "5.43%",
+        "neg_vol_5y": "5.61%",
+        "sharpe_1y": "0,95",
+        "sharpe_3y": "0,13",
+        "sharpe_5y": "Neg",
+        "sortino_1y": "1,73",
+        "sortino_3y": "0,19",
+        "sortino_5y": "Neg"
+      }
     },
     "AZ Equity - Global Infrastructure": {
       "url": "https://www.fondidoc.it/d/Index/GIU_5366/LU1621767737_az-f1-eq-gl-infrastructure-a-az-fund-cap-eur"

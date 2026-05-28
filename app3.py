@@ -4416,17 +4416,30 @@ def main():
     def _get_ana(nome: str) -> dict:
         """Restituisce il dict 'analysis' cercando prima il nome diretto,
         poi con fuzzy GP→FIDA (serve per i fondi del portafoglio suggerito
-        il cui nome non è stato risolto in chiave FIDA)."""
-        entry = _fd_live.get(nome)
-        if not entry:
-            resolved = _resolve_nome_for_fd(nome, _fd_live)
-            entry = _fd_live.get(resolved)
-        if not entry and nome:
-            _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', nome, flags=re.I).strip().lower()
-            if _sk:
-                for _fk, _fv in _fd_live.items():
-                    if isinstance(_fv, dict) and _sk in _fk.lower():
-                        entry = _fv; break
+        il cui nome non è stato risolto in chiave FIDA).
+
+        Quando _fd_live è la sessione live (Excel caricato) potrebbe non
+        contenere fondi GP del portafoglio suggerito: in quel caso usa
+        cached_fd (fund_cache.json bundled) come fallback aggiuntivo."""
+        def _lookup(src: dict) -> dict | None:
+            e = src.get(nome)
+            if not e:
+                res = _resolve_nome_for_fd(nome, src)
+                e = src.get(res)
+            if not e and nome:
+                _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', nome,
+                             flags=re.I).strip().lower()
+                if _sk:
+                    for _fk, _fv in src.items():
+                        if isinstance(_fv, dict) and _sk in _fk.lower():
+                            e = _fv; break
+            return e
+
+        entry = _lookup(_fd_live)
+        # Se non trovato in _fd_live (es. sessione live senza fondi GP)
+        # prova il cache bundled come fallback
+        if not entry and _fd_live is not cached_fd:
+            entry = _lookup(cached_fd)
         return (entry or {}).get("analysis", {})
 
     def _perf_wavg(keys: list) -> dict:
