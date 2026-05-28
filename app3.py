@@ -3562,21 +3562,30 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                     unsafe_allow_html=True)
 
     # ── Total weight indicator ────────────────────────────────────────────────
-    # Il target è la somma dei pesi liquidi (esclude private markets)
-    _liq_tgt = float(sum(sw.get(k, 0) for k in subcat_funds)) or 100.0
-    total_w  = sum(ww.get(f["nome"], 0.0) for f in funds)
-    diff     = abs(total_w - _liq_tgt)
+    # Accetta sia somma=pesi_liquidi (es. 70%) che somma=100%
+    # (il secondo caso: l'utente ha incluso il peso PM nei fondi liquidi)
+    _liq_tgt  = float(sum(sw.get(k, 0) for k in subcat_funds)) or 100.0
+    total_w   = sum(ww.get(f["nome"], 0.0) for f in funds)
+    diff_liq  = abs(total_w - _liq_tgt)
+    diff_full = abs(total_w - 100.0)
+    diff      = min(diff_liq, diff_full)
     st.markdown("<br>", unsafe_allow_html=True)
     if diff < 0.15:
         st.markdown(
             f'<div class="w-ok">✅ Somma pesi: <b>{total_w:.1f}%</b>'
             f' — Portafoglio pronto!</div>', unsafe_allow_html=True)
     else:
-        left = _liq_tgt - total_w
+        # Mostra la distanza dal target più vicino
+        if diff_liq <= diff_full:
+            left = _liq_tgt - total_w
+            tgt_lbl = f"target liquido {_liq_tgt:.0f}%"
+        else:
+            left = 100.0 - total_w
+            tgt_lbl = "target 100%"
         st.markdown(
             f'<div class="w-warn">⚠️ Somma pesi: <b>{total_w:.1f}%</b>'
             f' ({"mancano" if left>0 else "eccedono"} {abs(left):.1f}%'
-            f' al target {_liq_tgt:.0f}%)</div>',
+            f' al {tgt_lbl})</div>',
             unsafe_allow_html=True)
 
     if diff > 1.0:
