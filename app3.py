@@ -3294,6 +3294,29 @@ def _ms_badge_gp(ms_r) -> str:
     return (f"<span style='color:{_col};font-weight:700;"
             f"font-size:.8rem;'>{filled}</span>")
 
+def _qtl_rating_cell(isin: str, ratings: dict) -> str:
+    """Restituisce HTML del rating Quantalys (stelle + score) per un dato ISIN."""
+    v = ratings.get(isin) if isin else None
+    if not v:
+        return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+    score  = v.get("score")
+    globes = v.get("globes")
+    if score is None:
+        return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+    if globes:
+        _gc = {1:"#EF4444",2:"#F97316",3:"#EAB308",4:"#22C55E",5:"#1B4FBB"}.get(globes,"#64748B")
+        stars = (f"<span style='color:{_gc};font-size:.85rem;letter-spacing:1px;'>"
+                 f"{'★'*globes}{'☆'*(5-globes)}</span>")
+    else:
+        stars = ""
+    sc_col = ("#1B4FBB" if score >= 80 else "#22C55E" if score >= 60
+              else "#EAB308" if score >= 40 else "#EF4444")
+    sc_html = (f"<span style='font-size:.7rem;font-weight:700;color:{sc_col};"
+               f"background:#F1F5F9;border-radius:3px;padding:1px 4px;'>{score}</span>")
+    tip = f"Score {score}/100" + (f" · {globes} globi" if globes else "")
+    return f"<span title='{tip}'>{stars}{'<br>' if stars else ''}{sc_html}</span>"
+
+
 # Sub-category display names (Italian labels)
 _SUBCAT_DISPLAY = {
     "alloc_balanced":  "Allocation – Balanced",
@@ -3355,8 +3378,11 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
         "aggiorna automaticamente quando la somma raggiunge 100 %."
     )
 
+    # ── Carica ratings Quantalys ──────────────────────────────────────────────
+    _qtlr = load_quantalys_ratings()   # {ISIN: {"score": N, "globes": N}}
+
     # ── Column headers (only once, above all subcategories) ───────────────────
-    _h1, _h2, _h3, _h4 = st.columns([4.5, 1.2, 1.2, 1.4])
+    _h1, _h2, _h3, _h4, _h5 = st.columns([4.5, 1.2, 1.2, 1.2, 1.4])
     _h1.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
                  "text-transform:uppercase;letter-spacing:.08em;'>Fondo</span>",
                  unsafe_allow_html=True)
@@ -3367,6 +3393,9 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                  "text-transform:uppercase;letter-spacing:.08em;'>Morningstar</span>",
                  unsafe_allow_html=True)
     _h4.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>Quantalys</span>",
+                 unsafe_allow_html=True)
+    _h5.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
                  "text-transform:uppercase;letter-spacing:.08em;'>Peso %</span>",
                  unsafe_allow_html=True)
     st.markdown("<hr style='margin:.15rem 0 .3rem 0;border-color:#e2e8f0;'>",
@@ -3435,7 +3464,15 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                 if url_sg else
                 f'<span style="font-size:.84rem;font-weight:500;color:#1e293b;">{short}</span>'
             )
-            c1, c2, c3, c4 = st.columns([4.5, 1.2, 1.2, 1.4])
+            # Estrai ISIN dall'URL FondiDoc (formato: .../ISIN_nome-fondo)
+            _sg_isin = ""
+            _sg_url_chk = url_sg or _fd_entry.get("url", "")
+            if _sg_url_chk:
+                _sg_m = re.search(r'/([A-Z]{2}[A-Z0-9]{10})[_/]', _sg_url_chk)
+                if _sg_m:
+                    _sg_isin = _sg_m.group(1)
+
+            c1, c2, c3, c4, c5 = st.columns([4.5, 1.2, 1.2, 1.2, 1.4])
             with c1:
                 st.markdown(
                     f"<div style='padding:.55rem 0 .3rem 0;'>{name_html}</div>",
@@ -3451,6 +3488,11 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                     f"{_ms_badge_gp(ms_r)}</div>",
                     unsafe_allow_html=True)
             with c4:
+                st.markdown(
+                    f"<div style='padding:.5rem 0 .25rem 0;'>"
+                    f"{_qtl_rating_cell(_sg_isin, _qtlr)}</div>",
+                    unsafe_allow_html=True)
+            with c5:
                 default_w = float(ww.get(fname, round(f["weight"] * 100, 1)))
                 new_w = st.number_input(
                     "w", min_value=0.0, max_value=100.0,
