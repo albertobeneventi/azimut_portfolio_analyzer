@@ -2216,7 +2216,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                     pass
         out = {}
         for k in keys_list:
-            out[k] = f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "N/D"
+            out[k] = f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "-"
         return out
 
     # Paragraph style for portfolio summary row
@@ -2253,12 +2253,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     ptf_perf_row = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph(f"<b>100%</b>", WH),
-        pstyle_w(ptf_p.get("ytd","N/D")),
-        pstyle_w(ptf_p.get("perf_1y","N/D")),
-        pstyle_w(ptf_p.get("perf_3y","N/D")),
-        pstyle_w(ptf_p.get("perf_5y","N/D")),
-        Paragraph(ptf_p.get("vol_1y","N/D"), WH),
-        Paragraph(ptf_p.get("sharpe_1y","N/D"), WH),
+        pstyle_w(ptf_p.get("ytd","-")),
+        pstyle_w(ptf_p.get("perf_1y","-")),
+        pstyle_w(ptf_p.get("perf_3y","-")),
+        pstyle_w(ptf_p.get("perf_5y","-")),
+        Paragraph(ptf_p.get("vol_1y","-"), WH),
+        Paragraph(ptf_p.get("sharpe_1y","-"), WH),
     ]
 
     perf_rows = [perf_hdr, ptf_perf_row]
@@ -2268,7 +2268,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ana = fd.get("analysis", {})
         def gv(key, nome=row["nome"]):
             # Return factbook value (for return metrics) or FondiDoc value
-            return get_fb(nome, key) or ana.get(key, "N/D")
+            return get_fb(nome, key) or ana.get(key, "-")
         perf_rows.append([
             Paragraph(row["nome"][:48], SM),
             Paragraph(f"<b>{row[wcol]*100:.1f}%</b>", SM),
@@ -2325,19 +2325,19 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     ptf_risk_row = [
         Paragraph(f"<b>◆ PORTAFOGLIO {ptf_name.upper()}</b>", WH),
         Paragraph("<b>100%</b>", WH),
-        Paragraph(ptf_r.get("vol_1y","N/D"),     WH),
-        Paragraph(ptf_r.get("vol_3y","N/D"),     WH),
-        Paragraph(ptf_r.get("vol_5y","N/D"),     WH),
-        Paragraph(ptf_r.get("neg_vol_1y","N/D"), WH),
-        Paragraph(ptf_r.get("sharpe_3y","N/D"),  WH),
-        Paragraph(ptf_r.get("sortino_1y","N/D"), WH),
+        Paragraph(ptf_r.get("vol_1y","-"),     WH),
+        Paragraph(ptf_r.get("vol_3y","-"),     WH),
+        Paragraph(ptf_r.get("vol_5y","-"),     WH),
+        Paragraph(ptf_r.get("neg_vol_1y","-"), WH),
+        Paragraph(ptf_r.get("sharpe_3y","-"),  WH),
+        Paragraph(ptf_r.get("sortino_1y","-"), WH),
     ]
 
     risk_rows = [risk_hdr, ptf_risk_row]
     for _, row in d_sorted.iterrows():
         fd  = (fund_data or {}).get(row["nome"], {})
         ana = fd.get("analysis", {})
-        def gv_r(k): return ana.get(k,"N/D")
+        def gv_r(k): return ana.get(k,"-")
         risk_rows.append([
             Paragraph(row["nome"][:48], SM),
             Paragraph(f"{row[wcol]*100:.1f}%", SM),
@@ -2427,12 +2427,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             _ptf_rat_den += _w * _obb
 
     _ptf_dur_str = (f"{_ptf_dur_num / _ptf_dur_den:.2f}"
-                    if _ptf_dur_den > 0.001 else "N/D")
+                    if _ptf_dur_den > 0.001 else "-")
     if _ptf_rat_den > 0.001:
         _ri = max(1, min(22, round(_ptf_rat_num / _ptf_rat_den)))
-        _ptf_rat_str = RATING_INVERSE.get(_ri, "N/D")
+        _ptf_rat_str = RATING_INVERSE.get(_ri, "-")
     else:
-        _ptf_rat_str = "N/D"
+        _ptf_rat_str = "-"
 
     _alloc_hdr_items = [
         ("Fondo",        HDR), ("ISIN",         HDR), ("Peso",   HDR),
@@ -2615,7 +2615,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             _ptf_unp_str  = f"{_wtd_unp  / _cov_w:.2f}%"
             _ptf_iunp_str = f"{_wtd_iunp / _cov_w:.2f}%"
         else:
-            _ptf_unp_str = _ptf_iunp_str = "N/D"
+            _ptf_unp_str = _ptf_iunp_str = "-"
 
         unp_hdr_row = [Paragraph(f"<b>{t}</b>", HDR) for t in
                        ["Fondo", "Peso", "%UNP", "%IUNP36", "FIDArating", "Morningstar"]]
@@ -2714,11 +2714,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ov  = fd.get("overview",  {})
         ana = fd.get("analysis",  {})
 
-        def gv(k,src=ana,fallback="N/D"): return src.get(k,fallback)
+        def gv(k,src=ana,fallback="-"): return src.get(k,fallback)
 
-        srri_str = f"SRRI {gv('srri',ov,'—')}/7" if gv('srri',ov) != "N/D" else ""
-        nav_str  = f"NAV {gv('nav')} € ({gv('last_update')})" if gv('nav') != "N/D" else ""
-        rating_s = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("N/D","—") else ""
+        srri_str = f"SRRI {gv('srri',ov,'—')}/7" if gv('srri',ov) != "-" else ""
+        nav_str  = f"NAV {gv('nav')} € ({gv('last_update')})" if gv('nav') != "-" else ""
+        rating_s = f"FIDArating {gv('fida_rating',ov)}" if gv('fida_rating',ov) not in ("-","—") else ""
         meta_extra = "  ·  ".join(x for x in [srri_str, rating_s, nav_str] if x)
         isin = fd.get("isin", "") or isin_map.get(row["nome"], "")
         isin_str = f"  ·  ISIN: <b>{isin}</b>" if isin else ""
@@ -4436,7 +4436,7 @@ def main():
 
     def _perf_val_col(raw) -> str:
         """Wrap a performance string in green/red HTML span."""
-        s = str(raw) if raw is not None else "N/D"
+        s = str(raw) if raw is not None else "-"
         try:
             v   = float(s.replace("%", "").replace(",", ".").strip())
             col = "#1A7A4A" if v > 0 else ("#C0392B" if v < 0 else "#475569")
@@ -4492,7 +4492,7 @@ def main():
                     cov_w[k]  += _w
                 except Exception:
                     pass
-        return {k: (f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "N/D")
+        return {k: (f"{totals[k]/cov_w[k]:+.2f}%" if cov_w[k] > 0.01 else "-")
                 for k in keys}
 
     def _html_table(hdr_cols: list, ptf_row: list, fund_rows: list) -> str:
@@ -4841,19 +4841,19 @@ def main():
         _p_hdr   = ["Fondo", "Peso", "YTD", "1 Anno", "3 Anni", "5 Anni",
                     "Vol. 1A", "Sharpe 1A"]
         _p_ptf   = [_ptf_row_label, "100%",
-                    _ptf_p.get("ytd",      "N/D"),
-                    _ptf_p.get("perf_1y",  "N/D"),
-                    _ptf_p.get("perf_3y",  "N/D"),
-                    _ptf_p.get("perf_5y",  "N/D"),
-                    _ptf_p.get("vol_1y",   "N/D"),
-                    _ptf_p.get("sharpe_1y","N/D")]
+                    _ptf_p.get("ytd",      "-"),
+                    _ptf_p.get("perf_1y",  "-"),
+                    _ptf_p.get("perf_3y",  "-"),
+                    _ptf_p.get("perf_5y",  "-"),
+                    _ptf_p.get("vol_1y",   "-"),
+                    _ptf_p.get("sharpe_1y","-")]
         _p_funds = []
         for _, _pr in _df_sorted.iterrows():
             _np  = _pr["nome"]
             _ana = _get_ana(_np)
             def _gp(k, _n=_np, _a=_ana):
                 v = _fb_metric(_n, k) or _a.get(k, "") or ""
-                return str(v) if v else "N/D"
+                return str(v) if v else "-"
             _p_funds.append([
                 _fund_link(_np),
                 f"{_pr[wcol]*100:.1f}%",
@@ -4877,18 +4877,18 @@ def main():
         _r_hdr   = ["Fondo", "Peso", "Vol. 1A", "Vol. 3A", "Vol. 5A",
                     "Vol. Neg. 1A", "Sharpe 3A", "Sortino 1A"]
         _r_ptf   = [_ptf_row_label, "100%",
-                    _ptf_r.get("vol_1y",     "N/D"),
-                    _ptf_r.get("vol_3y",     "N/D"),
-                    _ptf_r.get("vol_5y",     "N/D"),
-                    _ptf_r.get("neg_vol_1y", "N/D"),
-                    _ptf_r.get("sharpe_3y",  "N/D"),
-                    _ptf_r.get("sortino_1y", "N/D")]
+                    _ptf_r.get("vol_1y",     "-"),
+                    _ptf_r.get("vol_3y",     "-"),
+                    _ptf_r.get("vol_5y",     "-"),
+                    _ptf_r.get("neg_vol_1y", "-"),
+                    _ptf_r.get("sharpe_3y",  "-"),
+                    _ptf_r.get("sortino_1y", "-")]
         _r_funds = []
         for _, _rr in _df_sorted.iterrows():
             _nr  = _rr["nome"]
             _ana = _get_ana(_nr)
             def _gr(k, _a=_ana):
-                return str(_a.get(k, "") or "") or "N/D"
+                return str(_a.get(k, "") or "") or "-"
             _r_funds.append([
                 _fund_link(_nr),
                 f"{_rr[wcol]*100:.1f}%",
@@ -4942,8 +4942,8 @@ def main():
                 _fida_cell_u,
                 _ms_cell_u,
             ])
-        _ptf_unp  = f"{_u_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
-        _ptf_iunp = f"{_iu_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "N/D"
+        _ptf_unp  = f"{_u_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "-"
+        _ptf_iunp = f"{_iu_wtd/_u_covw:.2f}%"  if _u_covw > 0.01 else "-"
         st.markdown(
             _html_table(
                 ["Fondo", "Peso", "%UNP", "%IUNP36", "FIDArating", "Morningstar"],
