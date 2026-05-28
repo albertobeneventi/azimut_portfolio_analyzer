@@ -38,7 +38,7 @@ from reportlab.lib.units import cm
 
 # ── PAGE CONFIG ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="Azimut | Analisi Portafoglio — AAS Emilia Romagna Marche Umbria",
+    page_title="Azimut | Demo Analisi",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -3836,7 +3836,7 @@ def main():
         st.session_state["_session_needs_update"] = True
     _ms_with_rating = 0   # default; updated inside sidebar block below
     with st.sidebar:
-        st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;margin-top:4px;line-height:1.3;'>AAS Emilia<br>Romagna<br>Marche Umbria</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
+        st.markdown("""<div style='padding:1.2rem 0 .4rem 0;'><div style='font-size:.6rem;letter-spacing:.22em;color:#3a5a78;text-transform:uppercase;font-weight:700;'>Analisi Portafoglio</div><div style='font-family:"Cormorant Garamond",serif;font-size:1.3rem;color:#dde8f5;font-weight:700;font-style:italic;margin-top:4px;line-height:1.3;'>Demo Analisi</div><div style='width:32px;height:3px;background:#C9A84C;border-radius:2px;margin-top:8px;'></div><div style='font-size:.6rem;color:#2a4a6a;margin-top:5px;'>v2.3 — Excel + GP cache persistente</div></div>""", unsafe_allow_html=True)
         st.markdown("<hr style='margin:.4rem 0 .5rem 0;border-color:#1a3050;'>", unsafe_allow_html=True)
 
         # ── Uploader Excel ────────────────────────────────────────────────────
