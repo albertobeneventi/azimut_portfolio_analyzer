@@ -39,7 +39,7 @@ _MS_RE = re.compile(
 #
 MANUAL_OVERRIDES: dict[str, str] = {
     "LU3081792221": "https://global.morningstar.com/it/investimenti/fondi/0P0001XRB9/quote",  # AZ F.1 All. Escalator 2030 A Cap EUR
-    "LU0738951036": "https://global.morningstar.com/it/investimenti/fondi/0P0001JMJQ/quote",  # AZ F.1 Bd Patriot A Cap EUR
+    "LU0738951036": "https://global.morningstar.com/it/investimenti/fondi/0P0000VGAH/quote",
     "LU2951609937": "https://global.morningstar.com/it/investimenti/fondi/0P0001US0L/quote",  # AZ F.1 Bd Target 2029 A Cap EUR
     "LU0346933400": "https://global.morningstar.com/it/investimenti/fondi/0P0000J14M/quote",  # AZ F.1 All. Balanced FoF A Cap EUR
     "LU2637786422": "https://global.morningstar.com/it/investimenti/fondi/0P0001TD5F/quote",  # AZ F.1 All. Potential Income Upside 2030 A Cap EUR
@@ -49,6 +49,7 @@ MANUAL_OVERRIDES: dict[str, str] = {
     "LU2458531147": "https://global.morningstar.com/it/investimenti/fondi/0P0001PA7Z/quote",
     "LU2102340044": "https://global.morningstar.com/it/investimenti/fondi/0P0001L78I/quote",
     "LU0346934713": "https://global.morningstar.com/it/investimenti/fondi/0P0000J14M/quote",
+    "LU2085663008": "https://global.morningstar.com/it/investimenti/fondi/0P0001JMJQ/quote",  # AZ F.1 Bd Global Macro Bond A Cap EUR
     # Esempio:
     # "LU2168564065": "https://www.morningstar.it/it/funds/snapshot/snapshot.aspx?id=XXXXXXXX",
 }
