@@ -3725,6 +3725,13 @@ def main():
             type=["xlsx","xls"],
             help=_xl_hint,
         )
+        if uploaded is not None:
+            # Salva i bytes subito in session_state: previene la perdita del file
+            # se un st.rerun() programmativo (es. auto-fetch GP, Aggiorna Dati)
+            # scatta prima che il blocco principale raggiunga save_excel_cache.
+            _xl_bytes_snap = uploaded.getvalue()
+            if _xl_bytes_snap:
+                st.session_state["_xl_pending_bytes"] = _xl_bytes_snap
         if _xl_cache_date and uploaded is None:
             st.caption(f"📂 Excel da cache · {_xl_cache_date}")
 
@@ -3736,12 +3743,20 @@ def main():
                  "Allocation. Dopo la prima estrazione scarica il file Excel "
                  "e ricaricalo la prossima volta: è più veloce.",
         )
+        if uploaded_fb is not None:
+            _fb_bytes_snap = uploaded_fb.getvalue()
+            if _fb_bytes_snap:
+                st.session_state["_fb_pending_bytes"] = _fb_bytes_snap
         uploaded_fb_xl = st.file_uploader(
             "DATI FACTBOOK (Excel, dopo prima estrazione)",
             type=["xlsx","xls"],
             help="Carica il file Excel scaricato dopo la prima estrazione del "
                  "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
         )
+        if uploaded_fb_xl is not None:
+            _fb_xl_bytes_snap = uploaded_fb_xl.getvalue()
+            if _fb_xl_bytes_snap:
+                st.session_state["_fb_xl_pending_bytes"] = _fb_xl_bytes_snap
 
         # ── Uploader GP ───────────────────────────────────────────────────────
         _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
@@ -4009,10 +4024,14 @@ def main():
     st.markdown(f"""<div class="az-header"><div class="az-eyebrow">AZIMUT INVESTMENTS · AAS EMILIA ROMAGNA MARCHE UMBRIA</div><div class="az-rule"></div><div class="az-title">{ptf_label}</div><div class="az-meta">{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()} &nbsp;·&nbsp; {datetime.date.today().strftime('%d %B %Y')}</div></div>""",unsafe_allow_html=True)
 
     # ── Carica dati Excel (file fresco → salva cache; altrimenti usa cache) ─────
-    if uploaded is not None:
+    # _xl_pending_bytes: bytes salvati subito nella sidebar quando il file è stato
+    # caricato. Usati come fallback se un rerun programmativo ha svuotato il widget.
+    _xl_pending = st.session_state.pop("_xl_pending_bytes", None)
+    _xl_fresh_bytes = (uploaded.getvalue() if uploaded is not None else _xl_pending)
+
+    if _xl_fresh_bytes is not None:
         with st.spinner("⏳ Caricamento dati…"):
-            file_bytes = uploaded.read()
-            raw = parse_excel(file_bytes)
+            raw = parse_excel(_xl_fresh_bytes)
         _xl_from_cache = False
     elif _xl_cache_raw is not None:
         raw = _xl_cache_raw
@@ -4029,7 +4048,7 @@ def main():
         raw["fida_urls"] = {**_fida_existing, **MANUAL_URL_OVERRIDES}
 
     # Salva su disco dopo il patch — la cache conterrà sempre gli URL aggiornati
-    if uploaded is not None and raw:
+    if _xl_fresh_bytes is not None and raw:
         save_excel_cache(raw)
 
     # Controlla se ci sono dati Excel disponibili (upload o cache)
@@ -4174,10 +4193,14 @@ def main():
     factbook_data: dict = load_factbook_auto()
     _fb_source = f"repository ({len(factbook_data)} fondi)" if factbook_data else ""
 
-    if uploaded_fb is not None:
+    _fb_pending  = st.session_state.pop("_fb_pending_bytes",    None)
+    _fb_xl_pending = st.session_state.pop("_fb_xl_pending_bytes", None)
+    _fb_fresh_bytes = (uploaded_fb.getvalue() if uploaded_fb is not None
+                       else _fb_pending)
+    if _fb_fresh_bytes is not None:
         # First-time (or refresh): parse PDF, auto-save, offer Excel
         with st.spinner("📖 Estraggo dati dal Factbook PDF…"):
-            _new = parse_factbook(uploaded_fb.read())
+            _new = parse_factbook(_fb_fresh_bytes)
         if _new:
             factbook_data = _new
             _fb_source = f"PDF ({len(_new)} fondi)"
@@ -4208,9 +4231,11 @@ def main():
             st.warning("⚠️ Factbook PDF caricato ma nessun dato estratto — "
                        "verrà usato FondiDoc")
 
-    if uploaded_fb_xl is not None:
+    _fb_xl_fresh_bytes = (uploaded_fb_xl.getvalue() if uploaded_fb_xl is not None
+                          else _fb_xl_pending)
+    if _fb_xl_fresh_bytes is not None:
         # Manual override: user uploaded a corrected Excel
-        _xl = factbook_from_excel(uploaded_fb_xl.read())
+        _xl = factbook_from_excel(_fb_xl_fresh_bytes)
         if _xl:
             factbook_data = _xl
             _fb_source = f"Excel ({len(_xl)} fondi)"
