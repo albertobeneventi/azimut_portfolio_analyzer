@@ -1199,6 +1199,22 @@ def load_quantalys_cache() -> dict:
 
 
 @st.cache_data(ttl=3600)
+def load_morningstar_cache() -> dict:
+    """Load ISIN → Morningstar URL mapping from data/morningstar_cache.json.
+    Returns {} if the file does not exist yet (run build_morningstar_cache.py first).
+    """
+    try:
+        fp = Path(__file__).parent / "data" / "morningstar_cache.json"
+        if fp.exists() and fp.stat().st_size > 5:
+            with open(fp, encoding="utf-8") as fh:
+                data = json.load(fh)
+            return {k: v for k, v in data.items() if v}
+    except Exception:
+        pass
+    return {}
+
+
+@st.cache_data(ttl=3600)
 def load_quantalys_ratings() -> dict:
     """Load ISIN → {score, globes} from data/quantalys_ratings.json."""
     try:
@@ -4780,6 +4796,7 @@ def main():
     # ── Quantalys cache + ratings + ISIN map ────────────────────────────────
     _qtl_cache   = load_quantalys_cache()    # {ISIN: "https://www.quantalys.it/Fonds/..."}
     _qtl_ratings = load_quantalys_ratings()  # {ISIN: {"score": 87, "globes": 5}}
+    _ms_cache    = load_morningstar_cache()  # {ISIN: "https://www.morningstar.it/..."}
 
     def _qtl_rating_html(isin: str) -> str:
         """Restituisce HTML con score e globi Quantalys per una riga della tabella."""
@@ -4848,7 +4865,7 @@ def main():
 
     tab1, tab_q, tab2, tab3, tab4 = st.tabs([
         "📊  Scomposizione Az/Obb",
-        "🔗  Quantalys",
+        "🔗  Quantalys · Morningstar",
         "📈  Rendimenti",
         "⚠️  Rischio",
         "💰  UNP / IUNP",
@@ -4951,10 +4968,12 @@ def main():
             f"<th style='{_TH_Q}text-align:center;'>Peso</th>"
             f"<th style='{_TH_Q}text-align:left;'>ISIN</th>"
             f"<th style='{_TH_Q}text-align:center;'>Quantalys</th>"
+            f"<th style='{_TH_Q}text-align:center;background:#c2410c;'>Morningstar</th>"
             f"</tr>"
         )
         _q_body = ""
         _q_found = 0
+        _ms_found = 0
         for _, _qr in _df_sorted.iterrows():
             _qnome = _qr["nome"]
             _qdisp = (_qr["nome_orig"]
@@ -4980,7 +4999,6 @@ def main():
             # Quantalys URL — prima ISIN diretto, poi fallback per nome-concetto
             _qurl = _qtl_cache.get(_qisin, "") if _qisin else ""
             if not _qurl:
-                # Prova a trovare l'URL tramite un'altra classe dello stesso fondo
                 _qck = _qtl_concept_key(_qnome)
                 _qurl = _qtl_concept_map.get(_qck, "")
                 if not _qurl and _qdisp != _qnome:
@@ -4998,6 +5016,20 @@ def main():
                 _qtl_cell = "<span style='color:#94A3B8;font-size:.77rem;'>non trovato</span>"
             else:
                 _qtl_cell = "<span style='color:#CBD5E1;font-size:.77rem;'>nessun ISIN</span>"
+            # Morningstar URL — lookup diretto per ISIN
+            _msurl = _ms_cache.get(_qisin, "") if _qisin else ""
+            if _msurl:
+                _ms_found += 1
+                _ms_cell = (
+                    f"<a href='{_msurl}' target='_blank' rel='noopener noreferrer' "
+                    f"style='display:inline-block;padding:3px 12px;background:#c2410c;"
+                    f"color:#fff;border-radius:5px;font-size:.77rem;font-weight:600;"
+                    f"text-decoration:none;'>Apri &#x2197;</a>"
+                )
+            elif _qisin:
+                _ms_cell = "<span style='color:#94A3B8;font-size:.77rem;'>non trovato</span>"
+            else:
+                _ms_cell = "<span style='color:#CBD5E1;font-size:.77rem;'>nessun ISIN</span>"
             _qisin_cell = (
                 f"<span style='font-family:monospace;font-size:.78rem;color:#475569;'>{_qisin}</span>"
                 if _qisin else
@@ -5009,6 +5041,7 @@ def main():
                 f"<td style='{_TC_Q}text-align:center;color:#1B4FBB;font-weight:600;'>{_qpeso}</td>"
                 f"<td style='{_TC_Q}'>{_qisin_cell}</td>"
                 f"<td style='{_TC_Q}text-align:center;'>{_qtl_cell}</td>"
+                f"<td style='{_TC_Q}text-align:center;'>{_ms_cell}</td>"
                 f"</tr>"
             )
         if _q_body:
@@ -5019,15 +5052,26 @@ def main():
                 f"<thead>{_q_hdr}</thead><tbody>{_q_body}</tbody>"
                 f"</table></div>",
                 unsafe_allow_html=True)
+            _note_parts = []
             if _qtl_cache:
                 _q_pct = int(_q_found / len(_df_sorted) * 100) if len(_df_sorted) else 0
+                _note_parts.append(
+                    f"Quantalys: {_q_found}/{len(_df_sorted)} fondi ({_q_pct}%) · "
+                    f"<a href='https://www.quantalys.it' target='_blank' "
+                    f"style='color:#94A3B8;'>quantalys.it</a>"
+                )
+            if _ms_cache:
+                _ms_pct = int(_ms_found / len(_df_sorted) * 100) if len(_df_sorted) else 0
+                _note_parts.append(
+                    f"Morningstar: {_ms_found}/{len(_df_sorted)} fondi ({_ms_pct}%) · "
+                    f"<a href='https://www.morningstar.it' target='_blank' "
+                    f"style='color:#94A3B8;'>morningstar.it</a>"
+                )
+            if _note_parts:
                 st.markdown(
-                    f"<p style='{_note_style}'>"
-                    f"Link Quantalys disponibili per {_q_found}/{len(_df_sorted)} fondi ({_q_pct}%). "
-                    f"Fonte: <a href='https://www.quantalys.it' target='_blank' "
-                    f"style='color:#94A3B8;'>quantalys.it</a></p>",
+                    f"<p style='{_note_style}'>{' &nbsp;|&nbsp; '.join(_note_parts)}</p>",
                     unsafe_allow_html=True)
-            else:
+            if not _qtl_cache:
                 st.info(
                     "Cache Quantalys non ancora disponibile. "
                     "Esegui `python build_quantalys_cache.py` per generarla.",
