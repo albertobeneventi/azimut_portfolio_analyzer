@@ -4048,8 +4048,21 @@ def main():
                 # Merge con il cache esistente: i fondi Excel aggiornati
                 # sovrascrivono il cache, ma i fondi GP aggiunti manualmente
                 # (non nell'Excel) vengono preservati anziché eliminati.
+                # Se fetch fallisce su un fondo (_fd_new[k]={}), non perdere
+                # l'analysis già presente nel cache.
                 _fd_base_existing = load_fund_cache()[0]
-                _fd_merged_new = {**_fd_base_existing, **_fd_new}
+                _fd_merged_new = dict(_fd_base_existing)
+                for _fk, _fv in _fd_new.items():
+                    if _fv and (_fv.get("analysis") or not _fd_merged_new.get(_fk, {}).get("analysis")):
+                        _fd_merged_new[_fk] = _fv
+                    elif _fv and not _fv.get("analysis") and _fd_merged_new.get(_fk, {}).get("analysis"):
+                        # Nuovo dato senza analysis: aggiorna url/isin ma preserva analysis
+                        _upd2 = dict(_fd_merged_new[_fk])
+                        if _fv.get("url"):  _upd2["url"]  = _fv["url"]
+                        if _fv.get("isin"): _upd2["isin"] = _fv["isin"]
+                        _fd_merged_new[_fk] = _upd2
+                    elif not _fv:
+                        pass  # fetch fallito: mantieni versione cache
                 save_fund_cache(_fd_merged_new)
                 st.session_state["_scomp_fd"] = _fd_merged_new
                 st.rerun()
@@ -4100,8 +4113,21 @@ def main():
             _gp_new = fetch_gp_urls_missing(_gp_src, _fd_base, _upd_gp, quick_urls=_quick)
             _pb_gp.empty()
             if _gp_new:
-                # Merge FondiDoc data into cache and save
-                _fd_merged = {**_fd_base, **_gp_new}
+                # Merge FondiDoc data into cache e save.
+                # IMPORTANTE: fetch_gp_urls_missing restituisce spesso solo
+                # {"url": "..."} senza analysis. Non sovrascrivere una voce
+                # già ricca di analysis con una URL-only.
+                _fd_merged = dict(_fd_base)
+                for _gk, _gv in _gp_new.items():
+                    _existing = _fd_merged.get(_gk, {})
+                    if _existing.get("analysis") and not (_gv or {}).get("analysis"):
+                        # Preserva analysis esistente — aggiorna solo url/isin
+                        _upd = dict(_existing)
+                        if (_gv or {}).get("url"):  _upd["url"]  = _gv["url"]
+                        if (_gv or {}).get("isin"): _upd["isin"] = _gv["isin"]
+                        _fd_merged[_gk] = _upd
+                    else:
+                        _fd_merged[_gk] = _gv
                 save_fund_cache(_fd_merged)
                 st.session_state["_scomp_fd"] = _fd_merged
                 # Aggiorna rating Morningstar per i nuovi fondi GP (best-effort)
