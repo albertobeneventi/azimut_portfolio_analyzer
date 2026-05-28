@@ -3724,15 +3724,26 @@ def main():
             "FILE EXCEL (PTF FULL + PTF SHORT + FIDA)",
             type=["xlsx","xls"],
             help=_xl_hint,
+            key="uploader_xl",
         )
         if uploaded is not None:
-            # Salva i bytes subito in session_state: previene la perdita del file
-            # se un st.rerun() programmativo (es. auto-fetch GP, Aggiorna Dati)
-            # scatta prima che il blocco principale raggiunga save_excel_cache.
+            # Salva bytes + nome in session_state immediatamente (sopravvivono
+            # a qualsiasi rerun successivo, anche programmativo)
             _xl_bytes_snap = uploaded.getvalue()
             if _xl_bytes_snap:
                 st.session_state["_xl_pending_bytes"] = _xl_bytes_snap
-        if _xl_cache_date and uploaded is None:
+                st.session_state["_xl_loaded_name"]   = uploaded.name
+        elif st.session_state.get("_xl_loaded_name"):
+            # Il widget è vuoto (Streamlit lo svuota su ogni rerun naturale)
+            # ma il file era stato caricato in questa sessione → mostra badge
+            st.markdown(
+                f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
+                f"font-size:.78rem;color:#86efac;'>"
+                f"✅&nbsp;<b>{st.session_state['_xl_loaded_name']}</b>"
+                f"&nbsp;·&nbsp;attivo in sessione</div>",
+                unsafe_allow_html=True)
+        elif _xl_cache_date:
             st.caption(f"📂 Excel da cache · {_xl_cache_date}")
 
         # ── Uploader Factbook ─────────────────────────────────────────────────
@@ -3742,21 +3753,42 @@ def main():
             help="Carica il Factbook PDF per estrarre Duration, Rating e Asset "
                  "Allocation. Dopo la prima estrazione scarica il file Excel "
                  "e ricaricalo la prossima volta: è più veloce.",
+            key="uploader_fb",
         )
         if uploaded_fb is not None:
             _fb_bytes_snap = uploaded_fb.getvalue()
             if _fb_bytes_snap:
                 st.session_state["_fb_pending_bytes"] = _fb_bytes_snap
+                st.session_state["_fb_loaded_name"]   = uploaded_fb.name
+        elif st.session_state.get("_fb_loaded_name"):
+            st.markdown(
+                f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
+                f"font-size:.78rem;color:#86efac;'>"
+                f"✅&nbsp;<b>{st.session_state['_fb_loaded_name']}</b>"
+                f"&nbsp;·&nbsp;attivo in sessione</div>",
+                unsafe_allow_html=True)
+
         uploaded_fb_xl = st.file_uploader(
             "DATI FACTBOOK (Excel, dopo prima estrazione)",
             type=["xlsx","xls"],
             help="Carica il file Excel scaricato dopo la prima estrazione del "
                  "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
+            key="uploader_fb_xl",
         )
         if uploaded_fb_xl is not None:
             _fb_xl_bytes_snap = uploaded_fb_xl.getvalue()
             if _fb_xl_bytes_snap:
                 st.session_state["_fb_xl_pending_bytes"] = _fb_xl_bytes_snap
+                st.session_state["_fb_xl_loaded_name"]   = uploaded_fb_xl.name
+        elif st.session_state.get("_fb_xl_loaded_name"):
+            st.markdown(
+                f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
+                f"font-size:.78rem;color:#86efac;'>"
+                f"✅&nbsp;<b>{st.session_state['_fb_xl_loaded_name']}</b>"
+                f"&nbsp;·&nbsp;attivo in sessione</div>",
+                unsafe_allow_html=True)
 
         # ── Uploader GP ───────────────────────────────────────────────────────
         _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
@@ -3768,9 +3800,21 @@ def main():
             "GLOBAL PERSPECTIVES PDF",
             type=["pdf"],
             help=_gp_hint,
+            key="uploader_gp",
         )
-        if _gp_cache_date and uploaded_gp is None:
-            st.caption(f"📂 GP da cache · {_gp_cache_date}")
+        if uploaded_gp is not None:
+            st.session_state["_gp_loaded_name"] = uploaded_gp.name
+        if uploaded_gp is None:
+            if _gp_cache_date:
+                st.caption(f"📂 GP da cache · {_gp_cache_date}")
+            elif st.session_state.get("_gp_loaded_name"):
+                st.markdown(
+                    f"<div style='background:#0d2b1a;border:1px solid #166534;"
+                    f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
+                    f"font-size:.78rem;color:#86efac;'>"
+                    f"✅&nbsp;<b>{st.session_state['_gp_loaded_name']}</b>"
+                    f"&nbsp;·&nbsp;attivo in sessione</div>",
+                    unsafe_allow_html=True)
 
         # ── Parsing GP (solo quando cambia file) ─────────────────────────────
         if uploaded_gp is not None:
