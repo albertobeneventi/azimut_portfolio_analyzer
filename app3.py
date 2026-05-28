@@ -719,6 +719,65 @@ def parse_factbook(pdf_bytes: bytes) -> dict:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             for page_idx, page in enumerate(pdf.pages):
 
+                # ── A0: Tabella Bond & Performance (pagine riepilogative) ─────
+                # Struttura: [Nome fondo | YTM% | Rating | Duration | Freq. cedola]
+                # Trigger: almeno una riga ha "YTM" e "Duration" come intestazioni
+                for tbl in (page.extract_tables() or []):
+                    _cells_flat = [str(c or '').strip().upper()
+                                   for row in tbl for c in row]
+                    _has_ytm = any('YTM' in c or 'YIELD' in c for c in _cells_flat)
+                    _has_dur = any('DURATION' in c for c in _cells_flat)
+                    if not (_has_ytm and _has_dur):
+                        continue
+                    # Trova indici colonne dall'header
+                    _hdr_row = next(
+                        (r for r in tbl
+                         if any('YTM' in str(c or '').upper() or 'YIELD' in str(c or '').upper()
+                                for c in r)),
+                        None)
+                    if _hdr_row is None:
+                        continue
+                    _hdr_u = [str(c or '').upper() for c in _hdr_row]
+                    _ci_ytm  = next((i for i, h in enumerate(_hdr_u)
+                                     if 'YTM' in h or 'YIELD' in h), None)
+                    _ci_rat  = next((i for i, h in enumerate(_hdr_u)
+                                     if 'RATING' in h), None)
+                    _ci_dur  = next((i for i, h in enumerate(_hdr_u)
+                                     if 'DURATION' in h), None)
+                    for _brow in tbl:
+                        _b0 = str(_brow[0] or '').replace('\n', ' ').strip()
+                        if not re.match(r'^AZ\s', _b0, re.IGNORECASE):
+                            continue
+                        _bnorm = _normalize_for_unp(_b0)
+                        _bnorm = _FUND_ALIASES.get(_bnorm, _bnorm)
+                        if not _bnorm:
+                            continue
+                        if _bnorm not in _metrics:
+                            _metrics[_bnorm] = {}
+                        # YTM
+                        if _ci_ytm is not None and _ci_ytm < len(_brow):
+                            _yt_s = str(_brow[_ci_ytm] or '').replace('%','').replace(',','.').strip()
+                            try:
+                                _yt_v = round(float(_yt_s), 2)
+                                if 'ytm' not in _metrics[_bnorm]:
+                                    _metrics[_bnorm]['ytm'] = _yt_v
+                            except ValueError:
+                                pass
+                        # Rating
+                        if _ci_rat is not None and _ci_rat < len(_brow):
+                            _rat_s = str(_brow[_ci_rat] or '').strip().upper()
+                            if _rat_s and _rat_s in RATING_SCALE and 'credit_rating' not in _metrics[_bnorm]:
+                                _metrics[_bnorm]['credit_rating'] = _rat_s
+                        # Duration
+                        if _ci_dur is not None and _ci_dur < len(_brow):
+                            _dur_s = str(_brow[_ci_dur] or '').replace(',','.').strip()
+                            try:
+                                _dur_v = round(float(_dur_s), 2)
+                                if 0 < _dur_v < 40 and 'duration' not in _metrics[_bnorm]:
+                                    _metrics[_bnorm]['duration'] = _dur_v
+                            except ValueError:
+                                pass
+
                 # ── A: structured table extraction (best-case) ────────────
                 for tbl in (page.extract_tables() or []):
                     for row in tbl:
