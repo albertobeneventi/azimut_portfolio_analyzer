@@ -53,7 +53,7 @@ MANUAL_OVERRIDES: dict[str, str] = {
     "LU3081730460": "https://global.morningstar.com/it/investimenti/fondi/0P0001XRBV/quote",  # AZ F.1 Bd Bond Value A Cap EUR
     "LU2056384311": "https://global.morningstar.com/it/investimenti/fondi/0P0001JDVK/quote",  # AZ F.1 Bd Hybrids A Cap EUR
     "LU2168561392": "https://global.morningstar.com/it/investimenti/fondi/0P0001L78U/quote",  # AZ F.1 Bd Total Return Bond A Cap EUR
-    "LU1422848470": "https://global.morningstar.com/it/investimenti/fondi/0P00018CTU/quote",  # AZ Bond - Convertible Bond
+    "LU1422848470": "https://global.morningstar.com/it/investimenti/fondi/0P00018CTU/quote",
     "LU1225037040": "https://global.morningstar.com/it/investimenti/fondi/0P00016AVL/quote",  # AZ F.1 Eq. Global Emerging FoF A Cap EUR
     "LU3081725973": "https://global.morningstar.com/it/investimenti/fondi/0P0001XRC8/quote",  # AZ F.1 Eq. Emerging Markets Technology A Cap EUR
     "LU2622500598": "https://global.morningstar.com/it/investimenti/fondi/0P0001SUO1/quote",  # AZ F.1 Eq. Industrial Revolution 4.0 A Cap EUR
@@ -74,6 +74,8 @@ MANUAL_OVERRIDES: dict[str, str] = {
     "LU0262760399": "https://global.morningstar.com/it/investimenti/fondi/0P00006X34/quote",
     "LU2384058314": "https://global.morningstar.com/it/investimenti/fondi/0P0001NZW4/quote",
     "LU1621767737": "https://global.morningstar.com/it/investimenti/fondi/0P0001BP85/quote",
+    "LU2622195936": "https://global.morningstar.com/it/investimenti/fondi/0P0001TD5Y/quote",
+    "LU2097822436": "https://global.morningstar.com/it/investimenti/fondi/0P0001JX5F/quote",
     # Esempio:
     # "LU2168564065": "https://global.morningstar.com/it/investimenti/fondi/0P0001LA6Q/quote",
 }

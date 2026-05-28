@@ -71,7 +71,9 @@ FONDIDOC_HEADERS = {
 # ISIN mancanti nel foglio FIDA dell'Excel.
 # Aggiungere qui i fondi per cui l'Excel non riporta l'ISIN ma è noto.
 MANUAL_ISIN_OVERRIDES: dict[str, str] = {
-    "AZ Equity - Global Infrastructure": "LU1621767737",
+    "AZ Equity - Global Infrastructure":    "LU1621767737",
+    "AZ Bond - CoCo Bonds (EUR-hedged)":    "LU2622195936",
+    "AZ Bond - Convertible Bond":           "LU1422848470",
 }
 
 # Override for one fund whose FIDA sheet hyperlink points to class B
