@@ -3877,7 +3877,10 @@ def main():
                 f"&nbsp;·&nbsp;attivo in sessione</div>",
                 unsafe_allow_html=True)
         elif _xl_cache_date:
-            st.caption(f"📂 Excel da cache · {_xl_cache_date}")
+            st.markdown(f"<div style='font-size:.76rem;color:#7DD3FC;margin:-4px 0 6px 0;"
+                        f"padding:3px 8px;background:#0c2236;border-radius:4px;"
+                        f"border-left:3px solid #3b82f6;'>📂 Excel in cache &nbsp;·&nbsp; <b>{_xl_cache_date}</b></div>",
+                        unsafe_allow_html=True)
 
         # ── Uploader Factbook ─────────────────────────────────────────────────
         uploaded_fb = st.file_uploader(
@@ -3937,7 +3940,10 @@ def main():
             if _fb_doc_date_sb:
                 st.session_state["_fb_doc_date"] = _fb_doc_date_sb
         if _fb_doc_date_sb:
-            st.caption(f"📅 Factbook al {_fb_doc_date_sb}")
+            st.markdown(f"<div style='font-size:.76rem;color:#7DD3FC;margin:-4px 0 6px 0;"
+                        f"padding:3px 8px;background:#0c2236;border-radius:4px;"
+                        f"border-left:3px solid #3b82f6;'>📅 Factbook in cache &nbsp;·&nbsp; <b>{_fb_doc_date_sb}</b></div>",
+                        unsafe_allow_html=True)
 
         # ── Uploader GP ───────────────────────────────────────────────────────
         _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
@@ -3959,10 +3965,11 @@ def main():
             _gp_ed_str = (st.session_state.get("_gp_doc_edition")
                           or (_gp_cache_data or {}).get("_edition", ""))
             if _gp_cache_date:
-                _gp_cap = f"📂 GP da cache · {_gp_cache_date}"
-                if _gp_ed_str:
-                    _gp_cap += f" · {_gp_ed_str}"
-                st.caption(_gp_cap)
+                _gp_cap_extra = f" &nbsp;·&nbsp; {_gp_ed_str}" if _gp_ed_str else ""
+                st.markdown(f"<div style='font-size:.76rem;color:#7DD3FC;margin:-4px 0 6px 0;"
+                            f"padding:3px 8px;background:#0c2236;border-radius:4px;"
+                            f"border-left:3px solid #3b82f6;'>📂 GP in cache &nbsp;·&nbsp; <b>{_gp_cache_date}</b>{_gp_cap_extra}</div>",
+                            unsafe_allow_html=True)
             elif st.session_state.get("_gp_loaded_name"):
                 _gp_ed_extra = (f"&nbsp;·&nbsp;📅&nbsp;{_gp_ed_str}"
                                 if _gp_ed_str else "")
