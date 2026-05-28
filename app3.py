@@ -3535,8 +3535,8 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
             f"Peso suggerito: {_pm_pct}%</span></div>",
             unsafe_allow_html=True)
         st.markdown(
-            "<p style='font-size:.78rem;color:#94A3B8;font-style:italic;"
-            "padding:.4rem .2rem .1rem .4rem;margin:0;'>"
+            "<p style='font-size:.82rem;color:#475569;font-weight:500;"
+            "padding:.5rem .2rem .1rem .4rem;margin:0;'>"
             "I fondi Private Markets (ELTIF, RAIF, Demos, …) non sono inclusi "
             "nel portafoglio liquido — peso da considerare separatamente.</p>",
             unsafe_allow_html=True)
