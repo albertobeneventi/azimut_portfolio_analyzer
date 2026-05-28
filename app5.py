@@ -85,6 +85,24 @@ MANUAL_URL_OVERRIDES = {
     # AZ Bond - CoCo Bonds (senza hedging — nome alternativo nei portafogli)
     "AZ Bond - CoCo Bonds":
         "https://www.fondidoc.it/d/Index/FIDFM857/LU2622195423_az-f1-bd-coco-bonds-a-az-fund-cap-eur",
+    # ── Fondi GP presenti nel portafoglio suggerito ma assenti dall'Excel ────
+    # Aggiunti per garantire link nel PDF e dati analisi nel tab Rischio
+    "AZ F.1 All. Balanced Plus A Cap EUR":
+        "https://www.fondidoc.it/d/Index/FDM03292/LU3081370317_az-f1-all-balanced-plus-a-cap-eur",
+    "AZ F.1 Bd Total Return Bond A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZF1BNDC/LU2168561392_az-f1-bd-total-return-bond-a-cap-eur",
+    "AZ F.1 Eq. Global Emerging FoF A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZ1278/LU1225037040_az-f1-eq-global-emerging-fof-a-cap-eur",
+    "AZ F.1 Eq. Future Opportunities A Cap EUR":
+        "https://www.fondidoc.it/d/Index/G1U16575/LU2332973481_az-f1-eq-future-opportunities-a-cap-eur",
+    "AZ F.1 Eq. Global Growth A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZFGGSA/LU0804221488_az-f1-eq-global-growth-a-cap-eur",
+    "AZ F.1 Eq. World Minimum Volatility A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZFABAAZ/LU0262757098_az-f1-eq-world-minimum-volatility-a-cap-eur",
+    "AZ F.1 Eq. Global Value FoF A Cap EUR":
+        "https://www.fondidoc.it/d/Index/FDFM4094/LU2622203623_az-f1-eq-global-value-fof-a-cap-eur",
+    "AZ F.1 Eq. Small Cap Europe FoF A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZSEUAAZ/LU0262753857_az-f1-eq-small-cap-europe-fof-a-cap-eur",
 }
 
 # ── GITHUB REPO PERSISTENCE ──────────────────────────────────────────────────
@@ -3383,10 +3401,16 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
     # Per-scenario session-state key so weights reset when switching scenarios
     ss_key = f"_sg_w_{sc_name}"
     if ss_key not in st.session_state:
-        # Initialise with equal-weight defaults from the scenario
-        st.session_state[ss_key] = {
-            f["nome"]: round(f["weight"] * 100, 1) for f in funds
-        }
+        # Distribuisce il peso suggerito di ogni sottocategoria equamente tra i
+        # suoi fondi (es. alloc_balanced 25% / 6 fondi = 4,2% ciascuno).
+        _init_w: dict = {}
+        for _sc_k, _sc_fs in subcat_funds.items():
+            _sc_pct = sw.get(_sc_k, 0.0)
+            _n = len(_sc_fs)
+            _per = round(_sc_pct / _n, 1) if _n else 0.0
+            for _fnd in _sc_fs:
+                _init_w[_fnd["nome"]] = _per
+        st.session_state[ss_key] = _init_w
     ww: dict = st.session_state[ss_key]
 
     # ── Page header ───────────────────────────────────────────────────────────
@@ -3513,7 +3537,9 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                     f"{_qtl_rating_cell(_sg_isin, _qtlr)}</div>",
                     unsafe_allow_html=True)
             with c5:
-                default_w = float(ww.get(fname, round(f["weight"] * 100, 1)))
+                _n_sc = len(subcat_funds.get(f["subcat"], [f]))
+                _fb_w = round(sw.get(f["subcat"], 0.0) / _n_sc, 1)
+                default_w = float(ww.get(fname, _fb_w))
                 new_w = st.number_input(
                     "w", min_value=0.0, max_value=100.0,
                     value=default_w, step=0.5,
@@ -3525,19 +3551,59 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
         st.markdown("<hr style='margin:.25rem 0 0 0;border-color:#f1f5f9;'>",
                     unsafe_allow_html=True)
 
+    # ── Sezione Private Markets (peso suggerito, nessun fondo) ────────────────
+    _pm_pct = 0
+    _gp_info = gp_scenario.get("info", "")
+    _pm_m = re.search(r'Private\s+Markets\s+(\d+)%', _gp_info, re.IGNORECASE)
+    if _pm_m:
+        _pm_pct = int(_pm_m.group(1))
+    else:
+        _pm_pct = max(0, round(100 - sum(sw.values())))
+    if _pm_pct > 0:
+        st.markdown(
+            f"<div style='background:linear-gradient(90deg,#3D2B1F,#5C3D2E);"
+            f"color:#fff;padding:.45rem 1rem;border-radius:6px;margin-top:.7rem;"
+            f"display:flex;align-items:center;gap:.8rem;'>"
+            f"<span style='font-weight:700;font-size:.88rem;flex:1;'>"
+            f"Private Markets</span>"
+            f"<span style='background:#C9A84C;color:#0D1B2A;padding:2px 9px;"
+            f"border-radius:4px;font-size:.73rem;font-weight:700;white-space:nowrap;'>"
+            f"Peso suggerito: {_pm_pct}%</span></div>",
+            unsafe_allow_html=True)
+        st.markdown(
+            "<p style='font-size:.82rem;color:#475569;font-weight:500;"
+            "padding:.5rem .2rem .1rem .4rem;margin:0;'>"
+            "I fondi Private Markets (ELTIF, RAIF, Demos, …) non sono inclusi "
+            "nel portafoglio liquido — peso da considerare separatamente.</p>",
+            unsafe_allow_html=True)
+        st.markdown("<hr style='margin:.4rem 0 0 0;border-color:#f1f5f9;'>",
+                    unsafe_allow_html=True)
+
     # ── Total weight indicator ────────────────────────────────────────────────
-    total_w = sum(ww.get(f["nome"], 0.0) for f in funds)
-    diff    = abs(total_w - 100.0)
+    # Accetta sia somma=pesi_liquidi (es. 70%) che somma=100%
+    # (il secondo caso: l'utente ha incluso il peso PM nei fondi liquidi)
+    _liq_tgt  = float(sum(sw.get(k, 0) for k in subcat_funds)) or 100.0
+    total_w   = sum(ww.get(f["nome"], 0.0) for f in funds)
+    diff_liq  = abs(total_w - _liq_tgt)
+    diff_full = abs(total_w - 100.0)
+    diff      = min(diff_liq, diff_full)
     st.markdown("<br>", unsafe_allow_html=True)
     if diff < 0.15:
         st.markdown(
             f'<div class="w-ok">✅ Somma pesi: <b>{total_w:.1f}%</b>'
             f' — Portafoglio pronto!</div>', unsafe_allow_html=True)
     else:
-        left = 100.0 - total_w
+        # Mostra la distanza dal target più vicino
+        if diff_liq <= diff_full:
+            left = _liq_tgt - total_w
+            tgt_lbl = f"target liquido {_liq_tgt:.0f}%"
+        else:
+            left = 100.0 - total_w
+            tgt_lbl = "target 100%"
         st.markdown(
             f'<div class="w-warn">⚠️ Somma pesi: <b>{total_w:.1f}%</b>'
-            f' ({"mancano" if left>0 else "eccedono"} {abs(left):.1f}%)</div>',
+            f' ({"mancano" if left>0 else "eccedono"} {abs(left):.1f}%'
+            f' al {tgt_lbl})</div>',
             unsafe_allow_html=True)
 
     if diff > 1.0:
@@ -4347,13 +4413,42 @@ def main():
         except Exception:
             return f"<span style='color:#94A3B8;'>{s}</span>"
 
+    def _get_ana(nome: str) -> dict:
+        """Restituisce il dict 'analysis' cercando prima il nome diretto,
+        poi con fuzzy GP→FIDA (serve per i fondi del portafoglio suggerito
+        il cui nome non è stato risolto in chiave FIDA).
+
+        Quando _fd_live è la sessione live (Excel caricato) potrebbe non
+        contenere fondi GP del portafoglio suggerito: in quel caso usa
+        cached_fd (fund_cache.json bundled) come fallback aggiuntivo."""
+        def _lookup(src: dict) -> dict | None:
+            e = src.get(nome)
+            if not e:
+                res = _resolve_nome_for_fd(nome, src)
+                e = src.get(res)
+            if not e and nome:
+                _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', nome,
+                             flags=re.I).strip().lower()
+                if _sk:
+                    for _fk, _fv in src.items():
+                        if isinstance(_fv, dict) and _sk in _fk.lower():
+                            e = _fv; break
+            return e
+
+        entry = _lookup(_fd_live)
+        # Se non trovato in _fd_live (es. sessione live senza fondi GP)
+        # prova il cache bundled come fallback
+        if not entry and _fd_live is not cached_fd:
+            entry = _lookup(cached_fd)
+        return (entry or {}).get("analysis", {})
+
     def _perf_wavg(keys: list) -> dict:
         """Weighted average of performance/risk metrics across active funds."""
         totals = {k: 0.0 for k in keys}
         cov_w  = {k: 0.0 for k in keys}
         for _, _row in df_act.iterrows():
             _w   = _row[wcol]
-            _ana = _fd_live.get(_row["nome"], {}).get("analysis", {})
+            _ana = _get_ana(_row["nome"])
             for k in keys:
                 raw = _fb_metric(_row["nome"], k) or _ana.get(k, "")
                 try:
@@ -4720,7 +4815,7 @@ def main():
         _p_funds = []
         for _, _pr in _df_sorted.iterrows():
             _np  = _pr["nome"]
-            _ana = _fd_live.get(_np, {}).get("analysis", {})
+            _ana = _get_ana(_np)
             def _gp(k, _n=_np, _a=_ana):
                 v = _fb_metric(_n, k) or _a.get(k, "") or ""
                 return str(v) if v else "N/D"
@@ -4756,7 +4851,7 @@ def main():
         _r_funds = []
         for _, _rr in _df_sorted.iterrows():
             _nr  = _rr["nome"]
-            _ana = _fd_live.get(_nr, {}).get("analysis", {})
+            _ana = _get_ana(_nr)
             def _gr(k, _a=_ana):
                 return str(_a.get(k, "") or "") or "N/D"
             _r_funds.append([
