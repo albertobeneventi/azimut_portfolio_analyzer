@@ -1399,12 +1399,31 @@ def _parse_analysis(html: str) -> dict:
                 if len(cells)<2: continue
                 # Take first data row that has % values (fund row, not benchmark)
                 if any("%" in c for c in cells) and "annual_perf" not in d:
+                    # Rileva shift: la prima colonna-anno contiene il nome del fondo
+                    # (label column), non un valore numerico → tutte le chiavi
+                    # anno vanno decrement ate di 1.
+                    _yr_shift = 0
+                    if years:
+                        try:
+                            _fi  = header.index(years[0])
+                            _fv  = (cells[_fi] if _fi < len(cells) else "").replace(
+                                "%","").replace("+","").replace("-","").replace(",",".").strip()
+                            float(_fv)           # se riesce → no shift
+                        except (ValueError, IndexError):
+                            _yr_shift = -1       # label column → shift
                     annual = {}
                     for yr in years:
                         try:
                             idx = header.index(yr)
-                            annual[yr] = cells[idx] if idx<len(cells) else "—"
-                        except ValueError: pass
+                            val = cells[idx] if idx < len(cells) else "—"
+                            # Salta celle non numeriche (es. nome del fondo)
+                            _vc = val.replace("%","").replace("+","").replace(
+                                "-","").replace(",",".").strip()
+                            float(_vc)
+                            actual_yr = str(int(yr) + _yr_shift)
+                            annual[actual_yr] = val
+                        except (ValueError, IndexError):
+                            pass
                     if annual: d["annual_perf"] = annual
                     break
     return d
