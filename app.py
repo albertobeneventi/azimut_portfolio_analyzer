@@ -1163,7 +1163,7 @@ def save_factbook_to_repo(fb_data: dict) -> bool:
     )
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def load_quantalys_cache() -> dict:
     """Load ISIN → Quantalys URL mapping from data/quantalys_cache.json.
     Returns {} if the file does not exist yet (run build_quantalys_cache.py first).
@@ -1175,6 +1175,19 @@ def load_quantalys_cache() -> dict:
                 data = json.load(fh)
             # Keep only non-empty URLs
             return {k: v for k, v in data.items() if v}
+    except Exception:
+        pass
+    return {}
+
+
+@st.cache_data(ttl=3600)
+def load_quantalys_ratings() -> dict:
+    """Load ISIN → {score, globes} from data/quantalys_ratings.json."""
+    try:
+        fp = Path(__file__).parent / "data" / "quantalys_ratings.json"
+        if fp.exists() and fp.stat().st_size > 5:
+            with open(fp, encoding="utf-8") as fh:
+                return json.load(fh)
     except Exception:
         pass
     return {}
@@ -2798,7 +2811,7 @@ def free_portfolio_ui(data):
     st.markdown('<p class="sec-title">Costruttore Portafoglio Libero</p>',unsafe_allow_html=True)
 
     # ── FIDArating filter ─────────────────────────────────────────────────────
-    _fd_live_free = st.session_state.get("_scomp_fd", {})
+    _fd_live_free = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
     # Build rating map: fund_name → "5"/"4"/"3"/"2"/"1"/"—"
     _fr_map = {
         r["nome"]: (str(_fd_live_free.get(r["nome"], {})
@@ -2874,15 +2887,17 @@ def free_portfolio_ui(data):
         st.warning("⚠️ Nessun fondo corrisponde ai filtri selezionati.")
         fida_filtered = fida  # fallback: show all
 
-    # Build option labels: include FIDArating and Morningstar badges
+    # Build option labels: include FIDArating, Morningstar badges and ISIN (for search)
     def _fund_option(r):
         fr   = _fr_map.get(r["nome"], "—")
         ms_r = _ms_fr_map.get(r["nome"], "—")
         ftag = f" · F{fr}"   if fr   != "—" else ""
         mtag = f" · M{ms_r}" if ms_r != "—" else ""
+        isin = str(r.get("isin", "") or "").strip()
+        isin_tag = f"  {isin}" if isin else ""
         if r["macro_cat"] != "Altro":
-            return f"{r['nome']}{ftag}{mtag}  [{r['macro_cat']}]"
-        return f"{r['nome']}{ftag}{mtag}"
+            return f"{r['nome']}{ftag}{mtag}  [{r['macro_cat']}]{isin_tag}"
+        return f"{r['nome']}{ftag}{mtag}{isin_tag}"
 
     options = fida_filtered.apply(_fund_option, axis=1).tolist()
 
@@ -2894,7 +2909,7 @@ def free_portfolio_ui(data):
             "🔍  Seleziona / cerca fondo:",
             options=options,
             max_selections=1,
-            placeholder="Digita per cercare, es. «comm», «glob», «targ»…",
+            placeholder="Digita nome o ISIN, es. «glob», «LU0346»…",
             key="sel_fund_ms",
         )
         sel = _sel_list[0] if _sel_list else (options[0] if options else "")
@@ -2902,8 +2917,8 @@ def free_portfolio_ui(data):
     with c3:
         st.markdown("<br>",unsafe_allow_html=True)
         if st.button("➕ Aggiungi",use_container_width=True):
-            # Strip FIDArating tag "· FN", Morningstar tag "· MN" and macro-cat "  [...]"
-            fname = re.split(r'\s+·\s+[FM]\d|\s{2}\[', sel)[0].strip()
+            # Strip FIDArating "· FN", Morningstar "· MN", macro-cat "  [...]", ISIN "  LU..."
+            fname = re.split(r'\s+·\s+[FM]\d|\s{2}\[|\s{2}[A-Z]{2}[A-Z0-9]{10}', sel)[0].strip()
             if any(f["nome"]==fname for f in st.session_state.free_ptf):
                 st.toast("⚠️ Fondo già presente!",icon="⚠️")
             else:
@@ -3279,6 +3294,29 @@ def _ms_badge_gp(ms_r) -> str:
     return (f"<span style='color:{_col};font-weight:700;"
             f"font-size:.8rem;'>{filled}</span>")
 
+def _qtl_rating_cell(isin: str, ratings: dict) -> str:
+    """Restituisce HTML del rating Quantalys (stelle + score) per un dato ISIN."""
+    v = ratings.get(isin) if isin else None
+    if not v:
+        return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+    score  = v.get("score")
+    globes = v.get("globes")
+    if score is None:
+        return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+    if globes:
+        _gc = {1:"#EF4444",2:"#F97316",3:"#EAB308",4:"#22C55E",5:"#1B4FBB"}.get(globes,"#64748B")
+        stars = (f"<span style='color:{_gc};font-size:.85rem;letter-spacing:1px;'>"
+                 f"{'★'*globes}{'☆'*(5-globes)}</span>")
+    else:
+        stars = ""
+    sc_col = ("#1B4FBB" if score >= 80 else "#22C55E" if score >= 60
+              else "#EAB308" if score >= 40 else "#EF4444")
+    sc_html = (f"<span style='font-size:.7rem;font-weight:700;color:{sc_col};"
+               f"background:#F1F5F9;border-radius:3px;padding:1px 4px;'>{score}</span>")
+    tip = f"Score {score}/100" + (f" · {globes} globi" if globes else "")
+    return f"<span title='{tip}'>{stars}{'<br>' if stars else ''}{sc_html}</span>"
+
+
 # Sub-category display names (Italian labels)
 _SUBCAT_DISPLAY = {
     "alloc_balanced":  "Allocation – Balanced",
@@ -3340,8 +3378,11 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
         "aggiorna automaticamente quando la somma raggiunge 100 %."
     )
 
+    # ── Carica ratings Quantalys ──────────────────────────────────────────────
+    _qtlr = load_quantalys_ratings()   # {ISIN: {"score": N, "globes": N}}
+
     # ── Column headers (only once, above all subcategories) ───────────────────
-    _h1, _h2, _h3, _h4 = st.columns([4.5, 1.2, 1.2, 1.4])
+    _h1, _h2, _h3, _h4, _h5 = st.columns([4.5, 1.2, 1.2, 1.2, 1.4])
     _h1.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
                  "text-transform:uppercase;letter-spacing:.08em;'>Fondo</span>",
                  unsafe_allow_html=True)
@@ -3352,6 +3393,9 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                  "text-transform:uppercase;letter-spacing:.08em;'>Morningstar</span>",
                  unsafe_allow_html=True)
     _h4.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
+                 "text-transform:uppercase;letter-spacing:.08em;'>Quantalys</span>",
+                 unsafe_allow_html=True)
+    _h5.markdown("<span style='font-size:.7rem;color:#64748B;font-weight:600;"
                  "text-transform:uppercase;letter-spacing:.08em;'>Peso %</span>",
                  unsafe_allow_html=True)
     st.markdown("<hr style='margin:.15rem 0 .3rem 0;border-color:#e2e8f0;'>",
@@ -3420,7 +3464,15 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                 if url_sg else
                 f'<span style="font-size:.84rem;font-weight:500;color:#1e293b;">{short}</span>'
             )
-            c1, c2, c3, c4 = st.columns([4.5, 1.2, 1.2, 1.4])
+            # Estrai ISIN dall'URL FondiDoc (formato: .../ISIN_nome-fondo)
+            _sg_isin = ""
+            _sg_url_chk = url_sg or _fd_entry.get("url", "")
+            if _sg_url_chk:
+                _sg_m = re.search(r'/([A-Z]{2}[A-Z0-9]{10})[_/]', _sg_url_chk)
+                if _sg_m:
+                    _sg_isin = _sg_m.group(1)
+
+            c1, c2, c3, c4, c5 = st.columns([4.5, 1.2, 1.2, 1.2, 1.4])
             with c1:
                 st.markdown(
                     f"<div style='padding:.55rem 0 .3rem 0;'>{name_html}</div>",
@@ -3436,6 +3488,11 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                     f"{_ms_badge_gp(ms_r)}</div>",
                     unsafe_allow_html=True)
             with c4:
+                st.markdown(
+                    f"<div style='padding:.5rem 0 .25rem 0;'>"
+                    f"{_qtl_rating_cell(_sg_isin, _qtlr)}</div>",
+                    unsafe_allow_html=True)
+            with c5:
                 default_w = float(ww.get(fname, round(f["weight"] * 100, 1)))
                 new_w = st.number_input(
                     "w", min_value=0.0, max_value=100.0,
@@ -4371,8 +4428,32 @@ def main():
                     f'text-underline-offset:2px;">{nome}</a>')
         return nome
 
-    # ── Quantalys cache + ISIN map (used in tab_q) ───────────────────────────
-    _qtl_cache = load_quantalys_cache()   # {ISIN: "https://www.quantalys.it/Fonds/..."}
+    # ── Quantalys cache + ratings + ISIN map ────────────────────────────────
+    _qtl_cache   = load_quantalys_cache()    # {ISIN: "https://www.quantalys.it/Fonds/..."}
+    _qtl_ratings = load_quantalys_ratings()  # {ISIN: {"score": 87, "globes": 5}}
+
+    def _qtl_rating_html(isin: str) -> str:
+        """Restituisce HTML con score e globi Quantalys per una riga della tabella."""
+        v = _qtl_ratings.get(isin)
+        if not v:
+            return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+        score  = v.get("score")
+        globes = v.get("globes")
+        if score is None:
+            return "<span style='color:#CBD5E1;font-size:.75rem;'>—</span>"
+        if globes:
+            _glob_col = {1:"#EF4444",2:"#F97316",3:"#EAB308",4:"#22C55E",5:"#1B4FBB"}.get(globes,"#64748B")
+            stars = (f"<span style='color:{_glob_col};font-size:.9rem;letter-spacing:1px;'>"
+                     f"{'★'*globes}{'☆'*(5-globes)}</span>")
+        else:
+            stars = ""
+        score_col = ("#1B4FBB" if score >= 80 else "#22C55E" if score >= 60
+                     else "#EAB308" if score >= 40 else "#EF4444")
+        score_html = (f"<span style='font-size:.75rem;font-weight:700;color:{score_col};"
+                      f"background:#F1F5F9;border-radius:3px;padding:1px 4px;'>{score}</span>")
+        tooltip = f"Score {score}/100" + (f" · {globes} globi" if globes else "")
+        return (f"<span title='{tooltip}'>{stars}"
+                f"{'<br>' if stars else ''}{score_html}</span>")
     _fida_raw_ui = raw.get("FIDA", pd.DataFrame())
     _isin_map_ui: dict[str, str] = {}
     if isinstance(_fida_raw_ui, pd.DataFrame) and not _fida_raw_ui.empty and "isin" in _fida_raw_ui.columns:
@@ -4390,8 +4471,6 @@ def main():
         n = re.sub(r'^AZ\s+(?:F\.\d+\s+\w+[\. ]+|Fund\s+\d+\s*[-–]\s*|\w+\s*[-–]\s*)', '', n, flags=re.I).strip()
         # Rimuove suffisso di classe: "A Cap EUR", "B Dis EUR(i)", "A-HU Cap EUR Hdg", ecc.
         n = re.sub(r'\s+[A-Z](?:-[A-Z0-9]+)?\s+(?:Cap|Dis|Acc|Inc)\b.*$', '', n, flags=re.I).strip()
-        # Rimuove suffissi tipo "(EUR-hedged)", "(hedged)", "(EUR)" dal nome PDF/portafoglio
-        n = re.sub(r'\s*\([^)]*(?:hedg|eur|usd|gbp|chf)[^)]*\)', '', n, flags=re.I).strip()
         return n.lower()
 
     # Mappa concetto → url (fallback quando l'ISIN specifico non è in cache)
@@ -4439,6 +4518,7 @@ def main():
             f"<th style='{_TH}text-align:left;'>Cat. FIDA</th>"
             f"<th style='{_TH}text-align:center;'>FIDArating</th>"
             f"<th style='{_TH}text-align:center;'>Morningstar</th>"
+            f"<th style='{_TH}text-align:center;'>Quantalys</th>"
             f"</tr>"
         )
         _tbl_body = ""
@@ -4469,6 +4549,14 @@ def main():
             )
             _ms_r = _ms_live.get(_tr["nome"], {}).get("ms_rating")
             _ms_cell = _ms_badge_html(_ms_r)
+            # Quantalys rating — stesso lookup ISIN del tab_q
+            _tr_isin = _isin_map_ui.get(_tr["nome"], "")
+            if not _tr_isin:
+                _tr_n = re.sub(r'[^a-z0-9]', '', _tr["nome"].lower())
+                for _ik, _iv in _isin_map_ui.items():
+                    if re.sub(r'[^a-z0-9]', '', _ik.lower()) == _tr_n:
+                        _tr_isin = _iv; break
+            _qtl_r_cell = _qtl_rating_html(_tr_isin)
             _tbl_body += (
                 f"<tr>"
                 f"<td style='{_TC}font-weight:500;'>{_fund_link(_tr['nome'])}</td>"
@@ -4481,6 +4569,7 @@ def main():
                 f"<td style='{_TC}color:#64748B;'>{_cat}</td>"
                 f"<td style='{_TC}text-align:center;'>{_fida_cell}</td>"
                 f"<td style='{_TC}text-align:center;'>{_ms_cell}</td>"
+                f"<td style='{_TC}text-align:center;'>{_qtl_r_cell}</td>"
                 f"</tr>"
             )
         if _tbl_body:
