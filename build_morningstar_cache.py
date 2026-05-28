@@ -64,6 +64,10 @@ MANUAL_OVERRIDES: dict[str, str] = {
     "LU2458358681": "https://global.morningstar.com/it/investimenti/fondi/0P0001PU1D/quote",  # AZ F.1 Bd Frontier Markets Debt A-HU Cap EUR Hdg
     "LU1867654516": "https://global.morningstar.com/it/investimenti/fondi/0P0001H0WL/quote",  # AZ F.1 Eq. Escalator A Cap EUR
     "LU2056383347": "https://global.morningstar.com/it/investimenti/fondi/0P0001JDVE/quote",  # AZ F.1 Eq. Best Value A Cap EUR
+    "LU0804221488": "https://global.morningstar.com/it/investimenti/fondi/0P0000XBSE/quote",  # AZ F.1 Eq. Global Growth A Cap EUR
+    "LU0262757098": "https://global.morningstar.com/it/investimenti/fondi/0P00006X4I/quote",  # AZ F.1 Eq. World Minimum Volatility A Cap EUR
+    "LU2622203623": "https://global.morningstar.com/it/investimenti/fondi/0P0001SUO5/quote",  # AZ F.1 Eq. Global Value FoF A Cap EUR
+    "LU0262753857": "https://global.morningstar.com/it/investimenti/fondi/0P00006X4K/quote",  # AZ F.1 Eq. Small Cap Europe FoF A Cap EUR
     # Esempio:
     # "LU2168564065": "https://global.morningstar.com/it/investimenti/fondi/0P0001LA6Q/quote",
 }
