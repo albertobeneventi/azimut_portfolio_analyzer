@@ -3935,12 +3935,20 @@ def main():
         _ptf_options  = ["📋  PTF FULL", "⚡  PTF SHORT", "🎨  LIBERO"]
         if _gp_loaded:
             _ptf_options.append("🌐  SUGGERITO")
-        # Forza index esplicito: evita che st.rerun() resetti la selezione
-        _cur_ptf = st.session_state.get("_ptf_choice_radio", _ptf_options[0])
-        _ptf_idx = _ptf_options.index(_cur_ptf) if _cur_ptf in _ptf_options else 0
+        # _ptf_type è la selezione persistente: NON è legata al widget radio
+        # quindi non viene mai svuotata dal rerun che avviene prima del render
+        # del radio (es. Aggiorna Dati chiama st.rerun() prima della riga del radio).
+        # _ptf_choice_radio (widget key) può essere persa in quel rerun;
+        # _ptf_type resta e fornisce il fallback corretto per il parametro index.
+        _ptf_saved = st.session_state.get("_ptf_type", _ptf_options[0])
+        if _ptf_saved not in _ptf_options:
+            _ptf_saved = _ptf_options[0]
+        _ptf_idx = _ptf_options.index(_ptf_saved)
         ptf_choice = st.radio("TIPO PORTAFOGLIO", _ptf_options,
                               index=_ptf_idx,
                               key="_ptf_choice_radio")
+        # Aggiorna la selezione persistente ad ogni render
+        st.session_state["_ptf_type"] = ptf_choice
 
         if "LIBERO" not in ptf_choice and "free_ptf" in st.session_state:
             del st.session_state["free_ptf"]
