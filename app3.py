@@ -4395,13 +4395,29 @@ def main():
         except Exception:
             return f"<span style='color:#94A3B8;'>{s}</span>"
 
+    def _get_ana(nome: str) -> dict:
+        """Restituisce il dict 'analysis' cercando prima il nome diretto,
+        poi con fuzzy GP→FIDA (serve per i fondi del portafoglio suggerito
+        il cui nome non è stato risolto in chiave FIDA)."""
+        entry = _fd_live.get(nome)
+        if not entry:
+            resolved = _resolve_nome_for_fd(nome, _fd_live)
+            entry = _fd_live.get(resolved)
+        if not entry and nome:
+            _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', nome, flags=re.I).strip().lower()
+            if _sk:
+                for _fk, _fv in _fd_live.items():
+                    if isinstance(_fv, dict) and _sk in _fk.lower():
+                        entry = _fv; break
+        return (entry or {}).get("analysis", {})
+
     def _perf_wavg(keys: list) -> dict:
         """Weighted average of performance/risk metrics across active funds."""
         totals = {k: 0.0 for k in keys}
         cov_w  = {k: 0.0 for k in keys}
         for _, _row in df_act.iterrows():
             _w   = _row[wcol]
-            _ana = _fd_live.get(_row["nome"], {}).get("analysis", {})
+            _ana = _get_ana(_row["nome"])
             for k in keys:
                 raw = _fb_metric(_row["nome"], k) or _ana.get(k, "")
                 try:
@@ -4768,7 +4784,7 @@ def main():
         _p_funds = []
         for _, _pr in _df_sorted.iterrows():
             _np  = _pr["nome"]
-            _ana = _fd_live.get(_np, {}).get("analysis", {})
+            _ana = _get_ana(_np)
             def _gp(k, _n=_np, _a=_ana):
                 v = _fb_metric(_n, k) or _a.get(k, "") or ""
                 return str(v) if v else "N/D"
@@ -4804,7 +4820,7 @@ def main():
         _r_funds = []
         for _, _rr in _df_sorted.iterrows():
             _nr  = _rr["nome"]
-            _ana = _fd_live.get(_nr, {}).get("analysis", {})
+            _ana = _get_ana(_nr)
             def _gr(k, _a=_ana):
                 return str(_a.get(k, "") or "") or "N/D"
             _r_funds.append([
