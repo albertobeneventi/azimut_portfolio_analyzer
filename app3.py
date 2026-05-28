@@ -3363,13 +3363,17 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
     # Per-scenario session-state key so weights reset when switching scenarios
     ss_key = f"_sg_w_{sc_name}"
     if ss_key not in st.session_state:
-        # Distribuisce il peso suggerito della sottocategoria equamente tra i
-        # fondi che la compongono (es. 25% / 6 fondi = 4,2% ciascuno).
+        # Distribuisce il peso di ogni sottocategoria equamente tra i suoi fondi,
+        # normalizzando sul totale liquido (i private markets sono esclusi dalla
+        # lista ma il loro peso è ancora in sw → senza normalizzazione la somma
+        # sarebbe <100%).  Es.: sw alloc_balanced=25 su totale_liq=70 →
+        # peso normalizzato = 25/70*100 ≈ 35,7%  → 35,7/6 ≈ 5,95% per fondo.
+        _total_liq = sum(sw.get(k, 0) for k in subcat_funds) or sum(sw.values()) or 100
         _init_w: dict = {}
         for _sc_k, _sc_fs in subcat_funds.items():
             _sc_tot = sw.get(_sc_k, 0.0)
             _n = len(_sc_fs)
-            _per = round(_sc_tot / _n, 1) if _n else 0.0
+            _per = round(_sc_tot / _n / _total_liq * 100, 1) if (_sc_tot and _n) else 0.0
             for _fnd in _sc_fs:
                 _init_w[_fnd["nome"]] = _per
         st.session_state[ss_key] = _init_w
@@ -3509,6 +3513,34 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                 ww[fname] = new_w
 
         st.markdown("<hr style='margin:.25rem 0 0 0;border-color:#f1f5f9;'>",
+                    unsafe_allow_html=True)
+
+    # ── Sezione Private Markets (peso suggerito, nessun fondo) ────────────────
+    _pm_pct = 0
+    _gp_info = gp_scenario.get("info", "")
+    _pm_m = re.search(r'Private\s+Markets\s+(\d+)%', _gp_info, re.IGNORECASE)
+    if _pm_m:
+        _pm_pct = int(_pm_m.group(1))
+    else:
+        _pm_pct = max(0, round(100 - sum(sw.values())))
+    if _pm_pct > 0:
+        st.markdown(
+            f"<div style='background:linear-gradient(90deg,#3D2B1F,#5C3D2E);"
+            f"color:#fff;padding:.45rem 1rem;border-radius:6px;margin-top:.7rem;"
+            f"display:flex;align-items:center;gap:.8rem;'>"
+            f"<span style='font-weight:700;font-size:.88rem;flex:1;'>"
+            f"Private Markets</span>"
+            f"<span style='background:#C9A84C;color:#0D1B2A;padding:2px 9px;"
+            f"border-radius:4px;font-size:.73rem;font-weight:700;white-space:nowrap;'>"
+            f"Peso suggerito: {_pm_pct}%</span></div>",
+            unsafe_allow_html=True)
+        st.markdown(
+            "<p style='font-size:.78rem;color:#94A3B8;font-style:italic;"
+            "padding:.4rem .2rem .1rem .4rem;margin:0;'>"
+            "I fondi Private Markets (ELTIF, RAIF, Demos, …) non sono inclusi "
+            "nel portafoglio liquido — peso da considerare separatamente.</p>",
+            unsafe_allow_html=True)
+        st.markdown("<hr style='margin:.4rem 0 0 0;border-color:#f1f5f9;'>",
                     unsafe_allow_html=True)
 
     # ── Total weight indicator ────────────────────────────────────────────────
