@@ -85,6 +85,24 @@ MANUAL_URL_OVERRIDES = {
     # AZ Bond - CoCo Bonds (senza hedging — nome alternativo nei portafogli)
     "AZ Bond - CoCo Bonds":
         "https://www.fondidoc.it/d/Index/FIDFM857/LU2622195423_az-f1-bd-coco-bonds-a-az-fund-cap-eur",
+    # ── Fondi GP presenti nel portafoglio suggerito ma assenti dall'Excel ────
+    # Aggiunti per garantire link nel PDF e dati analisi nel tab Rischio
+    "AZ F.1 All. Balanced Plus A Cap EUR":
+        "https://www.fondidoc.it/d/Index/FDM03292/LU3081370317_az-f1-all-balanced-plus-a-cap-eur",
+    "AZ F.1 Bd Total Return Bond A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZF1BNDC/LU2168561392_az-f1-bd-total-return-bond-a-cap-eur",
+    "AZ F.1 Eq. Global Emerging FoF A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZ1278/LU1225037040_az-f1-eq-global-emerging-fof-a-cap-eur",
+    "AZ F.1 Eq. Future Opportunities A Cap EUR":
+        "https://www.fondidoc.it/d/Index/G1U16575/LU2332973481_az-f1-eq-future-opportunities-a-cap-eur",
+    "AZ F.1 Eq. Global Growth A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZFGGSA/LU0804221488_az-f1-eq-global-growth-a-cap-eur",
+    "AZ F.1 Eq. World Minimum Volatility A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZFABAAZ/LU0262757098_az-f1-eq-world-minimum-volatility-a-cap-eur",
+    "AZ F.1 Eq. Global Value FoF A Cap EUR":
+        "https://www.fondidoc.it/d/Index/FDFM4094/LU2622203623_az-f1-eq-global-value-fof-a-cap-eur",
+    "AZ F.1 Eq. Small Cap Europe FoF A Cap EUR":
+        "https://www.fondidoc.it/d/Index/AZSEUAAZ/LU0262753857_az-f1-eq-small-cap-europe-fof-a-cap-eur",
 }
 
 # ── GITHUB REPO PERSISTENCE ──────────────────────────────────────────────────

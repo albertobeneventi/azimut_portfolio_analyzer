@@ -873,6 +873,172 @@
     },
     "AZ Bond - CoCo Bonds (EUR-hedged)": {
       "url": "https://www.fondidoc.it/d/Index/FDFM4346/LU2622195936_az-f1-bd-coco-bonds-a-az-fund-cap-eur-hdg"
+    },
+    "AZ F.1 All. Balanced Plus A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03292/LU3081370317_az-f1-all-balanced-plus-a-cap-eur",
+      "isin": "LU3081370317",
+      "analysis": {
+        "ytd": "8.18%",
+        "perf_1y": "0.00%",
+        "perf_3y": "0.00%",
+        "perf_5y": "0.00%",
+        "vol_1y": "0.00%",
+        "vol_3y": "0.00%",
+        "vol_5y": "0.00%",
+        "neg_vol_1y": "0.00%",
+        "neg_vol_3y": "0.00%",
+        "neg_vol_5y": "0.00%"
+      }
+    },
+    "AZ F.1 Bd Total Return Bond A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZF1BNDC/LU2168561392_az-f1-bd-total-return-bond-a-cap-eur",
+      "isin": "LU2168561392",
+      "analysis": {
+        "ytd": "0.50%",
+        "perf_1y": "2.74%",
+        "perf_3y": "17.02%",
+        "perf_5y": "21.97%",
+        "vol_1y": "2.26%",
+        "vol_3y": "2.36%",
+        "vol_5y": "3.92%",
+        "neg_vol_1y": "1.76%",
+        "neg_vol_3y": "1.46%",
+        "neg_vol_5y": "2.78%",
+        "sharpe_1y": "0,47",
+        "sharpe_3y": "0,85",
+        "sharpe_5y": "0,54",
+        "sortino_1y": "0,60",
+        "sortino_3y": "1,38",
+        "sortino_5y": "0,76"
+      }
+    },
+    "AZ F.1 Eq. Global Emerging FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZ1278/LU1225037040_az-f1-eq-global-emerging-fof-a-cap-eur",
+      "isin": "LU1225037040",
+      "analysis": {
+        "ytd": "27.78%",
+        "perf_1y": "46.28%",
+        "perf_3y": "50.51%",
+        "perf_5y": "32.21%",
+        "vol_1y": "20.45%",
+        "vol_3y": "14.78%",
+        "vol_5y": "13.18%",
+        "neg_vol_1y": "11.45%",
+        "neg_vol_3y": "9.05%",
+        "neg_vol_5y": "8.46%",
+        "sharpe_1y": "1,63",
+        "sharpe_3y": "0,63",
+        "sharpe_5y": "0,19",
+        "sortino_1y": "2,92",
+        "sortino_3y": "1,03",
+        "sortino_5y": "0,30"
+      }
+    },
+    "AZ F.1 Eq. Future Opportunities A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U16575/LU2332973481_az-f1-eq-future-opportunities-a-cap-eur",
+      "isin": "LU2332973481",
+      "analysis": {
+        "ytd": "16.55%",
+        "perf_1y": "36.45%",
+        "perf_3y": "80.91%",
+        "perf_5y": "-2.13%",
+        "vol_1y": "19.68%",
+        "vol_3y": "21.06%",
+        "vol_5y": "27.09%",
+        "neg_vol_1y": "6.63%",
+        "neg_vol_3y": "11.40%",
+        "neg_vol_5y": "20.10%",
+        "sharpe_1y": "1,48",
+        "sharpe_3y": "0,86",
+        "sharpe_5y": "Neg",
+        "sortino_1y": "4,38",
+        "sortino_3y": "1,59",
+        "sortino_5y": "Neg"
+      }
+    },
+    "AZ F.1 Eq. Global Growth A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZFGGSA/LU0804221488_az-f1-eq-global-growth-a-cap-eur",
+      "isin": "LU0804221488",
+      "analysis": {
+        "ytd": "11.25%",
+        "perf_1y": "29.65%",
+        "perf_3y": "72.07%",
+        "perf_5y": "56.66%",
+        "vol_1y": "17.35%",
+        "vol_3y": "17.04%",
+        "vol_5y": "20.82%",
+        "neg_vol_1y": "6.21%",
+        "neg_vol_3y": "9.58%",
+        "neg_vol_5y": "13.73%",
+        "sharpe_1y": "1,47",
+        "sharpe_3y": "1,02",
+        "sharpe_5y": "0,33",
+        "sortino_1y": "4,11",
+        "sortino_3y": "1,82",
+        "sortino_5y": "0,50"
+      }
+    },
+    "AZ F.1 Eq. World Minimum Volatility A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZFABAAZ/LU0262757098_az-f1-eq-world-minimum-volatility-a-cap-eur",
+      "isin": "LU0262757098",
+      "analysis": {
+        "ytd": "1.28%",
+        "perf_1y": "-3.12%",
+        "perf_3y": "9.25%",
+        "perf_5y": "12.67%",
+        "vol_1y": "8.34%",
+        "vol_3y": "8.31%",
+        "vol_5y": "9.08%",
+        "neg_vol_1y": "6.59%",
+        "neg_vol_3y": "5.78%",
+        "neg_vol_5y": "6.33%",
+        "sharpe_1y": "Neg",
+        "sharpe_3y": "0,02",
+        "sharpe_5y": "0,06",
+        "sortino_1y": "Neg",
+        "sortino_3y": "0,03",
+        "sortino_5y": "0,09"
+      }
+    },
+    "AZ F.1 Eq. Global Value FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM4094/LU2622203623_az-f1-eq-global-value-fof-a-cap-eur",
+      "isin": "LU2622203623",
+      "analysis": {
+        "ytd": "13.46%",
+        "perf_1y": "27.00%",
+        "perf_3y": "0.00%",
+        "perf_5y": "0.00%",
+        "vol_1y": "10.66%",
+        "vol_3y": "0.00%",
+        "vol_5y": "0.00%",
+        "neg_vol_1y": "6.89%",
+        "neg_vol_3y": "0.00%",
+        "neg_vol_5y": "0.00%",
+        "sharpe_1y": "1,92",
+        "sortino_1y": "2,96"
+      }
+    },
+    "AZ F.1 Eq. Small Cap Europe FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZSEUAAZ/LU0262753857_az-f1-eq-small-cap-europe-fof-a-cap-eur",
+      "isin": "LU0262753857",
+      "analysis": {
+        "ytd": "10.33%",
+        "perf_1y": "17.03%",
+        "perf_3y": "30.13%",
+        "perf_5y": "10.65%",
+        "vol_1y": "13.69%",
+        "vol_3y": "11.79%",
+        "vol_5y": "13.41%",
+        "neg_vol_1y": "8.03%",
+        "neg_vol_3y": "7.53%",
+        "neg_vol_5y": "9.84%",
+        "sharpe_1y": "1,25",
+        "sharpe_3y": "0,37",
+        "sharpe_5y": "0,01",
+        "sortino_1y": "2,13",
+        "sortino_3y": "0,58",
+        "sortino_5y": "0,02"
+      }
     }
   },
   "ms_data": {
