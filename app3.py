@@ -3823,8 +3823,15 @@ def main():
                 f"&nbsp;·&nbsp;attivo in sessione</div>",
                 unsafe_allow_html=True)
 
-        # Caption con la data di riferimento del Factbook (da session_state)
+        # Caption con la data di riferimento del Factbook.
+        # Al primo render di sessione legge direttamente il JSON su disco
+        # (la sidebar gira prima del main content che normalmente lo salva).
         _fb_doc_date_sb = st.session_state.get("_fb_doc_date", "")
+        if not _fb_doc_date_sb:
+            _fb_auto_q = load_factbook_auto()
+            _fb_doc_date_sb = (_fb_auto_q or {}).get("_ref_date", "")
+            if _fb_doc_date_sb:
+                st.session_state["_fb_doc_date"] = _fb_doc_date_sb
         if _fb_doc_date_sb:
             st.caption(f"📅 Factbook al {_fb_doc_date_sb}")
 
@@ -3843,7 +3850,10 @@ def main():
         if uploaded_gp is not None:
             st.session_state["_gp_loaded_name"] = uploaded_gp.name
         if uploaded_gp is None:
-            _gp_ed_str = st.session_state.get("_gp_doc_edition", "")
+            # Prendi edizione da session_state (render successivi) oppure
+            # direttamente dalla cache su disco (primo render di sessione)
+            _gp_ed_str = (st.session_state.get("_gp_doc_edition")
+                          or (_gp_cache_data or {}).get("_edition", ""))
             if _gp_cache_date:
                 _gp_cap = f"📂 GP da cache · {_gp_cache_date}"
                 if _gp_ed_str:
