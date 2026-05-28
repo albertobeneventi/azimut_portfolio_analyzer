@@ -3304,6 +3304,35 @@ def parse_global_perspectives(pdf_bytes: bytes):
             "subcat_weights": sw,
         }
 
+    # ── 5. Estrai edizione / trimestre dalla prima pagina ────────────────────────
+    if result:
+        _gp_edition = ""
+        _cover = pages[0] if pages else ""
+        # Cerca "Q1 2025" / "Q2 2026" ecc.
+        _em = re.search(r'\bQ([1-4])\s*(20\d{2})\b', _cover)
+        if _em:
+            _gp_edition = f"Q{_em.group(1)} {_em.group(2)}"
+        if not _gp_edition:
+            # Cerca "1° Trimestre 2025" o "Trimestre 1 2025"
+            _em = re.search(r'(\d)\s*[°o]?\s*[Tt]rimestre\s*(20\d{2})', _cover)
+            if not _em:
+                _em = re.search(r'[Tt]rimestre\s+(\d)\s*(20\d{2})', _cover)
+            if _em:
+                _qmap = {"1": "Q1", "2": "Q2", "3": "Q3", "4": "Q4"}
+                _gp_edition = f"{_qmap.get(_em.group(1), 'Q?')} {_em.group(2)}"
+        if not _gp_edition:
+            # Cerca "Edizione N" o "Edition N"
+            _em = re.search(r'[Ee]dizione\s+(\d+)', _cover)
+            if _em:
+                _gp_edition = f"Ed. {_em.group(1)}"
+        if not _gp_edition:
+            # Ultimo tentativo: prime 400 chars del testo completo (copertina)
+            _em = re.search(r'\bQ([1-4])\s*(20\d{2})\b', full[:400])
+            if _em:
+                _gp_edition = f"Q{_em.group(1)} {_em.group(2)}"
+        if _gp_edition:
+            result["_edition"] = _gp_edition
+
     return result if result else None
 
 
@@ -3761,11 +3790,15 @@ def main():
                 st.session_state["_fb_pending_bytes"] = _fb_bytes_snap
                 st.session_state["_fb_loaded_name"]   = uploaded_fb.name
         elif st.session_state.get("_fb_loaded_name"):
+            _fb_dt_str   = st.session_state.get("_fb_doc_date", "")
+            _fb_dt_extra = (f"&nbsp;·&nbsp;📅&nbsp;{_fb_dt_str}"
+                            if _fb_dt_str else "")
             st.markdown(
                 f"<div style='background:#0d2b1a;border:1px solid #166534;"
                 f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
                 f"font-size:.78rem;color:#86efac;'>"
                 f"✅&nbsp;<b>{st.session_state['_fb_loaded_name']}</b>"
+                f"{_fb_dt_extra}"
                 f"&nbsp;·&nbsp;attivo in sessione</div>",
                 unsafe_allow_html=True)
 
@@ -3790,6 +3823,11 @@ def main():
                 f"&nbsp;·&nbsp;attivo in sessione</div>",
                 unsafe_allow_html=True)
 
+        # Caption con la data di riferimento del Factbook (da session_state)
+        _fb_doc_date_sb = st.session_state.get("_fb_doc_date", "")
+        if _fb_doc_date_sb:
+            st.caption(f"📅 Factbook al {_fb_doc_date_sb}")
+
         # ── Uploader GP ───────────────────────────────────────────────────────
         _gp_cache_data, _gp_cache_fname, _gp_cache_date = load_gp_cache()
         if _gp_cache_date:
@@ -3805,14 +3843,21 @@ def main():
         if uploaded_gp is not None:
             st.session_state["_gp_loaded_name"] = uploaded_gp.name
         if uploaded_gp is None:
+            _gp_ed_str = st.session_state.get("_gp_doc_edition", "")
             if _gp_cache_date:
-                st.caption(f"📂 GP da cache · {_gp_cache_date}")
+                _gp_cap = f"📂 GP da cache · {_gp_cache_date}"
+                if _gp_ed_str:
+                    _gp_cap += f" · {_gp_ed_str}"
+                st.caption(_gp_cap)
             elif st.session_state.get("_gp_loaded_name"):
+                _gp_ed_extra = (f"&nbsp;·&nbsp;📅&nbsp;{_gp_ed_str}"
+                                if _gp_ed_str else "")
                 st.markdown(
                     f"<div style='background:#0d2b1a;border:1px solid #166534;"
                     f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
                     f"font-size:.78rem;color:#86efac;'>"
                     f"✅&nbsp;<b>{st.session_state['_gp_loaded_name']}</b>"
+                    f"{_gp_ed_extra}"
                     f"&nbsp;·&nbsp;attivo in sessione</div>",
                     unsafe_allow_html=True)
 
@@ -3824,6 +3869,10 @@ def main():
                 if _gp_parsed:
                     st.session_state["_gp_data"]    = _gp_parsed
                     st.session_state["_gp_filename"] = uploaded_gp.name
+                    # Salva edizione (es. "Q2 2025") se presente nel PDF
+                    _ed = _gp_parsed.get("_edition", "")
+                    if _ed:
+                        st.session_state["_gp_doc_edition"] = _ed
                     # Nuovo PDF → il fetch FondiDoc va rifatto
                     st.session_state.pop("_gp_fetch_done", None)
                     # Salva su disco per le sessioni future
@@ -3837,10 +3886,15 @@ def main():
             if not st.session_state.get("_gp_data") and _gp_cache_data:
                 st.session_state["_gp_data"]    = _gp_cache_data
                 st.session_state["_gp_filename"] = _gp_cache_fname
+                # Ripristina edizione dalla cache
+                _ed_c = _gp_cache_data.get("_edition", "")
+                if _ed_c and "_gp_doc_edition" not in st.session_state:
+                    st.session_state["_gp_doc_edition"] = _ed_c
             elif st.session_state.get("_gp_filename") and not _gp_cache_data:
                 # Cache rimossa manualmente → pulisci session state
-                st.session_state.pop("_gp_data",     None)
-                st.session_state.pop("_gp_filename",  None)
+                st.session_state.pop("_gp_data",        None)
+                st.session_state.pop("_gp_filename",     None)
+                st.session_state.pop("_gp_doc_edition",  None)
 
         # ── Card stato dati ───────────────────────────────────────────────────
         st.markdown("<hr style='margin:.25rem 0 .3rem 0;border:none;border-top:1px solid #1a3050;'>", unsafe_allow_html=True)
@@ -3858,11 +3912,13 @@ def main():
         _n_gp    = 0
         if _gp_loaded_now:
             _gp_ok  = st.session_state["_gp_data"]
-            _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values())
+            _n_gp   = sum(len(v["funds"]) for v in _gp_ok.values()
+                         if isinstance(v, dict) and "funds" in v)
             _fd_chk = _fd_now
             _gp_miss = len(set(
                 f["nome"]
                 for sc in _gp_ok.values()
+                if isinstance(sc, dict) and "funds" in sc
                 for f in sc.get("funds", [])
                 if not (
                     _fd_chk.get(_resolve_nome_for_fd(f["nome"], _fd_chk), {}).get("url", "")
@@ -4025,7 +4081,8 @@ def main():
 
         # ── Scenario — sotto SUGGERITO ────────────────────────────────────────
         if "SUGGERITO" in ptf_choice:
-            _gp_keys = list(st.session_state.get("_gp_data", {}).keys())
+            _gp_keys = [k for k in st.session_state.get("_gp_data", {}).keys()
+                        if not k.startswith("_")]
             _SC_LABELS = {
                 "Base": "⚖️  Scenario Base",
                 "Bear": "🐻  Scenario Bear",
@@ -4287,6 +4344,12 @@ def main():
             st.success(f"✅ Dati Factbook caricati da Excel — {len(_xl)} fondi")
         else:
             st.warning("⚠️ Excel Factbook vuoto — uso dati precedenti")
+
+    # Salva data di riferimento del Factbook in session_state
+    # (viene mostrata nella sidebar accanto all'uploader)
+    _fb_ref_date = (factbook_data or {}).get("_ref_date", "")
+    if _fb_ref_date:
+        st.session_state["_fb_doc_date"] = _fb_ref_date
 
     if _is_suggerito:
         _gp_data_main = st.session_state.get("_gp_data", {})
