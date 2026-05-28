@@ -1956,8 +1956,6 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     if fida_df is not None and not fida_df.empty and "isin" in fida_df.columns:
         isin_map = {r["nome"]: str(r["isin"]).strip() for _, r in fida_df.iterrows()
                     if r.get("isin") and str(r.get("isin","")).strip()}
-    # Quantalys URL cache: {ISIN → URL} — usato come fallback link nel PDF
-    _pdf_qtl_cache = load_quantalys_cache()
     w_az  = (d_act[wcol]*d_act["az_pct"]).sum()*100
     w_obb = (d_act[wcol]*d_act["obb_pct"]).sum()*100
 
@@ -2052,25 +2050,6 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                     if isinstance(_fv, dict) and _sk in _fk.lower() and _fv.get("url"):
                         url = _fv["url"]
                         break
-            # 4) Fuzzy su nome_orig (GP name) se diverso dal resolved
-            if not url and _rn_disp and _rn_disp != _rn:
-                _sk2 = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', _rn_disp, flags=re.I).strip().lower()
-                if _sk2 and _sk2 != _sk:
-                    for _fk, _fv in _fd.items():
-                        if isinstance(_fv, dict) and _sk2 in _fk.lower() and _fv.get("url"):
-                            url = _fv["url"]
-                            break
-            # 5) ISIN → pagina Quantalys (ultimo fallback)
-            if not url:
-                _isin_fb = (isin_map.get(_rn, "")
-                            or isin_map.get(_rn_disp, ""))
-                if not _isin_fb and _sk:
-                    # cerca ISIN per nome breve in isin_map
-                    for _ik, _iv in isin_map.items():
-                        if _sk in _ik.lower():
-                            _isin_fb = _iv; break
-                if _isin_fb:
-                    url = _pdf_qtl_cache.get(_isin_fb, "")
         name_s = (_rn_disp[:24] + "…") if len(_rn_disp) > 24 else _rn_disp
         pct_s  = f"{r[wcol]*100:.1f}%"
         if url:
@@ -3384,20 +3363,10 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
     # Per-scenario session-state key so weights reset when switching scenarios
     ss_key = f"_sg_w_{sc_name}"
     if ss_key not in st.session_state:
-        # Distribuisce il peso di ogni sottocategoria equamente tra i suoi fondi,
-        # normalizzando sul totale liquido (i private markets sono esclusi dalla
-        # lista ma il loro peso è ancora in sw → senza normalizzazione la somma
-        # sarebbe <100%).  Es.: sw alloc_balanced=25 su totale_liq=70 →
-        # peso normalizzato = 25/70*100 ≈ 35,7%  → 35,7/6 ≈ 5,95% per fondo.
-        _total_liq = sum(sw.get(k, 0) for k in subcat_funds) or sum(sw.values()) or 100
-        _init_w: dict = {}
-        for _sc_k, _sc_fs in subcat_funds.items():
-            _sc_tot = sw.get(_sc_k, 0.0)
-            _n = len(_sc_fs)
-            _per = round(_sc_tot / _n / _total_liq * 100, 1) if (_sc_tot and _n) else 0.0
-            for _fnd in _sc_fs:
-                _init_w[_fnd["nome"]] = _per
-        st.session_state[ss_key] = _init_w
+        # Initialise with equal-weight defaults from the scenario
+        st.session_state[ss_key] = {
+            f["nome"]: round(f["weight"] * 100, 1) for f in funds
+        }
     ww: dict = st.session_state[ss_key]
 
     # ── Page header ───────────────────────────────────────────────────────────
@@ -3534,34 +3503,6 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                 ww[fname] = new_w
 
         st.markdown("<hr style='margin:.25rem 0 0 0;border-color:#f1f5f9;'>",
-                    unsafe_allow_html=True)
-
-    # ── Sezione Private Markets (peso suggerito, nessun fondo) ────────────────
-    _pm_pct = 0
-    _gp_info = gp_scenario.get("info", "")
-    _pm_m = re.search(r'Private\s+Markets\s+(\d+)%', _gp_info, re.IGNORECASE)
-    if _pm_m:
-        _pm_pct = int(_pm_m.group(1))
-    else:
-        _pm_pct = max(0, round(100 - sum(sw.values())))
-    if _pm_pct > 0:
-        st.markdown(
-            f"<div style='background:linear-gradient(90deg,#3D2B1F,#5C3D2E);"
-            f"color:#fff;padding:.45rem 1rem;border-radius:6px;margin-top:.7rem;"
-            f"display:flex;align-items:center;gap:.8rem;'>"
-            f"<span style='font-weight:700;font-size:.88rem;flex:1;'>"
-            f"Private Markets</span>"
-            f"<span style='background:#C9A84C;color:#0D1B2A;padding:2px 9px;"
-            f"border-radius:4px;font-size:.73rem;font-weight:700;white-space:nowrap;'>"
-            f"Peso suggerito: {_pm_pct}%</span></div>",
-            unsafe_allow_html=True)
-        st.markdown(
-            "<p style='font-size:.82rem;color:#475569;font-weight:500;"
-            "padding:.5rem .2rem .1rem .4rem;margin:0;'>"
-            "I fondi Private Markets (ELTIF, RAIF, Demos, …) non sono inclusi "
-            "nel portafoglio liquido — peso da considerare separatamente.</p>",
-            unsafe_allow_html=True)
-        st.markdown("<hr style='margin:.4rem 0 0 0;border-color:#f1f5f9;'>",
                     unsafe_allow_html=True)
 
     # ── Total weight indicator ────────────────────────────────────────────────
@@ -4386,29 +4327,13 @@ def main():
         except Exception:
             return f"<span style='color:#94A3B8;'>{s}</span>"
 
-    def _get_ana(nome: str) -> dict:
-        """Restituisce il dict 'analysis' per un fondo: prova lookup diretto,
-        poi risolve il nome GP → chiave FIDA tramite fuzzy search in _fd_live."""
-        entry = _fd_live.get(nome)
-        if not entry:
-            resolved = _resolve_nome_for_fd(nome, _fd_live)
-            entry = _fd_live.get(resolved)
-        if not entry and nome:
-            # Ulteriore fuzzy: nome breve (senza prefisso "AZ [Fam] - ")
-            _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', nome, flags=re.I).strip().lower()
-            if _sk:
-                for _fk, _fv in _fd_live.items():
-                    if isinstance(_fv, dict) and _sk in _fk.lower():
-                        entry = _fv; break
-        return (entry or {}).get("analysis", {})
-
     def _perf_wavg(keys: list) -> dict:
         """Weighted average of performance/risk metrics across active funds."""
         totals = {k: 0.0 for k in keys}
         cov_w  = {k: 0.0 for k in keys}
         for _, _row in df_act.iterrows():
             _w   = _row[wcol]
-            _ana = _get_ana(_row["nome"])
+            _ana = _fd_live.get(_row["nome"], {}).get("analysis", {})
             for k in keys:
                 raw = _fb_metric(_row["nome"], k) or _ana.get(k, "")
                 try:
@@ -4775,7 +4700,7 @@ def main():
         _p_funds = []
         for _, _pr in _df_sorted.iterrows():
             _np  = _pr["nome"]
-            _ana = _get_ana(_np)
+            _ana = _fd_live.get(_np, {}).get("analysis", {})
             def _gp(k, _n=_np, _a=_ana):
                 v = _fb_metric(_n, k) or _a.get(k, "") or ""
                 return str(v) if v else "N/D"
@@ -4811,7 +4736,7 @@ def main():
         _r_funds = []
         for _, _rr in _df_sorted.iterrows():
             _nr  = _rr["nome"]
-            _ana = _get_ana(_nr)
+            _ana = _fd_live.get(_nr, {}).get("analysis", {})
             def _gr(k, _a=_ana):
                 return str(_a.get(k, "") or "") or "N/D"
             _r_funds.append([
