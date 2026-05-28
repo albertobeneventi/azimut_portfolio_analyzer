@@ -4319,11 +4319,13 @@ def main():
             return None
         return entry.get(key)
 
-    # Prefer live FondiDoc data fetched in this session over on-disk cache
-    _fd_live = st.session_state.get("_scomp_fd") or cached_fd
+    # Unisce fund_cache (bundled, contiene i fondi del portafoglio suggerito)
+    # con i dati live fetchati in sessione (portafoglio caricato dall'utente).
+    # cached_fd come base → _scomp_fd sovrascrive/aggiunge chiavi più recenti.
+    _fd_live = {**cached_fd, **(st.session_state.get("_scomp_fd") or {})}
 
-    # Morningstar ratings — from this session or from disk cache
-    _ms_live = st.session_state.get("_ms_data") or load_ms_cache()
+    # Morningstar ratings — merge cache disco + dati live sessione
+    _ms_live = {**load_ms_cache(), **(st.session_state.get("_ms_data") or {})}
 
     # Morningstar color scale (amber/gold palette)
     _MS_COL = {5: "#78350F", 4: "#92400E", 3: "#B45309", 2: "#475569", 1: "#94A3B8"}
@@ -4386,13 +4388,29 @@ def main():
         except Exception:
             return f"<span style='color:#94A3B8;'>{s}</span>"
 
+    def _get_ana(nome: str) -> dict:
+        """Restituisce il dict 'analysis' per un fondo: prova lookup diretto,
+        poi risolve il nome GP → chiave FIDA tramite fuzzy search in _fd_live."""
+        entry = _fd_live.get(nome)
+        if not entry:
+            resolved = _resolve_nome_for_fd(nome, _fd_live)
+            entry = _fd_live.get(resolved)
+        if not entry and nome:
+            # Ulteriore fuzzy: nome breve (senza prefisso "AZ [Fam] - ")
+            _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', nome, flags=re.I).strip().lower()
+            if _sk:
+                for _fk, _fv in _fd_live.items():
+                    if isinstance(_fv, dict) and _sk in _fk.lower():
+                        entry = _fv; break
+        return (entry or {}).get("analysis", {})
+
     def _perf_wavg(keys: list) -> dict:
         """Weighted average of performance/risk metrics across active funds."""
         totals = {k: 0.0 for k in keys}
         cov_w  = {k: 0.0 for k in keys}
         for _, _row in df_act.iterrows():
             _w   = _row[wcol]
-            _ana = _fd_live.get(_row["nome"], {}).get("analysis", {})
+            _ana = _get_ana(_row["nome"])
             for k in keys:
                 raw = _fb_metric(_row["nome"], k) or _ana.get(k, "")
                 try:
@@ -4759,7 +4777,7 @@ def main():
         _p_funds = []
         for _, _pr in _df_sorted.iterrows():
             _np  = _pr["nome"]
-            _ana = _fd_live.get(_np, {}).get("analysis", {})
+            _ana = _get_ana(_np)
             def _gp(k, _n=_np, _a=_ana):
                 v = _fb_metric(_n, k) or _a.get(k, "") or ""
                 return str(v) if v else "N/D"
@@ -4795,7 +4813,7 @@ def main():
         _r_funds = []
         for _, _rr in _df_sorted.iterrows():
             _nr  = _rr["nome"]
-            _ana = _fd_live.get(_nr, {}).get("analysis", {})
+            _ana = _get_ana(_nr)
             def _gr(k, _a=_ana):
                 return str(_a.get(k, "") or "") or "N/D"
             _r_funds.append([
