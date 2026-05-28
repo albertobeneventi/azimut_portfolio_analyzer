@@ -1481,6 +1481,8 @@ def fetch_gp_urls_missing(gp_data: dict, existing_cache: dict,
     # Include fondi assenti dal cache E fondi in cache ma senza URL
     missing: dict = {}   # resolved_name → pdf_name
     for sc_data in gp_data.values():
+        if not isinstance(sc_data, dict):
+            continue
         for f in sc_data.get("funds", []):
             pdf_name = f["nome"]
             res_name = _resolve_nome_for_fd(pdf_name, existing_cache)
