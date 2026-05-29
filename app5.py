@@ -2199,16 +2199,17 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     EY = S("EY", fontName="Helvetica",       fontSize=8,  textColor=rl_colors.HexColor("#94A3B8"), spaceAfter=4,letterSpacing=1.5)
     SU = S("SU", fontName="Helvetica",       fontSize=10, textColor=rl_colors.HexColor("#64748B"), spaceAfter=4)
     SC = S("SC", fontName="Helvetica-Bold",  fontSize=11, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=14,spaceAfter=8)
-    BD = S("BD", fontName="Helvetica",       fontSize=8.5,textColor=rl_colors.HexColor("#1E293B"), leading=13)
-    SM  = S("SM",  fontName="Helvetica",      fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11)
+    BD = S("BD", fontName="Helvetica",       fontSize=8.5,textColor=rl_colors.HexColor("#1E293B"), leading=13, alignment=1)
+    SM  = S("SM",  fontName="Helvetica",      fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=1)
     SMC = S("SMC", fontName="Helvetica",      fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=1)
+    SML = S("SML", fontName="Helvetica",      fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=0)
     FT = S("FT", fontName="Helvetica-Oblique",fontSize=7, textColor=rl_colors.HexColor("#94A3B8"), leading=10)
     FS = S("FS", fontName="Helvetica-Bold",  fontSize=13, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=4,spaceAfter=2)
     FK = S("FK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#64748B"), spaceAfter=2)
     LK = S("LK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1B4FBB"), spaceAfter=2)
     # HDR: sempre bianco+grassetto — per celle intestazione su sfondo scuro
     # (TEXTCOLOR di TableStyle NON sovrascrive il colore dei Paragraph — serve lo stile dedicato)
-    HDR = S("HDR", fontName="Helvetica-Bold", fontSize=7.5,textColor=rl_colors.white, leading=11)
+    HDR = S("HDR", fontName="Helvetica-Bold", fontSize=7.5,textColor=rl_colors.white, leading=11, alignment=1)
     HDRC= S("HDRC",fontName="Helvetica-Bold", fontSize=7.5,textColor=rl_colors.white, leading=11, alignment=1)
 
     story = []
@@ -2468,7 +2469,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         return out
 
     # Paragraph style for portfolio summary row
-    WH  = S("WH",  fontName="Helvetica-Bold", fontSize=8, textColor=rl_colors.white, leading=11)
+    WH  = S("WH",  fontName="Helvetica-Bold", fontSize=8, textColor=rl_colors.white, leading=11, alignment=1)
     WHC = S("WHC", fontName="Helvetica-Bold", fontSize=8, textColor=rl_colors.white, leading=11, alignment=1)
 
     def pstyle_w(val):
@@ -2716,12 +2717,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             return Paragraph(
                 _v,
                 S(f"SMF{_v}", fontName="Helvetica-Bold", fontSize=7.5,
-                  textColor=rl_colors.white, leading=11))
+                  textColor=rl_colors.white, leading=11, alignment=1))
         if _v in ("1", "2"):
             return Paragraph(
                 _v,
                 S(f"SMF{_v}", fontName="Helvetica-Bold", fontSize=7.5,
-                  textColor=rl_colors.HexColor("#1E293B"), leading=11))
+                  textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=1))
         return Paragraph(val, SM)   # "—" or unknown
 
     # Morningstar data for PDF (loaded from cache / session state)
@@ -2743,11 +2744,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             return Paragraph(
                 label,
                 S(f"SMMSP{v}", fontName="Helvetica-Bold", fontSize=7,
-                  textColor=rl_colors.white, leading=11))
+                  textColor=rl_colors.white, leading=11, alignment=1))
         return Paragraph(
             label,
             S(f"SMMSd{v}", fontName="Helvetica", fontSize=7,
-              textColor=rl_colors.HexColor("#475569"), leading=11))
+              textColor=rl_colors.HexColor("#475569"), leading=11, alignment=1))
 
     alloc_fund_rows = []
     _fida_vals = []   # keep to build BACKGROUND commands after the loop
@@ -3038,12 +3039,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
         det_data = [
             [Paragraph("<b>Dettagli Fondo</b>", BD)],
-            [Paragraph(f"Data avvio: {gv('start_date',ov,'—')}", SM)],
-            [Paragraph(f"Distribuzione: {gv('income',ov,'—')}", SM)],
-            [Paragraph(f"Categoria: {gv('cat_assog',ov,'—')}", SM)],
-            [Paragraph(f"Gestione: {gv('mgmt_fee',ov,'—')}  |  Perf.: {gv('perf_fee',ov,'—')}", SM)],
-            [Paragraph(f"Sottoscrizione: {gv('sub_fee',ov,'—')}", SM)],
-            [Paragraph(f"<b>FIDArating:</b> {gv('fida_rating',ov,'—')}  |  Score: {gv('fida_score',ov,'—')}", SM)],
+            [Paragraph(f"Data avvio: {gv('start_date',ov,'—')}", SML)],
+            [Paragraph(f"Distribuzione: {gv('income',ov,'—')}", SML)],
+            [Paragraph(f"Categoria: {gv('cat_assog',ov,'—')}", SML)],
+            [Paragraph(f"Gestione: {gv('mgmt_fee',ov,'—')}  |  Perf.: {gv('perf_fee',ov,'—')}", SML)],
+            [Paragraph(f"Sottoscrizione: {gv('sub_fee',ov,'—')}", SML)],
+            [Paragraph(f"<b>FIDArating:</b> {gv('fida_rating',ov,'—')}  |  Score: {gv('fida_score',ov,'—')}", SML)],
         ]
         det_tbl = Table([[d[0]] for d in det_data], colWidths=[DET_W])
         det_tbl.setStyle(TableStyle([
