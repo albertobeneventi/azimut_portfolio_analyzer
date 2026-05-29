@@ -2543,7 +2543,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ("PADDING",(0,0),(-1,-1),   5),
         ("ROWBACKGROUNDS",(0,2),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
         ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-        ("ALIGN",(1,0),(-1,-1),     "CENTER"),
+        ("ALIGN",(0,0),(-1,-1),     "CENTER"),
         ("VALIGN",(0,0),(-1,-1),    "MIDDLE"),
     ]
     perf_tbl.setStyle(TableStyle(ts_perf))
@@ -2606,7 +2606,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ("PADDING",(0,0),(-1,-1),   5),
         ("ROWBACKGROUNDS",(0,2),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
         ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-        ("ALIGN",(1,0),(-1,-1),     "CENTER"),
+        ("ALIGN",(0,0),(-1,-1),     "CENTER"),
         ("VALIGN",(0,0),(-1,-1),    "MIDDLE"),
     ]
     risk_tbl.setStyle(TableStyle(ts_risk))
@@ -2820,7 +2820,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ("ROWBACKGROUNDS", (0,2), (-1,-1),
          [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
         ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-        ("ALIGN",          (1,0), (-1,-1), "CENTER"),
+        ("ALIGN",          (0,0), (-1,-1), "CENTER"),
         ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
         *_fida_bg_cmds,   # coloured cell backgrounds — placed last to override
     ]))
@@ -2921,7 +2921,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             ("ROWBACKGROUNDS", (0,2), (-1,-1),
              [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
             ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-            ("ALIGN",          (1,0), (-1,-1), "CENTER"),
+            ("ALIGN",          (0,0), (-1,-1), "CENTER"),
             ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
             *_unp_bg_cmds,
         ]))
@@ -3033,7 +3033,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             ("PADDING",(0,0),(-1,-1),   3),
             ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
             ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-            ("ALIGN",(1,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+            ("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
         ]))
 
         det_data = [
