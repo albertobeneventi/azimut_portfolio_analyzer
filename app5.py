@@ -5471,6 +5471,32 @@ def main():
         ),
     )
     if _qtl_charts_pdf:
+        # Test Playwright visibile — clicca per verificare
+        if st.button("🔍 Verifica Playwright", key="_btn_pw_test", help="Testa se Chromium è disponibile sul server"):
+            with st.spinner("Test Playwright in corso…"):
+                _pw_ok = False
+                _pw_msg = ""
+                try:
+                    from playwright.sync_api import sync_playwright  # type: ignore
+                    with sync_playwright() as _p:
+                        _b = _p.chromium.launch(headless=True)
+                        _pg = _b.new_page()
+                        _pg.goto("https://www.quantalys.it/Fonds/Historique/825616",
+                                 wait_until="domcontentloaded", timeout=30_000)
+                        _pg.wait_for_selector(".qtjs-chart-histo svg", timeout=15_000)
+                        _svg_n = _pg.evaluate("() => document.querySelectorAll('svg').length")
+                        _b.close()
+                    _pw_ok  = True
+                    _pw_msg = f"✅ Playwright OK — SVG trovati: {_svg_n}"
+                except ImportError:
+                    _pw_msg = "❌ Playwright non installato (ImportError)"
+                except Exception as _ex:
+                    _pw_msg = f"❌ Errore: {_ex}"
+            if _pw_ok:
+                st.success(_pw_msg)
+            else:
+                st.error(_pw_msg)
+    if _qtl_charts_pdf:
         # Verifica rapida: quanti fondi hanno URL Quantalys?
         _qtl_chk  = load_quantalys_cache()
         _fida_tmp = raw.get("FIDA", pd.DataFrame())
