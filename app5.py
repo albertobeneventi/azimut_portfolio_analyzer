@@ -1326,13 +1326,14 @@ def _qtl_to_historique_url(url: str) -> str:
 
 
 def _capture_qtl_6charts(hist_url: str) -> bytes | None:
-    """Cattura legenda + 6 riquadri grafici dalla pagina Quantalys Historique.
-    Cache su file (data/qtl_chart_cache/) — scrive solo su successo,
-    così un fallimento non viene memorizzato.
-    Restituisce PNG bytes, o None se non disponibile."""
+    """Cattura dalla pagina Quantalys Historique un'immagine composita:
+      - Region A: legenda (pallini colorati) + tabella performance
+      - Region B: titolo "Serie storica" + 3 grafici storici +
+                  titolo "Fondo vs Categoria" + 3 scatter
+    Esclude: toolbar blu, "Indicatori avanzati".
+    Cache su file — scrive solo su successo."""
     import hashlib, sys as _sys
 
-    # ── Cache su file ────────────────────────────────────────────────────────
     _key       = hashlib.md5(hist_url.encode()).hexdigest()[:14]
     _cache_dir = Path(__file__).parent / "data" / "qtl_chart_cache"
     _cache_dir.mkdir(parents=True, exist_ok=True)
@@ -1340,7 +1341,6 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
     if _cache_fp.exists() and _cache_fp.stat().st_size > 1000:
         return _cache_fp.read_bytes()
 
-    # ── Playwright ───────────────────────────────────────────────────────────
     try:
         from playwright.sync_api import sync_playwright  # type: ignore
         from PIL import Image
@@ -1352,20 +1352,13 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 1400, "height": 3200})
-
-            # domcontentloaded è affidabile; networkidle va in timeout sulle pagine
-            # con richieste continue (ads, live data)
             page.goto(hist_url, wait_until="domcontentloaded", timeout=45_000)
-
-            # Attende che i grafici amCharts SVG siano nel DOM
             try:
                 page.wait_for_selector(".qtjs-chart-histo svg", timeout=18_000)
                 page.wait_for_selector(".qtjs-chart-fvscat svg", timeout=10_000)
             except Exception:
                 pass
-            page.wait_for_timeout(2_000)   # rendering finale
-
-            # Chiude il banner cookie se presente
+            page.wait_for_timeout(2_000)
             try:
                 _cb = page.locator(
                     "button:has-text('Ok, accetta tutto'),"
@@ -1377,142 +1370,116 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
                     page.wait_for_timeout(700)
             except Exception:
                 pass
-
-            # ── FIX TOOLTIP: sposta il mouse in un angolo neutro ────────────
-            # Questo evita che il grafico centrale mostri i dati in hover
+            # Sposta mouse fuori dai grafici → elimina tooltip hover
             page.mouse.move(10, 10)
             page.wait_for_timeout(600)
 
-            # ── Bounding box: legenda + 6 riquadri ──────────────────────────
             bounds_info = page.evaluate("""() => {
-                // 6 riquadri: 2 righe con >=3 SVG
-                const rows = [...document.querySelectorAll('.row.is-flex.row-layout')]
-                              .filter(r => r.querySelectorAll('svg').length >= 3);
-                if (rows.length < 2) return null;
-                const r1 = rows[0].getBoundingClientRect();
-                const r2 = rows[rows.length - 1].getBoundingClientRect();
-                const charts = {
-                    x: Math.round(r1.left) - 5,
-                    y: Math.round(r1.top)  - 18,
-                    w: Math.round(r1.width) + 10,
-                    h: Math.round(r2.bottom - r1.top) + 28
-                };
-
-                // ── Legenda (riga pallini colorati + nomi fondo) ───────────────
-                // Struttura pagina (dall'alto):
-                //   [riga legenda: pallini colorati + nomi]   ← vogliamo SOLO questa
-                //   [tabella performance]                      ← stop qui
-                //   [toolbar blu data/periodo]
-                //   [3 grafici storici + 3 scatter]
+                // ── Pannello superiore (legenda + tabella + toolbar + indicatori) ──
                 const panel = document.querySelector('.qtjs-panel-reloaded-graph')
                            || document.querySelector('[class*="qtjs-panel"]');
-                let legend = null;
-                let legendDbg = 'no-panel';
-                if (panel) {
-                    const pr = panel.getBoundingClientRect();
-                    let legendH = null;
+                if (!panel) return null;
+                const pr = panel.getBoundingClientRect();
 
-                    // Strategia 1: trova la tabella performance; la legenda è SOPRA di lei
-                    const perfTable = panel.querySelector('table');
-                    if (perfTable) {
-                        const tR = perfTable.getBoundingClientRect();
-                        const h = Math.round(tR.top - pr.top);
-                        if (h >= 18 && h <= 120) { legendH = h; legendDbg = 'table-top h=' + h; }
+                // ── Region A: legenda pallini + tabella performance ───────────
+                // La toolbar blu contiene <select>: prendi tutto CIÒ CHE PRECEDE
+                let regionAH = null;
+                const selectEl = panel.querySelector('select');
+                if (selectEl) {
+                    // Risali fino al figlio diretto del pannello
+                    let el = selectEl;
+                    while (el.parentElement && el.parentElement !== panel) {
+                        el = el.parentElement;
                     }
-
-                    // Strategia 2: cerca un elemento figlio diretto piccolo (la riga legenda)
-                    if (legendH === null) {
-                        const firstSmallChild = [...panel.children]
-                            .find(c => {
-                                const r = c.getBoundingClientRect();
-                                return r.height >= 20 && r.height <= 80 && r.width > 400
-                                    && r.top <= pr.top + 10;
-                            });
-                        if (firstSmallChild) {
-                            const fcR = firstSmallChild.getBoundingClientRect();
-                            legendH = Math.round(fcR.height) + 4;
-                            legendDbg = 'first-small-child h=' + legendH;
-                        }
-                    }
-
-                    // Strategia 3: cerca elemento con classe legenda amCharts
-                    if (legendH === null) {
-                        const lgEl = panel.querySelector('[class*="legend"]')
-                                  || panel.querySelector('[class*="am4charts"]');
-                        if (lgEl) {
-                            const lr = lgEl.getBoundingClientRect();
-                            if (lr.height >= 15 && lr.height <= 100 && lr.width > 100) {
-                                legendH = Math.round(lr.height) + 6;
-                                legendDbg = 'amcharts-legend h=' + legendH;
-                            }
-                        }
-                    }
-
-                    // Fallback: riga legenda tipicamente ~40px
-                    if (legendH === null) { legendH = 40; legendDbg = 'fallback-40'; }
-
-                    legend = {
-                        x: Math.round(pr.left) - 5,
-                        y: Math.round(pr.top),
-                        w: Math.round(pr.width) + 10,
-                        h: legendH + 2
-                    };
-                    legend._dbg = legendDbg;
+                    const h = Math.round(el.getBoundingClientRect().top - pr.top);
+                    if (h >= 50 && h <= 600) regionAH = h;
                 }
-                return { charts, legend };
+                // Fallback: bottom della tabella performance
+                if (regionAH === null) {
+                    const tbl = panel.querySelector('table');
+                    if (tbl) {
+                        const h = Math.round(tbl.getBoundingClientRect().bottom - pr.top) + 8;
+                        if (h >= 80 && h <= 600) regionAH = h;
+                    }
+                }
+                if (regionAH === null) regionAH = 280;   // fixed fallback
+
+                const regionA = {
+                    x: Math.round(pr.left) - 5,
+                    y: Math.round(pr.top),
+                    w: Math.round(pr.width) + 10,
+                    h: regionAH
+                };
+
+                // ── Region B: "Serie storica" + 6 grafici ──────────────────
+                // Trova le 2 righe che hanno ≥3 colonne figlie dirette con
+                // .qtjs-chart-histo / .qtjs-chart-fvscat  (esclude container-padre)
+                const targetRows = [...document.querySelectorAll('.row.is-flex.row-layout')]
+                    .filter(r => {
+                        const colsWithChart = [...r.children].filter(c =>
+                            c.querySelector('.qtjs-chart-histo, .qtjs-chart-fvscat')
+                        );
+                        return colsWithChart.length >= 3;
+                    });
+                if (targetRows.length < 1) return null;
+
+                const lastRowR = targetRows[targetRows.length - 1].getBoundingClientRect();
+                const regionBStartY = Math.round(pr.bottom);          // subito dopo il pannello
+                const regionBEndY   = Math.round(lastRowR.bottom) + 20;
+                if (regionBEndY <= regionBStartY) return null;
+
+                const regionB = {
+                    x: Math.round(pr.left) - 5,
+                    y: regionBStartY,
+                    w: Math.round(pr.width) + 10,
+                    h: regionBEndY - regionBStartY
+                };
+
+                const dbg = {
+                    panelTop: Math.round(pr.top), panelH: Math.round(pr.height),
+                    regionAH,
+                    regionBStart: regionBStartY, regionBH: regionBEndY - regionBStartY,
+                    targetRowCount: targetRows.length
+                };
+                return { regionA, regionB, dbg };
             }""")
 
             svg_n = page.evaluate("() => document.querySelectorAll('svg').length")
-            _dbg_leg = (bounds_info or {}).get("legend", {}) or {}
-            print(f"[QTL] {hist_url}  SVG={svg_n}  "
-                  f"charts={bounds_info and bounds_info.get('charts')}  "
-                  f"legend={_dbg_leg}  legDbg={_dbg_leg.get('_dbg','?')}",
+            print(f"[QTL] SVG={svg_n}  dbg={bounds_info and bounds_info.get('dbg')}",
                   file=_sys.stderr)
 
             png_full = page.screenshot(full_page=True)
             browser.close()
 
-        if not bounds_info or not bounds_info.get("charts"):
+        if not bounds_info or not bounds_info.get("regionA") or not bounds_info.get("regionB"):
             print(f"[QTL] bounds=None per {hist_url}", file=_sys.stderr)
             return None
 
-        charts = bounds_info["charts"]
-        legend = bounds_info.get("legend")
-
+        rA = bounds_info["regionA"]
+        rB = bounds_info["regionB"]
         img = Image.open(_io.BytesIO(png_full))
 
-        # Crop 6 riquadri
-        cx1 = max(0, charts["x"])
-        cy1 = max(0, charts["y"])
-        cx2 = min(img.width,  cx1 + charts["w"])
-        cy2 = min(img.height, cy1 + charts["h"])
-        charts_img = img.crop((cx1, cy1, cx2, cy2))
+        def _crop(r):
+            x1 = max(0, r["x"]);  y1 = max(0, r["y"])
+            x2 = min(img.width,  x1 + r["w"])
+            y2 = min(img.height, y1 + r["h"])
+            return img.crop((x1, y1, x2, y2))
 
-        if legend and legend.get("h", 0) > 10:
-            # Crop strip legenda
-            lx1 = max(0, legend["x"])
-            ly1 = max(0, legend["y"])
-            lx2 = min(img.width,  lx1 + legend["w"])
-            ly2 = min(img.height, ly1 + legend["h"])
-            legend_img = img.crop((lx1, ly1, lx2, ly2))
-            print(f"[QTL] legenda crop {lx1},{ly1} → {lx2},{ly2}  ({legend_img.width}×{legend_img.height}px)", file=_sys.stderr)
+        img_a = _crop(rA)   # legenda + tabella
+        img_b = _crop(rB)   # serie storica + 6 grafici
+        print(f"[QTL] imgA={img_a.size}  imgB={img_b.size}", file=_sys.stderr)
 
-            # Combina verticalmente: legenda + piccolo gap + 6 riquadri
-            gap        = 8
-            target_w   = max(legend_img.width, charts_img.width)
-            total_h    = legend_img.height + gap + charts_img.height
-            combined   = Image.new("RGB", (target_w, total_h), (255, 255, 255))
-            combined.paste(legend_img, ((target_w - legend_img.width) // 2, 0))
-            combined.paste(charts_img, ((target_w - charts_img.width) // 2, legend_img.height + gap))
-            final_img  = combined
-        else:
-            print(f"[QTL] legenda non trovata, solo 6 riquadri", file=_sys.stderr)
-            final_img = charts_img
+        # Componi verticalmente con un sottile separatore bianco
+        gap      = 10
+        target_w = max(img_a.width, img_b.width)
+        combined = Image.new("RGB", (target_w, img_a.height + gap + img_b.height), (245, 245, 245))
+        combined.paste(img_a, ((target_w - img_a.width)  // 2, 0))
+        combined.paste(img_b, ((target_w - img_b.width)  // 2, img_a.height + gap))
 
         buf = _io.BytesIO()
-        final_img.save(buf, format="PNG")
+        combined.save(buf, format="PNG")
         png_bytes = buf.getvalue()
-        _cache_fp.write_bytes(png_bytes)       # salva in cache solo su successo
+        _cache_fp.write_bytes(png_bytes)
         return png_bytes
 
     except Exception as _ex:
