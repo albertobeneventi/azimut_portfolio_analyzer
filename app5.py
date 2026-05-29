@@ -5460,30 +5460,44 @@ def main():
     )
     if _qtl_charts_pdf:
         # Verifica rapida: quanti fondi hanno URL Quantalys?
-        _qtl_chk = load_quantalys_cache()
+        _qtl_chk  = load_quantalys_cache()
         _fida_tmp = raw.get("FIDA", pd.DataFrame())
         _imap_tmp = ({r["nome"]: str(r["isin"]).strip()
                       for _, r in _fida_tmp.iterrows()
                       if str(r.get("isin","")).strip()}
                      if not _fida_tmp.empty and "isin" in _fida_tmp.columns else {})
         _imap_tmp.update(MANUAL_ISIN_OVERRIDES)
-        _qtl_found_n = sum(
-            1 for _, rr in df_act.iterrows()
-            if _qtl_chk.get(_imap_tmp.get(rr["nome"], ""), "")
-        )
-        if _qtl_found_n == 0:
+
+        _qtl_ok, _qtl_miss = [], []
+        for _, _rr in df_act.iterrows():
+            _rn   = _rr["nome"]
+            _risin = _imap_tmp.get(_rn, "")
+            if _qtl_chk.get(_risin, ""):
+                _qtl_ok.append(_rn)
+            else:
+                _qtl_miss.append((_rn, _risin or "ISIN mancante"))
+
+        if not _qtl_ok:
             st.warning(
                 "⚠️ Nessun fondo del portafoglio ha un URL Quantalys in cache. "
-                "I grafici non verranno inclusi. Verifica che la cache Quantalys "
-                "contenga gli ISIN di questi fondi.",
+                "I grafici non verranno inclusi.",
                 icon="⚠️"
             )
         else:
             st.info(
-                f"📊 Grafici Quantalys disponibili per **{_qtl_found_n}/{len(df_act)}** fondi. "
-                "La prima cattura richiede ~10s per fondo (poi in cache su disco).",
+                f"📊 Grafici Quantalys per **{len(_qtl_ok)}/{len(df_act)}** fondi. "
+                "Prima cattura ~10s/fondo, poi in cache su disco.",
                 icon="ℹ️"
             )
+
+        if _qtl_miss:
+            with st.expander(f"▸ {len(_qtl_miss)} fondo/i senza URL Quantalys — clicca per vedere"):
+                st.markdown(
+                    "Incollami il link Quantalys (es. `https://www.quantalys.it/Fonds/12345`) "
+                    "per ciascuno e lo aggiungo alla cache:\n"
+                )
+                for _mn, _mi in _qtl_miss:
+                    st.markdown(f"- **{_mn}** · ISIN: `{_mi}`")
 
     # ── Cache key: invalidate when portfolio/profile/fund-data changes ──────
     _pdf_cache_key = (f"{_ptf_key}|{len(df_act)}|{len(_fd_live)}"
