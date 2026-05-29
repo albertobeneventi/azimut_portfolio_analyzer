@@ -3962,11 +3962,16 @@ h1,h2,h3{font-family:'Cormorant Garamond',serif !important;}
 [data-testid="stSidebar"] .stFileUploader p,[data-testid="stSidebar"] .stFileUploader span{color:#8aa5c0 !important;font-size:.75rem !important;line-height:1.3 !important;}
 [data-testid="stSidebar"] .stFileUploader{margin-bottom:.2rem !important;}
 [data-testid="stSidebar"] hr{margin:.3rem 0 !important;border-color:#1a3050 !important;}
-[data-testid="stSidebar"] ::-webkit-scrollbar{width:9px;}
-[data-testid="stSidebar"] ::-webkit-scrollbar-track{background:#0d1f35;border-radius:4px;}
-[data-testid="stSidebar"] ::-webkit-scrollbar-thumb{background:#C9A84C;border-radius:4px;border:2px solid #0d1f35;}
-[data-testid="stSidebar"] ::-webkit-scrollbar-thumb:hover{background:#e8c96a;}
-[data-testid="stSidebar"] ::-webkit-scrollbar-corner{background:#0d1f35;}
+[data-testid="stSidebarContent"]{scrollbar-width:thin;scrollbar-color:#C9A84C #0d1f35;}
+[data-testid="stSidebarContent"]::-webkit-scrollbar{width:9px !important;}
+[data-testid="stSidebarContent"]::-webkit-scrollbar-track{background:#0d1f35 !important;border-radius:4px;}
+[data-testid="stSidebarContent"]::-webkit-scrollbar-thumb{background:#C9A84C !important;border-radius:4px;border:2px solid #0d1f35;}
+[data-testid="stSidebarContent"]::-webkit-scrollbar-thumb:hover{background:#e8c96a !important;}
+section[data-testid="stSidebar"]>div:first-child{scrollbar-width:thin;scrollbar-color:#C9A84C #0d1f35;}
+section[data-testid="stSidebar"]>div:first-child::-webkit-scrollbar{width:9px !important;}
+section[data-testid="stSidebar"]>div:first-child::-webkit-scrollbar-track{background:#0d1f35 !important;}
+section[data-testid="stSidebar"]>div:first-child::-webkit-scrollbar-thumb{background:#C9A84C !important;border-radius:4px;}
+section[data-testid="stSidebar"]>div:first-child::-webkit-scrollbar-thumb:hover{background:#e8c96a !important;}
 .main{background:#f6f8fb !important;}.block-container{padding-top:1.8rem !important;max-width:1300px;}
 .az-header{background:linear-gradient(130deg,#081420 0%,#0f2644 50%,#162e52 100%);border-radius:16px;padding:2rem 2.5rem;margin-bottom:1.8rem;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.15);}
 .az-header::after{content:'';position:absolute;bottom:-60px;right:-40px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(201,168,76,.18) 0%,transparent 70%);}
