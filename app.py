@@ -2414,11 +2414,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     _fb_ref    = (factbook_data or {}).get("_ref_date", "")      # data dal frontespizio
     _fd_ref    = cache_date or datetime.date.today().strftime("%d/%m/%Y")  # data FondiDoc
     if _fb_loaded:
-        _rend_src = (f"Rendimenti: Factbook AZ Investments"
-                     + (f" al {_fb_ref}" if _fb_ref else "")
-                     + f"  ·  Rischio: FondiDoc aggiornata al {_fd_ref}")
+        _rend_src = (f"Fonte: FondiDoc aggiornata al {_fd_ref}"
+                     + f"  ·  Fallback: Factbook AZ Investments"
+                     + (f" al {_fb_ref}" if _fb_ref else ""))
     else:
-        _rend_src = f"Fonte: FIDA FondiDoc aggiornata al {_fd_ref}"
+        _rend_src = f"Fonte: FondiDoc aggiornata al {_fd_ref}"
     story.append(Paragraph(
         f"Performance per fondo  ·  Profilo {profile.title()}  ·  {_rend_src}", SU))
     story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=12))
@@ -2447,7 +2447,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     # ── Helper: weighted average of a metric across all funds ─────────────────
     def ptf_wavg(keys_list):
-        """Weighted average per metric. Prefers factbook for return keys."""
+        """Weighted average per metric. Priorità FondiDoc; Factbook come fallback."""
         totals = {k: 0.0 for k in keys_list}
         cov_w  = {k: 0.0 for k in keys_list}
         for _, row in d_sorted.iterrows():
@@ -2455,7 +2455,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             ana = fd.get("analysis", {})
             w   = row[wcol]
             for k in keys_list:
-                raw = get_fb(row["nome"], k) or ana.get(k, "")
+                raw = ana.get(k, "") or get_fb(row["nome"], k)
                 try:
                     num = float(raw.replace("%","").replace(",",".").strip())
                     totals[k] += num * w
@@ -2515,8 +2515,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         fd  = (fund_data or {}).get(row["nome"], {})
         ana = fd.get("analysis", {})
         def gv(key, nome=row["nome"]):
-            # Return factbook value (for return metrics) or FondiDoc value
-            return get_fb(nome, key) or ana.get(key, "-")
+            # Priorità FondiDoc; Factbook come fallback
+            return ana.get(key, "") or get_fb(nome, key) or "-"
         perf_rows.append([
             Paragraph(row["nome"][:48], SM),
             Paragraph(f"<b>{row[wcol]*100:.1f}%</b>", SM),
@@ -4964,7 +4964,7 @@ def main():
             _w   = _row[wcol]
             _ana = _get_ana(_row["nome"])
             for k in keys:
-                raw = _fb_metric(_row["nome"], k) or _ana.get(k, "")
+                raw = _ana.get(k, "") or _fb_metric(_row["nome"], k)
                 try:
                     num = float(str(raw).replace("%", "").replace(",", ".").strip())
                     totals[k] += num * _w
@@ -5361,7 +5361,7 @@ def main():
             _np  = _pr["nome"]
             _ana = _get_ana(_np)
             def _gp(k, _n=_np, _a=_ana):
-                v = _fb_metric(_n, k) or _a.get(k, "") or ""
+                v = _a.get(k, "") or _fb_metric(_n, k) or ""
                 return str(v) if v else "-"
             _p_funds.append([
                 _fund_link(_np),
@@ -5376,7 +5376,7 @@ def main():
         st.markdown(_html_table(_p_hdr, _p_ptf, _p_funds), unsafe_allow_html=True)
         st.markdown(
             f"<p style='{_note_style}'>"
-            f"YTD, 1A, 3A, 5A: {_note_fb} &nbsp;·&nbsp; Vol. e Sharpe: {_note_fd}</p>",
+            f"Rendimenti &amp; Rischio: {_note_fd} &nbsp;·&nbsp; Fallback: {_note_fb}</p>",
             unsafe_allow_html=True)
 
     # ── TAB 3 — RISCHIO ──────────────────────────────────────────────────────
