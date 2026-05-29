@@ -1319,53 +1319,81 @@ def _qtl_to_historique_url(url: str) -> str:
     return url
 
 
-@st.cache_data(show_spinner=False, ttl=86400)
 def _capture_qtl_6charts(hist_url: str) -> bytes | None:
     """Cattura i 6 riquadri grafici dalla pagina Quantalys Historique.
-    Usa cache Streamlit 24h. Restituisce PNG bytes, o None se Playwright
-    non è disponibile / la pagina non contiene i grafici attesi."""
+    Cache su file (data/qtl_chart_cache/) — scrive solo su successo,
+    così un fallimento non viene memorizzato.
+    Restituisce PNG bytes, o None se non disponibile."""
+    import hashlib, sys as _sys
+
+    # ── Cache su file ────────────────────────────────────────────────────────
+    _key       = hashlib.md5(hist_url.encode()).hexdigest()[:14]
+    _cache_dir = Path(__file__).parent / "data" / "qtl_chart_cache"
+    _cache_dir.mkdir(parents=True, exist_ok=True)
+    _cache_fp  = _cache_dir / f"{_key}.png"
+    if _cache_fp.exists() and _cache_fp.stat().st_size > 1000:
+        return _cache_fp.read_bytes()
+
+    # ── Playwright ───────────────────────────────────────────────────────────
     try:
         from playwright.sync_api import sync_playwright  # type: ignore
         from PIL import Image
         import io as _io
-    except ImportError:
+    except ImportError as _e:
+        print(f"[QTL] Import error: {_e}", file=_sys.stderr)
         return None
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            # Viewport molto alto: evita scroll, tutti gli SVG visibili subito
             page = browser.new_page(viewport={"width": 1400, "height": 3200})
-            page.goto(hist_url, wait_until="networkidle", timeout=30_000)
-            page.wait_for_timeout(5_000)   # attende rendering amCharts SVG
 
-            # Chiude il banner cookie se presente (altrimenti copre i grafici)
+            # domcontentloaded è affidabile; networkidle va in timeout sulle pagine
+            # con richieste continue (ads, live data)
+            page.goto(hist_url, wait_until="domcontentloaded", timeout=45_000)
+
+            # Attende che i grafici amCharts SVG siano nel DOM
             try:
-                _cookie_btn = page.locator("button:has-text('Ok, accetta tutto'), button:has-text('Accetta tutto'), button:has-text('Accept all')")
-                if _cookie_btn.count() > 0:
-                    _cookie_btn.first.click()
-                    page.wait_for_timeout(800)
+                page.wait_for_selector(".qtjs-chart-histo svg", timeout=18_000)
+                page.wait_for_selector(".qtjs-chart-fvscat svg", timeout=10_000)
+            except Exception:
+                pass
+            page.wait_for_timeout(2_000)   # rendering finale
+
+            # Chiude il banner cookie se presente
+            try:
+                _cb = page.locator(
+                    "button:has-text('Ok, accetta tutto'),"
+                    "button:has-text('Accetta tutto'),"
+                    "button:has-text('Accept all')"
+                )
+                if _cb.count() > 0:
+                    _cb.first.click()
+                    page.wait_for_timeout(700)
             except Exception:
                 pass
 
-            # Bounding box delle 2 righe con ≥3 SVG ciascuna (= 6 riquadri)
+            # Bounding box delle 2 righe con ≥3 SVG (= i 6 riquadri)
             bounds = page.evaluate("""() => {
                 const rows = [...document.querySelectorAll('.row.is-flex.row-layout')]
                               .filter(r => r.querySelectorAll('svg').length >= 3);
                 if (rows.length < 2) return null;
                 const r1 = rows[0].getBoundingClientRect();
                 const r2 = rows[rows.length - 1].getBoundingClientRect();
-                const sy = window.scrollY || 0;
                 return {
                     x: Math.round(r1.left) - 5,
-                    y: Math.round(r1.top  + sy) - 18,
+                    y: Math.round(r1.top)  - 18,
                     w: Math.round(r1.width) + 10,
                     h: Math.round(r2.bottom - r1.top) + 28
                 };
             }""")
+            svg_n = page.evaluate("() => document.querySelectorAll('svg').length")
+            print(f"[QTL] {hist_url}  SVG={svg_n}  bounds={bounds}", file=_sys.stderr)
+
             png_full = page.screenshot(full_page=True)
             browser.close()
 
         if not bounds:
+            print(f"[QTL] bounds=None per {hist_url}", file=_sys.stderr)
             return None
 
         img = Image.open(_io.BytesIO(png_full))
@@ -1377,9 +1405,12 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
 
         buf = _io.BytesIO()
         cropped.save(buf, format="PNG")
-        return buf.getvalue()
+        png_bytes = buf.getvalue()
+        _cache_fp.write_bytes(png_bytes)       # salva in cache solo su successo
+        return png_bytes
 
-    except Exception:
+    except Exception as _ex:
+        print(f"[QTL] Errore capture {hist_url}: {_ex}", file=_sys.stderr)
         return None
 
 
@@ -5427,6 +5458,32 @@ def main():
             "Richiede Playwright — la prima generazione può richiedere ~1 min."
         ),
     )
+    if _qtl_charts_pdf:
+        # Verifica rapida: quanti fondi hanno URL Quantalys?
+        _qtl_chk = load_quantalys_cache()
+        _fida_tmp = raw.get("FIDA", pd.DataFrame())
+        _imap_tmp = ({r["nome"]: str(r["isin"]).strip()
+                      for _, r in _fida_tmp.iterrows()
+                      if str(r.get("isin","")).strip()}
+                     if not _fida_tmp.empty and "isin" in _fida_tmp.columns else {})
+        _imap_tmp.update(MANUAL_ISIN_OVERRIDES)
+        _qtl_found_n = sum(
+            1 for _, rr in df_act.iterrows()
+            if _qtl_chk.get(_imap_tmp.get(rr["nome"], ""), "")
+        )
+        if _qtl_found_n == 0:
+            st.warning(
+                "⚠️ Nessun fondo del portafoglio ha un URL Quantalys in cache. "
+                "I grafici non verranno inclusi. Verifica che la cache Quantalys "
+                "contenga gli ISIN di questi fondi.",
+                icon="⚠️"
+            )
+        else:
+            st.info(
+                f"📊 Grafici Quantalys disponibili per **{_qtl_found_n}/{len(df_act)}** fondi. "
+                "La prima cattura richiede ~10s per fondo (poi in cache su disco).",
+                icon="ℹ️"
+            )
 
     # ── Cache key: invalidate when portfolio/profile/fund-data changes ──────
     _pdf_cache_key = (f"{_ptf_key}|{len(df_act)}|{len(_fd_live)}"
