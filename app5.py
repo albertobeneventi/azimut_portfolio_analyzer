@@ -1382,45 +1382,48 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
             page.mouse.move(10, 10)
             page.wait_for_timeout(600)
 
-            # Screenshot solo del viewport (no full_page)
-            png_raw = page.screenshot()
-
-            # Trova il top della toolbar blu (contiene <select>) per croppare lì
-            toolbar_y = page.evaluate("""() => {
+            # Calcola clip: bounds pannello (esclude margini grigi) × altezza fino alla toolbar
+            clip_info = page.evaluate("""() => {
                 const panel = document.querySelector('.qtjs-panel-reloaded-graph')
                            || document.querySelector('[class*="qtjs-panel"]');
                 if (!panel) return null;
+                const pr = panel.getBoundingClientRect();
+
+                // Trova il top della toolbar blu (contiene <select>)
+                let toolbarY = null;
                 const ctrl = panel.querySelector('select')
                           || panel.querySelector('input[type="text"]');
-                if (!ctrl) return null;
-                let el = ctrl;
-                while (el.parentElement && el.parentElement !== panel) {
-                    el = el.parentElement;
+                if (ctrl) {
+                    let el = ctrl;
+                    while (el.parentElement && el.parentElement !== panel) {
+                        el = el.parentElement;
+                    }
+                    toolbarY = Math.round(el.getBoundingClientRect().top);
                 }
-                return Math.round(el.getBoundingClientRect().top);
+
+                const x = Math.max(0, Math.round(pr.left));
+                const y = Math.max(0, Math.round(pr.top));
+                const w = Math.round(pr.width);
+                const h = (toolbarY && toolbarY > 100)
+                          ? toolbarY - y - 2
+                          : Math.round(pr.height);
+                return { x, y, w, h: Math.max(80, h), toolbarY };
             }""")
 
             svg_n = page.evaluate("() => document.querySelectorAll('svg').length")
-            print(f"[QTL] viewport ok  SVG={svg_n}  toolbar_y={toolbar_y}  url={hist_url}",
-                  file=_sys.stderr)
-            browser.close()
+            print(f"[QTL] SVG={svg_n}  clip={clip_info}  url={hist_url}", file=_sys.stderr)
 
-        # Croppa appena sopra la toolbar blu (esclude toolbar + indicatori avanzati)
-        if toolbar_y and toolbar_y > 100:
-            try:
-                from PIL import Image as _PILImg
-                import io as _io2
-                _img  = _PILImg.open(_io2.BytesIO(png_raw))
-                _crop = _img.crop((0, 0, _img.width, toolbar_y - 2))
-                _buf  = _io2.BytesIO()
-                _crop.save(_buf, format="PNG")
-                png_bytes = _buf.getvalue()
-                print(f"[QTL] crop → {_img.width}×{toolbar_y-2}px", file=_sys.stderr)
-            except Exception as _ce:
-                print(f"[QTL] crop fallback (PIL err: {_ce})", file=_sys.stderr)
-                png_bytes = png_raw
-        else:
-            png_bytes = png_raw
+            if clip_info and clip_info["w"] > 100 and clip_info["h"] > 80:
+                png_bytes = page.screenshot(clip={
+                    "x":      clip_info["x"],
+                    "y":      clip_info["y"],
+                    "width":  clip_info["w"],
+                    "height": clip_info["h"],
+                })
+            else:
+                # Fallback: viewport intero
+                png_bytes = page.screenshot()
+            browser.close()
 
         _cache_fp.write_bytes(png_bytes)
         return png_bytes
