@@ -3920,26 +3920,7 @@ def main():
                 f"&nbsp;·&nbsp;attivo in sessione</div>",
                 unsafe_allow_html=True)
 
-        uploaded_fb_xl = st.file_uploader(
-            "DATI FACTBOOK (Excel, dopo prima estrazione)",
-            type=["xlsx","xls"],
-            help="Carica il file Excel scaricato dopo la prima estrazione del "
-                 "Factbook PDF. Evita di ricaricare il PDF ogni volta.",
-            key="uploader_fb_xl",
-        )
-        if uploaded_fb_xl is not None:
-            _fb_xl_bytes_snap = uploaded_fb_xl.getvalue()
-            if _fb_xl_bytes_snap:
-                st.session_state["_fb_xl_pending_bytes"] = _fb_xl_bytes_snap
-                st.session_state["_fb_xl_loaded_name"]   = uploaded_fb_xl.name
-        elif st.session_state.get("_fb_xl_loaded_name"):
-            st.markdown(
-                f"<div style='background:#0d2b1a;border:1px solid #166534;"
-                f"border-radius:6px;padding:5px 10px;margin:-4px 0 4px 0;"
-                f"font-size:.78rem;color:#86efac;'>"
-                f"✅&nbsp;<b>{st.session_state['_fb_xl_loaded_name']}</b>"
-                f"&nbsp;·&nbsp;attivo in sessione</div>",
-                unsafe_allow_html=True)
+        uploaded_fb_xl = None  # rimosso: GITHUB_TOKEN salva automaticamente
 
         # Caption con la data di riferimento del Factbook.
         # Al primo render di sessione legge direttamente il JSON su disco
@@ -4455,7 +4436,7 @@ def main():
     _fb_source = f"repository ({len(factbook_data)} fondi)" if factbook_data else ""
 
     _fb_pending  = st.session_state.pop("_fb_pending_bytes",    None)
-    _fb_xl_pending = st.session_state.pop("_fb_xl_pending_bytes", None)
+    _fb_xl_pending = None  # uploader rimosso
     _fb_fresh_bytes = (uploaded_fb.getvalue() if uploaded_fb is not None
                        else _fb_pending)
     if _fb_fresh_bytes is not None:
