@@ -1375,88 +1375,148 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
             page.wait_for_timeout(600)
 
             bounds_info = page.evaluate("""() => {
-                // ── Pannello superiore (legenda + tabella + toolbar + indicatori) ──
-                const panel = document.querySelector('.qtjs-panel-reloaded-graph')
-                           || document.querySelector('[class*="qtjs-panel"]');
-                if (!panel) return null;
-                const pr = panel.getBoundingClientRect();
+                const dbg = {};
 
-                // ── Region A: legenda pallini + tabella performance ───────────
-                // La toolbar blu contiene <select>: prendi tutto CIÒ CHE PRECEDE
-                let regionAH = null;
-                const selectEl = panel.querySelector('select');
-                if (selectEl) {
-                    // Risali fino al figlio diretto del pannello
-                    let el = selectEl;
-                    while (el.parentElement && el.parentElement !== panel) {
-                        el = el.parentElement;
-                    }
-                    const h = Math.round(el.getBoundingClientRect().top - pr.top);
-                    if (h >= 50 && h <= 600) regionAH = h;
-                }
-                // Fallback: bottom della tabella performance
-                if (regionAH === null) {
-                    const tbl = panel.querySelector('table');
-                    if (tbl) {
-                        const h = Math.round(tbl.getBoundingClientRect().bottom - pr.top) + 8;
-                        if (h >= 80 && h <= 600) regionAH = h;
-                    }
-                }
-                if (regionAH === null) regionAH = 280;   // fixed fallback
-
-                const regionA = {
-                    x: Math.round(pr.left) - 5,
-                    y: Math.round(pr.top),
-                    w: Math.round(pr.width) + 10,
-                    h: regionAH
-                };
-
-                // ── Region B: "Serie storica" + 6 grafici ──────────────────
-                // Trova le 2 righe che hanno ≥3 colonne figlie dirette con
-                // .qtjs-chart-histo / .qtjs-chart-fvscat  (esclude container-padre)
-                const targetRows = [...document.querySelectorAll('.row.is-flex.row-layout')]
+                // ══ Trova le righe con i 6 grafici piccoli ══════════════════
+                // Strategia 1: colonne figlie DIRETTE con .qtjs-chart-histo/.fvscat
+                let targetRows = [...document.querySelectorAll('.row.is-flex.row-layout')]
                     .filter(r => {
                         const colsWithChart = [...r.children].filter(c =>
                             c.querySelector('.qtjs-chart-histo, .qtjs-chart-fvscat')
                         );
                         return colsWithChart.length >= 3;
                     });
-                if (targetRows.length < 1) return null;
+                dbg.strategy1rows = targetRows.length;
 
-                const lastRowR = targetRows[targetRows.length - 1].getBoundingClientRect();
-                const regionBStartY = Math.round(pr.bottom);          // subito dopo il pannello
-                const regionBEndY   = Math.round(lastRowR.bottom) + 20;
-                if (regionBEndY <= regionBStartY) return null;
+                // Strategia 2: .closest() da ogni .qtjs-chart-histo / .qtjs-chart-fvscat
+                if (targetRows.length < 1) {
+                    const rowSet = new Set();
+                    document.querySelectorAll('.qtjs-chart-histo, .qtjs-chart-fvscat')
+                        .forEach(el => {
+                            const r = el.closest('.row.is-flex.row-layout');
+                            if (r) rowSet.add(r);
+                        });
+                    targetRows = [...rowSet]
+                        .sort((a,b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+                    dbg.strategy2rows = targetRows.length;
+                }
+
+                // Strategia 3: fallback originale — SVG≥3 con altezza ragionevole
+                if (targetRows.length < 1) {
+                    targetRows = [...document.querySelectorAll('.row.is-flex.row-layout')]
+                        .filter(r => {
+                            const rr = r.getBoundingClientRect();
+                            return r.querySelectorAll('svg').length >= 3
+                                && rr.height >= 80 && rr.height <= 500;
+                        });
+                    dbg.strategy3rows = targetRows.length;
+                }
+
+                if (targetRows.length < 1) {
+                    dbg.error = 'no-target-rows';
+                    return { dbg };
+                }
+
+                const firstRowR = targetRows[0].getBoundingClientRect();
+                const lastRowR  = targetRows[targetRows.length - 1].getBoundingClientRect();
+
+                // ══ Pannello superiore (legenda + tabella + toolbar + indicatori) ══
+                const panel = document.querySelector('.qtjs-panel-reloaded-graph')
+                           || document.querySelector('[class*="qtjs-panel"]');
+                dbg.panelFound = !!panel;
+
+                // ── Region A ────────────────────────────────────────────────
+                let regionA = null;
+                if (panel) {
+                    const pr = panel.getBoundingClientRect();
+                    dbg.panelTop = Math.round(pr.top);
+                    dbg.panelH   = Math.round(pr.height);
+                    dbg.panelBot = Math.round(pr.bottom);
+
+                    // Cerca la toolbar: ha <select> o <input> al suo interno
+                    let regionAH = null;
+                    const ctrlEl = panel.querySelector('select') || panel.querySelector('input[type="text"]');
+                    if (ctrlEl) {
+                        let el = ctrlEl;
+                        while (el.parentElement && el.parentElement !== panel) el = el.parentElement;
+                        const h = Math.round(el.getBoundingClientRect().top - pr.top);
+                        if (h >= 30 && h <= 700) { regionAH = h; dbg.regionAstrat = 'select h='+h; }
+                    }
+                    if (regionAH === null) {
+                        const tbl = panel.querySelector('table');
+                        if (tbl) {
+                            const h = Math.round(tbl.getBoundingClientRect().bottom - pr.top) + 8;
+                            if (h >= 60 && h <= 700) { regionAH = h; dbg.regionAstrat = 'table h='+h; }
+                        }
+                    }
+                    if (regionAH === null) { regionAH = 300; dbg.regionAstrat = 'fallback300'; }
+
+                    regionA = {
+                        x: Math.round(pr.left) - 5,
+                        y: Math.round(pr.top),
+                        w: Math.round(pr.width) + 10,
+                        h: regionAH
+                    };
+                }
+
+                // ── Region B ────────────────────────────────────────────────
+                // Inizia: subito dopo il pannello, o 80px prima del primo grafico
+                let regionBStartY;
+                if (panel) {
+                    const pr = panel.getBoundingClientRect();
+                    // Se i grafici sono FUORI dal pannello, parto dal fondo del pannello
+                    // Se i grafici sono DENTRO, parto 80px prima del primo grafico
+                    if (firstRowR.top >= pr.bottom - 20) {
+                        regionBStartY = Math.round(pr.bottom);
+                        dbg.regionBstrat = 'panel-bottom';
+                    } else {
+                        regionBStartY = Math.max(0, Math.round(firstRowR.top) - 80);
+                        dbg.regionBstrat = 'firstRow-80';
+                    }
+                } else {
+                    regionBStartY = Math.max(0, Math.round(firstRowR.top) - 80);
+                    dbg.regionBstrat = 'no-panel';
+                }
+
+                const regionBEndY = Math.round(lastRowR.bottom) + 20;
+                const refX = regionA ? regionA.x : Math.round(firstRowR.left) - 5;
+                const refW = regionA ? regionA.w : Math.round(firstRowR.width) + 10;
+
+                if (regionBEndY <= regionBStartY) {
+                    dbg.error = 'regionB-negative h=' + (regionBEndY - regionBStartY);
+                    return { dbg };
+                }
 
                 const regionB = {
-                    x: Math.round(pr.left) - 5,
+                    x: refX,
                     y: regionBStartY,
-                    w: Math.round(pr.width) + 10,
+                    w: refW,
                     h: regionBEndY - regionBStartY
                 };
 
-                const dbg = {
-                    panelTop: Math.round(pr.top), panelH: Math.round(pr.height),
-                    regionAH,
-                    regionBStart: regionBStartY, regionBH: regionBEndY - regionBStartY,
-                    targetRowCount: targetRows.length
-                };
+                dbg.regionBStart = regionBStartY;
+                dbg.regionBH     = regionBEndY - regionBStartY;
+                dbg.firstRowY    = Math.round(firstRowR.top);
+                dbg.lastRowBot   = Math.round(lastRowR.bottom);
+
                 return { regionA, regionB, dbg };
             }""")
 
             svg_n = page.evaluate("() => document.querySelectorAll('svg').length")
-            print(f"[QTL] SVG={svg_n}  dbg={bounds_info and bounds_info.get('dbg')}",
-                  file=_sys.stderr)
+            _dbg  = (bounds_info or {}).get("dbg", {})
+            print(f"[QTL] SVG={svg_n}  dbg={_dbg}", file=_sys.stderr)
+            if _dbg.get("error"):
+                print(f"[QTL] JS error: {_dbg['error']} — url={hist_url}", file=_sys.stderr)
 
             png_full = page.screenshot(full_page=True)
             browser.close()
 
-        if not bounds_info or not bounds_info.get("regionA") or not bounds_info.get("regionB"):
-            print(f"[QTL] bounds=None per {hist_url}", file=_sys.stderr)
+        if not bounds_info or not bounds_info.get("regionB"):
+            print(f"[QTL] nessun bounds per {hist_url}  info={bounds_info}", file=_sys.stderr)
             return None
 
-        rA = bounds_info["regionA"]
-        rB = bounds_info["regionB"]
+        rA  = bounds_info.get("regionA")   # può essere None se pannello non trovato
+        rB  = bounds_info["regionB"]
         img = Image.open(_io.BytesIO(png_full))
 
         def _crop(r):
@@ -1465,16 +1525,19 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
             y2 = min(img.height, y1 + r["h"])
             return img.crop((x1, y1, x2, y2))
 
-        img_a = _crop(rA)   # legenda + tabella
         img_b = _crop(rB)   # serie storica + 6 grafici
-        print(f"[QTL] imgA={img_a.size}  imgB={img_b.size}", file=_sys.stderr)
 
-        # Componi verticalmente con un sottile separatore bianco
-        gap      = 10
-        target_w = max(img_a.width, img_b.width)
-        combined = Image.new("RGB", (target_w, img_a.height + gap + img_b.height), (245, 245, 245))
-        combined.paste(img_a, ((target_w - img_a.width)  // 2, 0))
-        combined.paste(img_b, ((target_w - img_b.width)  // 2, img_a.height + gap))
+        if rA:
+            img_a = _crop(rA)   # legenda + tabella
+            print(f"[QTL] imgA={img_a.size}  imgB={img_b.size}", file=_sys.stderr)
+            gap      = 10
+            target_w = max(img_a.width, img_b.width)
+            combined = Image.new("RGB", (target_w, img_a.height + gap + img_b.height), (245, 245, 245))
+            combined.paste(img_a, ((target_w - img_a.width) // 2, 0))
+            combined.paste(img_b, ((target_w - img_b.width) // 2, img_a.height + gap))
+        else:
+            print(f"[QTL] solo imgB={img_b.size} (no regionA)", file=_sys.stderr)
+            combined = img_b
 
         buf = _io.BytesIO()
         combined.save(buf, format="PNG")
