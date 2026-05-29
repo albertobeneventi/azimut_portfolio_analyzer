@@ -2145,7 +2145,10 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                  factbook_data: dict = None,
                  cache_date: str = "",
                  print_unp: bool = False,
-                 qtl_charts: bool = False) -> bytes:
+                 qtl_charts: bool = False,
+                 _progress_cb=None) -> bytes:
+    """_progress_cb(fraction: float, text: str) — chiamata durante la cattura
+    Quantalys per aggiornare una barra di avanzamento nell'UI."""
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -2917,6 +2920,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         '<u>Motore di ricerca Morningstar</u></link>', LK))
     story.append(Spacer(1, 6))
 
+    # ── Pre-conteggio per barra avanzamento Quantalys ───────────────────────
+    _qtl_total = 0
+    _qtl_done  = 0
+    if qtl_charts and _progress_cb:
+        for _, _pr in d_sorted.iterrows():
+            _fd_pre   = (fund_data or {}).get(_pr["nome"], {})
+            _isin_pre = _fd_pre.get("isin", "") or isin_map.get(_pr["nome"], "")
+            if _isin_pre and _pdf_qtl.get(_isin_pre, ""):
+                _qtl_total += 1
+        if _qtl_total:
+            _progress_cb(0.0, f"📊 Cattura grafici Quantalys (0/{_qtl_total})…")
+
     for idx, (_, row) in enumerate(d_sorted.iterrows()):
         fd  = (fund_data or {}).get(row["nome"], {})
         ov  = fd.get("overview",  {})
@@ -3019,10 +3034,17 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                      Paragraph("<b>Performance Annuale (%)</b>", SM),
                      RLImage(bar_buf, width=PW, height=2.4*cm)]
 
-        # ── Grafici Quantalys (6 riquadri: serie storica + fondo vs categoria) ──
+        # ── Grafici Quantalys (serie storica + performance comparata) ───────────
         if qtl_charts and isin:
             _qurl_chart = _pdf_qtl.get(isin, "")
             if _qurl_chart:
+                _qtl_done += 1
+                if _progress_cb and _qtl_total > 0:
+                    _nm_short = row["nome"][:38] + ("…" if len(row["nome"]) > 38 else "")
+                    _progress_cb(
+                        (_qtl_done - 1) / _qtl_total,
+                        f"📊 {_nm_short}  ({_qtl_done}/{_qtl_total})"
+                    )
                 _hist_url  = _qtl_to_historique_url(_qurl_chart)
                 _qtl_png   = _capture_qtl_6charts(_hist_url)
                 if _qtl_png:
@@ -3059,6 +3081,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         "(fondidoc.it). I pesi indicati sono riferiti al portafoglio modello e non costituiscono offerta o consulenza "
         "di investimento. Rendimenti passati non garantiscono risultati futuri. © Azimut Group — uso interno.", FT))
 
+    if _progress_cb:
+        _progress_cb(0.97, "⚡ Assemblo PDF…")
     doc.build(story)
     buf.seek(0)
     return buf.read()
@@ -5530,21 +5554,26 @@ def main():
     if not _is_free and st.session_state.get("_pdf_cache_key") != _pdf_cache_key:
         _fname_auto = (f"Azimut_{ptf_label.replace(' ','_').replace('—','')}"
                        f"_{profile}_{datetime.date.today().strftime('%Y%m%d')}.pdf")
-        with st.spinner("⚡ Genero PDF…"):
-            try:
-                _pdf_auto = generate_pdf(
-                    df_act, wcol, profile, ptf_label, _fd_live,
-                    fida_df=fida_df, factbook_data=factbook_data,
-                    cache_date=cache_date, print_unp=_print_unp,
-                    qtl_charts=_qtl_charts_pdf)
-                st.session_state["_pdf_bytes_ready"]  = _pdf_auto
-                st.session_state["_pdf_fname_ready"]  = _fname_auto
-                st.session_state["_pdf_lbl"]          = (
-                    f"{len(_fd_live)} schede da FondiDoc" if _fd_live
-                    else "dati base (lancia Aggiorna Dati per arricchire)")
-                st.session_state["_pdf_cache_key"]    = _pdf_cache_key
-            except Exception as _pe:
-                st.error(f"Errore generazione PDF: {_pe}")
+        _pb_auto = st.progress(0, text="⚡ Genero PDF…")
+        def _upd_auto(v, txt="⚡ Genero PDF…"):
+            _pb_auto.progress(min(float(v), 1.0), text=txt)
+        try:
+            _pdf_auto = generate_pdf(
+                df_act, wcol, profile, ptf_label, _fd_live,
+                fida_df=fida_df, factbook_data=factbook_data,
+                cache_date=cache_date, print_unp=_print_unp,
+                qtl_charts=_qtl_charts_pdf,
+                _progress_cb=_upd_auto)
+            _upd_auto(1.0, "✅ PDF pronto")
+            st.session_state["_pdf_bytes_ready"]  = _pdf_auto
+            st.session_state["_pdf_fname_ready"]  = _fname_auto
+            st.session_state["_pdf_lbl"]          = (
+                f"{len(_fd_live)} schede da FondiDoc" if _fd_live
+                else "dati base (lancia Aggiorna Dati per arricchire)")
+            st.session_state["_pdf_cache_key"]    = _pdf_cache_key
+        except Exception as _pe:
+            st.error(f"Errore generazione PDF: {_pe}")
+        _pb_auto.empty()
 
     with col_btn:
         if st.session_state.get("_pdf_bytes_ready") and not _is_free:
@@ -5575,15 +5604,18 @@ def main():
                 pb = st.progress(0, text="Scarico dati FondiDoc…")
                 def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
                 fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
-                pb.progress(1.0, text="✅ Genero PDF…")
                 save_fund_cache(fund_data)
                 st.session_state["_scomp_fd"] = fund_data
+                pb.progress(0.0, text="⚡ Genero PDF…")
+                def _upd_pdf(v, txt="⚡ Genero PDF…"):
+                    pb.progress(min(float(v), 1.0), text=txt)
                 try:
                     pdf_bytes = generate_pdf(
                         df_act, wcol, profile, ptf_label, fund_data,
                         fida_df=fida_df, factbook_data=factbook_data,
                         cache_date=cache_date, print_unp=_print_unp,
-                        qtl_charts=_qtl_charts_pdf)
+                        qtl_charts=_qtl_charts_pdf,
+                        _progress_cb=_upd_pdf)
                     fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
                              f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
                     st.session_state["_pdf_bytes_ready"]  = pdf_bytes
