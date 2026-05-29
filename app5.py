@@ -1398,42 +1398,76 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
                     h: Math.round(r2.bottom - r1.top) + 28
                 };
 
-                // Legenda: cerca nella sezione del grafico principale
+                // ── Legenda (riga pallini colorati + nomi fondo) ───────────────
+                // Struttura pagina (dall'alto):
+                //   [riga legenda: pallini colorati + nomi]   ← vogliamo SOLO questa
+                //   [tabella performance]                      ← stop qui
+                //   [toolbar blu data/periodo]
+                //   [3 grafici storici + 3 scatter]
                 const panel = document.querySelector('.qtjs-panel-reloaded-graph')
                            || document.querySelector('[class*="qtjs-panel"]');
                 let legend = null;
+                let legendDbg = 'no-panel';
                 if (panel) {
                     const pr = panel.getBoundingClientRect();
-                    // Cerca un elemento legenda specifico (amCharts div)
-                    const lgEl = panel.querySelector('[class*="legend"]')
-                              || panel.querySelector('[class*="amlegend"]')
-                              || panel.querySelector('[class*="am4charts"]');
-                    if (lgEl) {
-                        const lr = lgEl.getBoundingClientRect();
-                        if (lr.height > 5 && lr.width > 50) {
-                            legend = {
-                                x: Math.round(pr.left) - 5,
-                                y: Math.round(lr.top),
-                                w: Math.round(pr.width) + 10,
-                                h: Math.round(lr.height) + 6
-                            };
+                    let legendH = null;
+
+                    // Strategia 1: trova la tabella performance; la legenda è SOPRA di lei
+                    const perfTable = panel.querySelector('table');
+                    if (perfTable) {
+                        const tR = perfTable.getBoundingClientRect();
+                        const h = Math.round(tR.top - pr.top);
+                        if (h >= 18 && h <= 120) { legendH = h; legendDbg = 'table-top h=' + h; }
+                    }
+
+                    // Strategia 2: cerca un elemento figlio diretto piccolo (la riga legenda)
+                    if (legendH === null) {
+                        const firstSmallChild = [...panel.children]
+                            .find(c => {
+                                const r = c.getBoundingClientRect();
+                                return r.height >= 20 && r.height <= 80 && r.width > 400
+                                    && r.top <= pr.top + 10;
+                            });
+                        if (firstSmallChild) {
+                            const fcR = firstSmallChild.getBoundingClientRect();
+                            legendH = Math.round(fcR.height) + 4;
+                            legendDbg = 'first-small-child h=' + legendH;
                         }
                     }
-                    if (!legend) {
-                        // Fallback: prendi i primi 60px del pannello principale
-                        legend = {
-                            x: Math.round(pr.left) - 5,
-                            y: Math.round(pr.top),
-                            w: Math.round(pr.width) + 10,
-                            h: 60
-                        };
+
+                    // Strategia 3: cerca elemento con classe legenda amCharts
+                    if (legendH === null) {
+                        const lgEl = panel.querySelector('[class*="legend"]')
+                                  || panel.querySelector('[class*="am4charts"]');
+                        if (lgEl) {
+                            const lr = lgEl.getBoundingClientRect();
+                            if (lr.height >= 15 && lr.height <= 100 && lr.width > 100) {
+                                legendH = Math.round(lr.height) + 6;
+                                legendDbg = 'amcharts-legend h=' + legendH;
+                            }
+                        }
                     }
+
+                    // Fallback: riga legenda tipicamente ~40px
+                    if (legendH === null) { legendH = 40; legendDbg = 'fallback-40'; }
+
+                    legend = {
+                        x: Math.round(pr.left) - 5,
+                        y: Math.round(pr.top),
+                        w: Math.round(pr.width) + 10,
+                        h: legendH + 2
+                    };
+                    legend._dbg = legendDbg;
                 }
                 return { charts, legend };
             }""")
 
             svg_n = page.evaluate("() => document.querySelectorAll('svg').length")
-            print(f"[QTL] {hist_url}  SVG={svg_n}  bounds_info={bounds_info}", file=_sys.stderr)
+            _dbg_leg = (bounds_info or {}).get("legend", {}) or {}
+            print(f"[QTL] {hist_url}  SVG={svg_n}  "
+                  f"charts={bounds_info and bounds_info.get('charts')}  "
+                  f"legend={_dbg_leg}  legDbg={_dbg_leg.get('_dbg','?')}",
+                  file=_sys.stderr)
 
             png_full = page.screenshot(full_page=True)
             browser.close()
