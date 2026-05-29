@@ -47,15 +47,20 @@ st.set_page_config(
 # ── Playwright / Chromium bootstrap (Streamlit Cloud) ───────
 @st.cache_resource(show_spinner=False)
 def _ensure_playwright_chromium():
-    """Installa il browser Chromium per Playwright (solo al primo avvio del server)."""
+    """Installa il browser Chromium per Playwright (solo al primo avvio del server).
+    Usa solo 'install chromium' senza --with-deps: le dipendenze di sistema
+    sono gestite da packages.txt e --with-deps richiede sudo su Streamlit Cloud."""
     import subprocess, sys
     try:
-        subprocess.run(
-            [sys.executable, "-m", "playwright", "install", "chromium", "--with-deps"],
-            capture_output=True, timeout=120
+        result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True, timeout=180
         )
-    except Exception:
-        pass
+        print(f"[playwright install] rc={result.returncode}", flush=True)
+        if result.stderr:
+            print(f"[playwright install stderr] {result.stderr.decode('utf-8','replace')[:300]}", flush=True)
+    except Exception as _e:
+        print(f"[playwright install] errore: {_e}", flush=True)
 
 _ensure_playwright_chromium()
 
@@ -89,7 +94,7 @@ MANUAL_ISIN_OVERRIDES: dict[str, str] = {
     "AZ Equity - Global Infrastructure":    "LU1621767737",
     "AZ Bond - CoCo Bonds (EUR-hedged)":    "LU2622195936",
     "AZ Bond - Convertible Bond":           "LU1422848470",
-    "AZ Equity - Brazil Trend":             "LU0346934713",
+    "AZ F.1 All. Balanced FoF A Cap EUR":   "LU0346933400",  # ISIN classe A (FondiDoc URL)
 }
 
 # Override for one fund whose FIDA sheet hyperlink points to class B
