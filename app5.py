@@ -1326,7 +1326,7 @@ def _qtl_to_historique_url(url: str) -> str:
 
 
 def _capture_qtl_6charts(hist_url: str) -> bytes | None:
-    """Cattura i 6 riquadri grafici dalla pagina Quantalys Historique.
+    """Cattura legenda + 6 riquadri grafici dalla pagina Quantalys Historique.
     Cache su file (data/qtl_chart_cache/) — scrive solo su successo,
     così un fallimento non viene memorizzato.
     Restituisce PNG bytes, o None se non disponibile."""
@@ -1378,39 +1378,105 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
             except Exception:
                 pass
 
-            # Bounding box delle 2 righe con ≥3 SVG (= i 6 riquadri)
-            bounds = page.evaluate("""() => {
+            # ── FIX TOOLTIP: sposta il mouse in un angolo neutro ────────────
+            # Questo evita che il grafico centrale mostri i dati in hover
+            page.mouse.move(10, 10)
+            page.wait_for_timeout(600)
+
+            # ── Bounding box: legenda + 6 riquadri ──────────────────────────
+            bounds_info = page.evaluate("""() => {
+                // 6 riquadri: 2 righe con >=3 SVG
                 const rows = [...document.querySelectorAll('.row.is-flex.row-layout')]
                               .filter(r => r.querySelectorAll('svg').length >= 3);
                 if (rows.length < 2) return null;
                 const r1 = rows[0].getBoundingClientRect();
                 const r2 = rows[rows.length - 1].getBoundingClientRect();
-                return {
+                const charts = {
                     x: Math.round(r1.left) - 5,
                     y: Math.round(r1.top)  - 18,
                     w: Math.round(r1.width) + 10,
                     h: Math.round(r2.bottom - r1.top) + 28
                 };
+
+                // Legenda: cerca nella sezione del grafico principale
+                const panel = document.querySelector('.qtjs-panel-reloaded-graph')
+                           || document.querySelector('[class*="qtjs-panel"]');
+                let legend = null;
+                if (panel) {
+                    const pr = panel.getBoundingClientRect();
+                    // Cerca un elemento legenda specifico (amCharts div)
+                    const lgEl = panel.querySelector('[class*="legend"]')
+                              || panel.querySelector('[class*="amlegend"]')
+                              || panel.querySelector('[class*="am4charts"]');
+                    if (lgEl) {
+                        const lr = lgEl.getBoundingClientRect();
+                        if (lr.height > 5 && lr.width > 50) {
+                            legend = {
+                                x: Math.round(pr.left) - 5,
+                                y: Math.round(lr.top),
+                                w: Math.round(pr.width) + 10,
+                                h: Math.round(lr.height) + 6
+                            };
+                        }
+                    }
+                    if (!legend) {
+                        // Fallback: prendi i primi 60px del pannello principale
+                        legend = {
+                            x: Math.round(pr.left) - 5,
+                            y: Math.round(pr.top),
+                            w: Math.round(pr.width) + 10,
+                            h: 60
+                        };
+                    }
+                }
+                return { charts, legend };
             }""")
+
             svg_n = page.evaluate("() => document.querySelectorAll('svg').length")
-            print(f"[QTL] {hist_url}  SVG={svg_n}  bounds={bounds}", file=_sys.stderr)
+            print(f"[QTL] {hist_url}  SVG={svg_n}  bounds_info={bounds_info}", file=_sys.stderr)
 
             png_full = page.screenshot(full_page=True)
             browser.close()
 
-        if not bounds:
+        if not bounds_info or not bounds_info.get("charts"):
             print(f"[QTL] bounds=None per {hist_url}", file=_sys.stderr)
             return None
 
+        charts = bounds_info["charts"]
+        legend = bounds_info.get("legend")
+
         img = Image.open(_io.BytesIO(png_full))
-        x1  = max(0, bounds["x"])
-        y1  = max(0, bounds["y"])
-        x2  = min(img.width,  x1 + bounds["w"])
-        y2  = min(img.height, y1 + bounds["h"])
-        cropped = img.crop((x1, y1, x2, y2))
+
+        # Crop 6 riquadri
+        cx1 = max(0, charts["x"])
+        cy1 = max(0, charts["y"])
+        cx2 = min(img.width,  cx1 + charts["w"])
+        cy2 = min(img.height, cy1 + charts["h"])
+        charts_img = img.crop((cx1, cy1, cx2, cy2))
+
+        if legend and legend.get("h", 0) > 10:
+            # Crop strip legenda
+            lx1 = max(0, legend["x"])
+            ly1 = max(0, legend["y"])
+            lx2 = min(img.width,  lx1 + legend["w"])
+            ly2 = min(img.height, ly1 + legend["h"])
+            legend_img = img.crop((lx1, ly1, lx2, ly2))
+            print(f"[QTL] legenda crop {lx1},{ly1} → {lx2},{ly2}  ({legend_img.width}×{legend_img.height}px)", file=_sys.stderr)
+
+            # Combina verticalmente: legenda + piccolo gap + 6 riquadri
+            gap        = 8
+            target_w   = max(legend_img.width, charts_img.width)
+            total_h    = legend_img.height + gap + charts_img.height
+            combined   = Image.new("RGB", (target_w, total_h), (255, 255, 255))
+            combined.paste(legend_img, ((target_w - legend_img.width) // 2, 0))
+            combined.paste(charts_img, ((target_w - charts_img.width) // 2, legend_img.height + gap))
+            final_img  = combined
+        else:
+            print(f"[QTL] legenda non trovata, solo 6 riquadri", file=_sys.stderr)
+            final_img = charts_img
 
         buf = _io.BytesIO()
-        cropped.save(buf, format="PNG")
+        final_img.save(buf, format="PNG")
         png_bytes = buf.getvalue()
         _cache_fp.write_bytes(png_bytes)       # salva in cache solo su successo
         return png_bytes
@@ -3051,9 +3117,15 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                 _qtl_png   = _capture_qtl_6charts(_hist_url)
                 if _qtl_png:
                     _qtl_io  = io.BytesIO(_qtl_png)
-                    # aspect ratio empirico 1186×739 px (rilevato da test Playwright)
+                    # Calcola aspect ratio dall'immagine reale (include eventuale strip legenda)
+                    try:
+                        from PIL import Image as _PILImg
+                        _qtl_pil = _PILImg.open(io.BytesIO(_qtl_png))
+                        _qtl_ar  = _qtl_pil.height / max(_qtl_pil.width, 1)
+                    except Exception:
+                        _qtl_ar  = 739 / 1186   # fallback empirico
                     _qtl_w   = PW * 0.98
-                    _qtl_h   = _qtl_w * (739 / 1186)
+                    _qtl_h   = _qtl_w * _qtl_ar
                     card += [Spacer(1,4),
                              Paragraph(
                                  "<b>Analisi Quantalys</b>"
