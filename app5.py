@@ -2234,7 +2234,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Spacer(1,14))
 
     # ── TITLE BLOCK ─────────────────────────────────────────
-    story.append(Paragraph("AZIMUT INVESTMENTS  ·  AAS EMILIA ROMAGNA MARCHE UMBRIA", EY))
+    story.append(Paragraph("DEMO ANALISI", EY))
     story.append(Spacer(1,4))
     story.append(Paragraph(f"Portafoglio {ptf_name}", T))
     story.append(Paragraph(
@@ -2407,7 +2407,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # ════════════════════════════════════════════════════════
     # PAGE 2: RENDIMENTI 1-3-5 ANNI
     # ════════════════════════════════════════════════════════
-    story.append(Paragraph("AZIMUT INVESTMENTS  ·  AAS EMILIA ROMAGNA MARCHE UMBRIA", EY))
+    story.append(Paragraph("DEMO ANALISI", EY))
     story.append(Spacer(1,4))
     story.append(Paragraph("Tavola dei Rendimenti", T))
     _fb_loaded = bool(factbook_data)
@@ -2946,7 +2946,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # ════════════════════════════════════════════════════════
     # PAGES 3+: SCHEDE SINGOLI FONDI
     # ════════════════════════════════════════════════════════
-    story.append(Paragraph("AZIMUT INVESTMENTS  ·  AAS EMILIA ROMAGNA MARCHE UMBRIA", EY))
+    story.append(Paragraph("DEMO ANALISI", EY))
     story.append(Spacer(1,4))
     story.append(Paragraph("Schede Analitiche dei Fondi", T))
     story.append(Paragraph(
