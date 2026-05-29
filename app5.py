@@ -44,6 +44,21 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Playwright / Chromium bootstrap (Streamlit Cloud) ───────
+@st.cache_resource(show_spinner=False)
+def _ensure_playwright_chromium():
+    """Installa il browser Chromium per Playwright (solo al primo avvio del server)."""
+    import subprocess, sys
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium", "--with-deps"],
+            capture_output=True, timeout=120
+        )
+    except Exception:
+        pass
+
+_ensure_playwright_chromium()
+
 # ── CONSTANTS ───────────────────────────────────────────────
 GROUP_NAMES = {"ALLOCATION", "AZIONARI (LONG)", "BOND"}
 COL_A, COL_B, COL_C, COL_G, COL_K, COL_O, COL_R = 0, 1, 2, 6, 10, 14, 17
@@ -1294,6 +1309,80 @@ def load_quantalys_ratings() -> dict:
     return {}
 
 
+# ── Quantalys chart capture (Playwright) ────────────────────────────────────
+
+def _qtl_to_historique_url(url: str) -> str:
+    """Trasforma URL Quantalys fondo → URL pagina Historique con i 6 grafici."""
+    m = re.search(r'quantalys\.it/Fonds(?:/[A-Za-z]+)?/(\d+)', url)
+    if m:
+        return f"https://www.quantalys.it/Fonds/Historique/{m.group(1)}"
+    return url
+
+
+@st.cache_data(show_spinner=False, ttl=86400)
+def _capture_qtl_6charts(hist_url: str) -> bytes | None:
+    """Cattura i 6 riquadri grafici dalla pagina Quantalys Historique.
+    Usa cache Streamlit 24h. Restituisce PNG bytes, o None se Playwright
+    non è disponibile / la pagina non contiene i grafici attesi."""
+    try:
+        from playwright.sync_api import sync_playwright  # type: ignore
+        from PIL import Image
+        import io as _io
+    except ImportError:
+        return None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            # Viewport molto alto: evita scroll, tutti gli SVG visibili subito
+            page = browser.new_page(viewport={"width": 1400, "height": 3200})
+            page.goto(hist_url, wait_until="networkidle", timeout=30_000)
+            page.wait_for_timeout(5_000)   # attende rendering amCharts SVG
+
+            # Chiude il banner cookie se presente (altrimenti copre i grafici)
+            try:
+                _cookie_btn = page.locator("button:has-text('Ok, accetta tutto'), button:has-text('Accetta tutto'), button:has-text('Accept all')")
+                if _cookie_btn.count() > 0:
+                    _cookie_btn.first.click()
+                    page.wait_for_timeout(800)
+            except Exception:
+                pass
+
+            # Bounding box delle 2 righe con ≥3 SVG ciascuna (= 6 riquadri)
+            bounds = page.evaluate("""() => {
+                const rows = [...document.querySelectorAll('.row.is-flex.row-layout')]
+                              .filter(r => r.querySelectorAll('svg').length >= 3);
+                if (rows.length < 2) return null;
+                const r1 = rows[0].getBoundingClientRect();
+                const r2 = rows[rows.length - 1].getBoundingClientRect();
+                const sy = window.scrollY || 0;
+                return {
+                    x: Math.round(r1.left) - 5,
+                    y: Math.round(r1.top  + sy) - 18,
+                    w: Math.round(r1.width) + 10,
+                    h: Math.round(r2.bottom - r1.top) + 28
+                };
+            }""")
+            png_full = page.screenshot(full_page=True)
+            browser.close()
+
+        if not bounds:
+            return None
+
+        img = Image.open(_io.BytesIO(png_full))
+        x1  = max(0, bounds["x"])
+        y1  = max(0, bounds["y"])
+        x2  = min(img.width,  x1 + bounds["w"])
+        y2  = min(img.height, y1 + bounds["h"])
+        cropped = img.crop((x1, y1, x2, y2))
+
+        buf = _io.BytesIO()
+        cropped.save(buf, format="PNG")
+        return buf.getvalue()
+
+    except Exception:
+        return None
+
+
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
     ws = wb[sheet_name]
     rows = list(ws.iter_rows(values_only=True))
@@ -2042,7 +2131,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                  fida_df: pd.DataFrame = None,
                  factbook_data: dict = None,
                  cache_date: str = "",
-                 print_unp: bool = False) -> bytes:
+                 print_unp: bool = False,
+                 qtl_charts: bool = False) -> bytes:
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -2078,6 +2168,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     if fida_df is not None and not fida_df.empty and "isin" in fida_df.columns:
         isin_map = {r["nome"]: str(r["isin"]).strip() for _, r in fida_df.iterrows()
                     if r.get("isin") and str(r.get("isin","")).strip()}
+    isin_map.update(MANUAL_ISIN_OVERRIDES)   # fondi senza ISIN nell'Excel
     w_az  = (d_act[wcol]*d_act["az_pct"]).sum()*100
     w_obb = (d_act[wcol]*d_act["obb_pct"]).sum()*100
 
@@ -2914,6 +3005,25 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             card += [Spacer(1,3),
                      Paragraph("<b>Performance Annuale (%)</b>", SM),
                      RLImage(bar_buf, width=PW, height=2.4*cm)]
+
+        # ── Grafici Quantalys (6 riquadri: serie storica + fondo vs categoria) ──
+        if qtl_charts and isin:
+            _qurl_chart = _pdf_qtl.get(isin, "")
+            if _qurl_chart:
+                _hist_url  = _qtl_to_historique_url(_qurl_chart)
+                _qtl_png   = _capture_qtl_6charts(_hist_url)
+                if _qtl_png:
+                    _qtl_io  = io.BytesIO(_qtl_png)
+                    # aspect ratio empirico 1186×739 px (rilevato da test Playwright)
+                    _qtl_w   = PW * 0.98
+                    _qtl_h   = _qtl_w * (739 / 1186)
+                    card += [Spacer(1,4),
+                             Paragraph(
+                                 "<b>Analisi Quantalys</b>"
+                                 " · Serie Storica &amp; Performance Comparata",
+                                 SM),
+                             RLImage(_qtl_io, width=_qtl_w, height=_qtl_h)]
+
         story.append(KeepTogether(card))
 
         # Separatore sottile tra schede
@@ -5307,9 +5417,20 @@ def main():
         key="_pdf_print_unp",
         help="Aggiunge una tabella con i dati UNP e IUNP per ogni fondo (commissioni nette consulente).",
     )
+    _qtl_charts_pdf = st.checkbox(
+        "Includi grafici Quantalys nel PDF",
+        value=False,
+        key="_pdf_qtl_charts",
+        help=(
+            "Aggiunge sotto ogni scheda fondo i 6 grafici Quantalys "
+            "(serie storiche 1/3/5 anni + fondo vs categoria). "
+            "Richiede Playwright — la prima generazione può richiedere ~1 min."
+        ),
+    )
 
     # ── Cache key: invalidate when portfolio/profile/fund-data changes ──────
-    _pdf_cache_key = (f"{_ptf_key}|{len(df_act)}|{len(_fd_live)}|unp{int(_print_unp)}"
+    _pdf_cache_key = (f"{_ptf_key}|{len(df_act)}|{len(_fd_live)}"
+                      f"|unp{int(_print_unp)}|qtl{int(_qtl_charts_pdf)}"
                       + (f"|{hash(tuple(sorted(df_act['nome'].tolist())))}"
                          if _is_free else ""))
 
@@ -5323,7 +5444,8 @@ def main():
                 _pdf_auto = generate_pdf(
                     df_act, wcol, profile, ptf_label, _fd_live,
                     fida_df=fida_df, factbook_data=factbook_data,
-                    cache_date=cache_date, print_unp=_print_unp)
+                    cache_date=cache_date, print_unp=_print_unp,
+                    qtl_charts=_qtl_charts_pdf)
                 st.session_state["_pdf_bytes_ready"]  = _pdf_auto
                 st.session_state["_pdf_fname_ready"]  = _fname_auto
                 st.session_state["_pdf_lbl"]          = (
@@ -5369,7 +5491,8 @@ def main():
                     pdf_bytes = generate_pdf(
                         df_act, wcol, profile, ptf_label, fund_data,
                         fida_df=fida_df, factbook_data=factbook_data,
-                        cache_date=cache_date, print_unp=_print_unp)
+                        cache_date=cache_date, print_unp=_print_unp,
+                        qtl_charts=_qtl_charts_pdf)
                     fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
                              f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
                     st.session_state["_pdf_bytes_ready"]  = pdf_bytes
