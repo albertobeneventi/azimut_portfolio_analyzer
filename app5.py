@@ -89,6 +89,7 @@ MANUAL_ISIN_OVERRIDES: dict[str, str] = {
     "AZ Equity - Global Infrastructure":    "LU1621767737",
     "AZ Bond - CoCo Bonds (EUR-hedged)":    "LU2622195936",
     "AZ Bond - Convertible Bond":           "LU1422848470",
+    "AZ Equity - Brazil Trend":             "LU0346934713",
 }
 
 # Override for one fund whose FIDA sheet hyperlink points to class B
