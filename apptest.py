@@ -5579,7 +5579,7 @@ def main():
             )
 
         if _qtl_miss:
-            with st.expander(f"▸ {len(_qtl_miss)} fondo/i senza URL Quantalys — clicca per vedere"):
+            with st.expander(f"▸ {len(_qtl_miss)} fondo/i senza URL Quantalys — clicca per vedere", expanded=True):
                 st.markdown(
                     "Incollami il link Quantalys (es. `https://www.quantalys.it/Fonds/12345`) "
                     "per ciascuno e lo aggiungo alla cache:\n"
@@ -5691,7 +5691,7 @@ except BaseException as _e:
     # For everything else, show a readable error in the UI.
     try:
         st.error(f"**Errore imprevisto:** {_ename}: {_e}")
-        with st.expander("🔍 Dettaglio tecnico (per il debug)"):
+        with st.expander("🔍 Dettaglio tecnico (per il debug)", expanded=True):
             st.code(_tb.format_exc())
     except Exception:
         pass
