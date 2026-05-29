@@ -1326,11 +1326,8 @@ def _qtl_to_historique_url(url: str) -> str:
 
 
 def _capture_qtl_6charts(hist_url: str) -> bytes | None:
-    """Cattura dalla pagina Quantalys Historique un'immagine composita:
-      - Region A: legenda (pallini colorati) + tabella performance
-      - Region B: titolo "Serie storica" + 3 grafici storici +
-                  titolo "Fondo vs Categoria" + 3 scatter
-    Esclude: toolbar blu, "Indicatori avanzati".
+    """Screenshot viewport della sezione principale Quantalys Historique.
+    Approccio semplice: scroll al pannello → screenshot del viewport 1400×780.
     Cache su file — scrive solo su successo."""
     import hashlib, sys as _sys
 
@@ -1343,22 +1340,24 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
 
     try:
         from playwright.sync_api import sync_playwright  # type: ignore
-        from PIL import Image
-        import io as _io
     except ImportError as _e:
         print(f"[QTL] Import error: {_e}", file=_sys.stderr)
         return None
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page(viewport={"width": 1400, "height": 3200})
+            # Viewport 1400×780 — mostra il pannello principale completo
+            page = browser.new_page(viewport={"width": 1400, "height": 780})
             page.goto(hist_url, wait_until="domcontentloaded", timeout=45_000)
+
+            # Attende rendering amCharts
             try:
-                page.wait_for_selector(".qtjs-chart-histo svg", timeout=18_000)
-                page.wait_for_selector(".qtjs-chart-fvscat svg", timeout=10_000)
+                page.wait_for_selector(".qtjs-panel-reloaded-graph svg", timeout=18_000)
             except Exception:
                 pass
-            page.wait_for_timeout(2_000)
+            page.wait_for_timeout(3_000)
+
+            # Chiude cookie banner se presente
             try:
                 _cb = page.locator(
                     "button:has-text('Ok, accetta tutto'),"
@@ -1370,178 +1369,25 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
                     page.wait_for_timeout(700)
             except Exception:
                 pass
-            # Sposta mouse fuori dai grafici → elimina tooltip hover
+
+            # Scrolla al pannello principale (grafico storico)
+            page.evaluate("""() => {
+                const el = document.querySelector('.qtjs-panel-reloaded-graph')
+                        || document.querySelector('[class*="qtjs-panel"]');
+                if (el) el.scrollIntoView({behavior: 'instant', block: 'start'});
+            }""")
+            page.wait_for_timeout(400)
+
+            # Sposta mouse fuori dai grafici per evitare tooltip hover
             page.mouse.move(10, 10)
             page.wait_for_timeout(600)
 
-            bounds_info = page.evaluate("""() => {
-                const dbg = {};
-
-                // ══ Trova le righe con i 6 grafici piccoli ══════════════════
-                // Strategia 1: colonne figlie DIRETTE con .qtjs-chart-histo/.fvscat
-                let targetRows = [...document.querySelectorAll('.row.is-flex.row-layout')]
-                    .filter(r => {
-                        const colsWithChart = [...r.children].filter(c =>
-                            c.querySelector('.qtjs-chart-histo, .qtjs-chart-fvscat')
-                        );
-                        return colsWithChart.length >= 3;
-                    });
-                dbg.strategy1rows = targetRows.length;
-
-                // Strategia 2: .closest() da ogni .qtjs-chart-histo / .qtjs-chart-fvscat
-                if (targetRows.length < 1) {
-                    const rowSet = new Set();
-                    document.querySelectorAll('.qtjs-chart-histo, .qtjs-chart-fvscat')
-                        .forEach(el => {
-                            const r = el.closest('.row.is-flex.row-layout');
-                            if (r) rowSet.add(r);
-                        });
-                    targetRows = [...rowSet]
-                        .sort((a,b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
-                    dbg.strategy2rows = targetRows.length;
-                }
-
-                // Strategia 3: fallback originale — SVG≥3 con altezza ragionevole
-                if (targetRows.length < 1) {
-                    targetRows = [...document.querySelectorAll('.row.is-flex.row-layout')]
-                        .filter(r => {
-                            const rr = r.getBoundingClientRect();
-                            return r.querySelectorAll('svg').length >= 3
-                                && rr.height >= 80 && rr.height <= 500;
-                        });
-                    dbg.strategy3rows = targetRows.length;
-                }
-
-                if (targetRows.length < 1) {
-                    dbg.error = 'no-target-rows';
-                    return { dbg };
-                }
-
-                const firstRowR = targetRows[0].getBoundingClientRect();
-                const lastRowR  = targetRows[targetRows.length - 1].getBoundingClientRect();
-
-                // ══ Pannello superiore (legenda + tabella + toolbar + indicatori) ══
-                const panel = document.querySelector('.qtjs-panel-reloaded-graph')
-                           || document.querySelector('[class*="qtjs-panel"]');
-                dbg.panelFound = !!panel;
-
-                // ── Region A ────────────────────────────────────────────────
-                let regionA = null;
-                if (panel) {
-                    const pr = panel.getBoundingClientRect();
-                    dbg.panelTop = Math.round(pr.top);
-                    dbg.panelH   = Math.round(pr.height);
-                    dbg.panelBot = Math.round(pr.bottom);
-
-                    // Cerca la toolbar: ha <select> o <input> al suo interno
-                    let regionAH = null;
-                    const ctrlEl = panel.querySelector('select') || panel.querySelector('input[type="text"]');
-                    if (ctrlEl) {
-                        let el = ctrlEl;
-                        while (el.parentElement && el.parentElement !== panel) el = el.parentElement;
-                        const h = Math.round(el.getBoundingClientRect().top - pr.top);
-                        if (h >= 30 && h <= 700) { regionAH = h; dbg.regionAstrat = 'select h='+h; }
-                    }
-                    if (regionAH === null) {
-                        const tbl = panel.querySelector('table');
-                        if (tbl) {
-                            const h = Math.round(tbl.getBoundingClientRect().bottom - pr.top) + 8;
-                            if (h >= 60 && h <= 700) { regionAH = h; dbg.regionAstrat = 'table h='+h; }
-                        }
-                    }
-                    if (regionAH === null) { regionAH = 300; dbg.regionAstrat = 'fallback300'; }
-
-                    regionA = {
-                        x: Math.round(pr.left) - 5,
-                        y: Math.round(pr.top),
-                        w: Math.round(pr.width) + 10,
-                        h: regionAH
-                    };
-                }
-
-                // ── Region B ────────────────────────────────────────────────
-                // Inizia: subito dopo il pannello, o 80px prima del primo grafico
-                let regionBStartY;
-                if (panel) {
-                    const pr = panel.getBoundingClientRect();
-                    // Se i grafici sono FUORI dal pannello, parto dal fondo del pannello
-                    // Se i grafici sono DENTRO, parto 80px prima del primo grafico
-                    if (firstRowR.top >= pr.bottom - 20) {
-                        regionBStartY = Math.round(pr.bottom);
-                        dbg.regionBstrat = 'panel-bottom';
-                    } else {
-                        regionBStartY = Math.max(0, Math.round(firstRowR.top) - 80);
-                        dbg.regionBstrat = 'firstRow-80';
-                    }
-                } else {
-                    regionBStartY = Math.max(0, Math.round(firstRowR.top) - 80);
-                    dbg.regionBstrat = 'no-panel';
-                }
-
-                const regionBEndY = Math.round(lastRowR.bottom) + 20;
-                const refX = regionA ? regionA.x : Math.round(firstRowR.left) - 5;
-                const refW = regionA ? regionA.w : Math.round(firstRowR.width) + 10;
-
-                if (regionBEndY <= regionBStartY) {
-                    dbg.error = 'regionB-negative h=' + (regionBEndY - regionBStartY);
-                    return { dbg };
-                }
-
-                const regionB = {
-                    x: refX,
-                    y: regionBStartY,
-                    w: refW,
-                    h: regionBEndY - regionBStartY
-                };
-
-                dbg.regionBStart = regionBStartY;
-                dbg.regionBH     = regionBEndY - regionBStartY;
-                dbg.firstRowY    = Math.round(firstRowR.top);
-                dbg.lastRowBot   = Math.round(lastRowR.bottom);
-
-                return { regionA, regionB, dbg };
-            }""")
-
+            # Screenshot solo del viewport (no full_page)
+            png_bytes = page.screenshot()
             svg_n = page.evaluate("() => document.querySelectorAll('svg').length")
-            _dbg  = (bounds_info or {}).get("dbg", {})
-            print(f"[QTL] SVG={svg_n}  dbg={_dbg}", file=_sys.stderr)
-            if _dbg.get("error"):
-                print(f"[QTL] JS error: {_dbg['error']} — url={hist_url}", file=_sys.stderr)
-
-            png_full = page.screenshot(full_page=True)
+            print(f"[QTL] viewport screenshot ok  SVG={svg_n}  url={hist_url}", file=_sys.stderr)
             browser.close()
 
-        if not bounds_info or not bounds_info.get("regionB"):
-            print(f"[QTL] nessun bounds per {hist_url}  info={bounds_info}", file=_sys.stderr)
-            return None
-
-        rA  = bounds_info.get("regionA")   # può essere None se pannello non trovato
-        rB  = bounds_info["regionB"]
-        img = Image.open(_io.BytesIO(png_full))
-
-        def _crop(r):
-            x1 = max(0, r["x"]);  y1 = max(0, r["y"])
-            x2 = min(img.width,  x1 + r["w"])
-            y2 = min(img.height, y1 + r["h"])
-            return img.crop((x1, y1, x2, y2))
-
-        img_b = _crop(rB)   # serie storica + 6 grafici
-
-        if rA:
-            img_a = _crop(rA)   # legenda + tabella
-            print(f"[QTL] imgA={img_a.size}  imgB={img_b.size}", file=_sys.stderr)
-            gap      = 10
-            target_w = max(img_a.width, img_b.width)
-            combined = Image.new("RGB", (target_w, img_a.height + gap + img_b.height), (245, 245, 245))
-            combined.paste(img_a, ((target_w - img_a.width) // 2, 0))
-            combined.paste(img_b, ((target_w - img_b.width) // 2, img_a.height + gap))
-        else:
-            print(f"[QTL] solo imgB={img_b.size} (no regionA)", file=_sys.stderr)
-            combined = img_b
-
-        buf = _io.BytesIO()
-        combined.save(buf, format="PNG")
-        png_bytes = buf.getvalue()
         _cache_fp.write_bytes(png_bytes)
         return png_bytes
 
