@@ -95,6 +95,12 @@ MANUAL_ISIN_OVERRIDES: dict[str, str] = {
     "AZ Bond - CoCo Bonds (EUR-hedged)":    "LU2622195936",
     "AZ Bond - Convertible Bond":           "LU1422848470",
     "AZ F.1 All. Balanced FoF A Cap EUR":   "LU0346933400",  # ISIN classe A (FondiDoc URL)
+    # Fondi GP (nome breve) senza ISIN nel foglio FIDA — necessari per Quantalys SUGGERITO
+    "AZ Allocation - Global Balanced":      "LU0262757841",
+    "AZ Bond - Aggregate Bond Euro":        "LU0194809330",
+    "AZ Bond - Income Dynamic":             "LU0108019232",
+    "AZ Equity - Global FoF":              "LU0262760399",
+    "AZ Equity - Global Healthcare":        "LU2384058314",
 }
 
 # Override for one fund whose FIDA sheet hyperlink points to class B
