@@ -1383,10 +1383,44 @@ def _capture_qtl_6charts(hist_url: str) -> bytes | None:
             page.wait_for_timeout(600)
 
             # Screenshot solo del viewport (no full_page)
-            png_bytes = page.screenshot()
+            png_raw = page.screenshot()
+
+            # Trova il top della toolbar blu (contiene <select>) per croppare lì
+            toolbar_y = page.evaluate("""() => {
+                const panel = document.querySelector('.qtjs-panel-reloaded-graph')
+                           || document.querySelector('[class*="qtjs-panel"]');
+                if (!panel) return null;
+                const ctrl = panel.querySelector('select')
+                          || panel.querySelector('input[type="text"]');
+                if (!ctrl) return null;
+                let el = ctrl;
+                while (el.parentElement && el.parentElement !== panel) {
+                    el = el.parentElement;
+                }
+                return Math.round(el.getBoundingClientRect().top);
+            }""")
+
             svg_n = page.evaluate("() => document.querySelectorAll('svg').length")
-            print(f"[QTL] viewport screenshot ok  SVG={svg_n}  url={hist_url}", file=_sys.stderr)
+            print(f"[QTL] viewport ok  SVG={svg_n}  toolbar_y={toolbar_y}  url={hist_url}",
+                  file=_sys.stderr)
             browser.close()
+
+        # Croppa appena sopra la toolbar blu (esclude toolbar + indicatori avanzati)
+        if toolbar_y and toolbar_y > 100:
+            try:
+                from PIL import Image as _PILImg
+                import io as _io2
+                _img  = _PILImg.open(_io2.BytesIO(png_raw))
+                _crop = _img.crop((0, 0, _img.width, toolbar_y - 2))
+                _buf  = _io2.BytesIO()
+                _crop.save(_buf, format="PNG")
+                png_bytes = _buf.getvalue()
+                print(f"[QTL] crop → {_img.width}×{toolbar_y-2}px", file=_sys.stderr)
+            except Exception as _ce:
+                print(f"[QTL] crop fallback (PIL err: {_ce})", file=_sys.stderr)
+                png_bytes = png_raw
+        else:
+            png_bytes = png_raw
 
         _cache_fp.write_bytes(png_bytes)
         return png_bytes
