@@ -1322,11 +1322,13 @@ def factbook_from_excel(excel_bytes: bytes) -> dict:
 # ── PARSER FACTBOOK FONDI PENSIONE ──────────────────────────────────────────
 
 def parse_fp_factbook(pdf_bytes: bytes) -> dict:
-    """Estrae rendimenti netti dal Factbook Fondi Pensione AZ.
+    """Estrae rendimenti dal Factbook Fondi Pensione AZ Previdenza / AZ Sustainable Future.
 
-    Il formato atteso è una tabella con colonne:
-      Fondo | ... | YTD | 1 Anno | 3 Anni | 5 Anni | ...
-    Restituisce {nome_fondo: {ytd, perf_1y, perf_3y, perf_5y, "_ref_date": "..."}}
+    Formato atteso (tabella riepilogativa):
+      colonne: nome | AUM | 1 mese | 3 mesi | 6 mesi | 12 mesi | 24 mesi | 36 mesi | 60 mesi | YTD
+      header riga: ['', 'AUM', '1 mese', '3 mesi', '6 mesi', '12 mesi', '24 mesi', '36 mesi', '60 mesi', 'YTD']
+
+    Restituisce {nome_comparto: {ytd, perf_1y, perf_3y, perf_5y}, "_ref_date": "DD/MM/YYYY"}
     """
     try:
         import pdfplumber
@@ -1339,8 +1341,10 @@ def parse_fp_factbook(pdf_bytes: bytes) -> dict:
     def _to_pct(s):
         if not s:
             return None
-        s = str(s).strip().replace('−', '-').replace('–', '-').replace(',', '.').replace('%', '').strip()
-        if s in ('-', 'n.d.', 'N/D', '', 'None', 'nd'):
+        s = (str(s).strip()
+             .replace('−', '-').replace('–', '-')
+             .replace(',', '.').replace('%', '').strip())
+        if s in ('-', 'n.d.', 'N/D', '', 'None', 'nd', 'n/d'):
             return None
         try:
             return f"{float(s):+.2f}%"
@@ -1349,57 +1353,58 @@ def parse_fp_factbook(pdf_bytes: bytes) -> dict:
 
     try:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            full_text = "\n".join(p.extract_text() or "" for p in pdf.pages)
-            # Cerca data di riferimento (es. "al 31 marzo 2025" o "31/03/2025")
-            _dm = re.search(r'(\d{1,2}[\/\s]\w+[\/\s]\d{4}|\d{2}/\d{2}/\d{4})', full_text)
-            if _dm:
-                ref_date = _dm.group(1).strip()
-
             for page in pdf.pages:
+                page_txt = page.extract_text() or ""
+
+                # Cerca data di riferimento "Performance at DD/MM/YYYY"
+                if not ref_date:
+                    _dm = re.search(r'Performance\s+at\s+(\d{2}/\d{2}/\d{4})', page_txt, re.IGNORECASE)
+                    if _dm:
+                        ref_date = _dm.group(1)
+
                 tables = page.extract_tables()
                 for table in tables:
-                    if not table or len(table) < 2:
+                    if not table or len(table) < 6:
                         continue
-                    # Cerca la riga header con colonne di rendimento
-                    header = None
-                    header_idx = 0
-                    for i, row in enumerate(table):
-                        row_txt = [str(c or "").strip().lower() for c in row]
-                        if any(kw in " ".join(row_txt) for kw in
-                               ["anno", "ytd", "rend", "perf", "1 a", "3 a", "5 a"]):
-                            header = row
-                            header_idx = i
-                            break
-                    if header is None:
-                        continue
-                    # Mappa colonne
-                    def _col(kws):
-                        for j, h in enumerate(header):
-                            ht = str(h or "").lower().strip()
-                            if any(k in ht for k in kws):
-                                return j
-                        return None
-                    c_nome = _col(["fondo", "comparto", "linea", "nome"])
-                    if c_nome is None:
-                        c_nome = 0
-                    c_ytd   = _col(["ytd"])
-                    c_1y    = _col(["1 anno", "1anno", "12 m", "1 a"])
-                    c_3y    = _col(["3 ann", "3anno", "36 m", "3 a"])
-                    c_5y    = _col(["5 ann", "5anno", "60 m", "5 a"])
 
+                    # Cerca riga header con colonna "12 mesi" (formato AZ Previdenza)
+                    header_idx = None
+                    col_map = {}
+                    for i, row in enumerate(table):
+                        cells = [str(c or "").strip().lower() for c in row]
+                        row_str = " ".join(cells)
+                        if "12 mesi" in row_str or ("ytd" in row_str and "mesi" in row_str):
+                            header_idx = i
+                            # Mappa indici colonne
+                            for j, h in enumerate(row):
+                                ht = str(h or "").strip().lower()
+                                if ht == "ytd":              col_map["ytd"]  = j
+                                elif "12 mesi" in ht:        col_map["1y"]   = j
+                                elif "36 mesi" in ht:        col_map["3y"]   = j
+                                elif "60 mesi" in ht:        col_map["5y"]   = j
+                            break
+
+                    if header_idx is None or not col_map:
+                        continue
+
+                    # Estrai righe dati
                     for row in table[header_idx + 1:]:
-                        if not row or c_nome >= len(row):
+                        if not row:
                             continue
-                        nome = str(row[c_nome] or "").strip()
-                        if not nome or len(nome) < 3:
+                        nome = str(row[0] or "").replace("\n", " ").strip()
+                        if not nome or len(nome) < 5:
+                            continue
+                        # Salta righe vuote o di spaziatura
+                        if not any(str(c or "").strip() for c in row[1:]):
                             continue
                         entry = {}
-                        if c_ytd  is not None and c_ytd  < len(row): entry["ytd"]     = _to_pct(row[c_ytd])
-                        if c_1y   is not None and c_1y   < len(row): entry["perf_1y"] = _to_pct(row[c_1y])
-                        if c_3y   is not None and c_3y   < len(row): entry["perf_3y"] = _to_pct(row[c_3y])
-                        if c_5y   is not None and c_5y   < len(row): entry["perf_5y"] = _to_pct(row[c_5y])
+                        if "ytd" in col_map: entry["ytd"]     = _to_pct(row[col_map["ytd"]])
+                        if "1y"  in col_map: entry["perf_1y"] = _to_pct(row[col_map["1y"]])
+                        if "3y"  in col_map: entry["perf_3y"] = _to_pct(row[col_map["3y"]])
+                        if "5y"  in col_map: entry["perf_5y"] = _to_pct(row[col_map["5y"]])
                         if any(v for v in entry.values()):
                             result[nome] = entry
+
     except Exception:
         pass
 
