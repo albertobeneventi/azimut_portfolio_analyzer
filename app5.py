@@ -5791,20 +5791,29 @@ def main():
     with tab_fp:
         _fp_data = st.session_state.get("_fp_data") or load_fp_cache()
         _fp_ref  = (_fp_data or {}).get("_ref_date", "")
-        _fp_funds = {k: v for k, v in (_fp_data or {}).items()
-                     if k != "_ref_date" and isinstance(v, dict)}
+        _fp_all  = {k: v for k, v in (_fp_data or {}).items()
+                    if k != "_ref_date" and isinstance(v, dict)}
+        # Mostra solo i FP presenti nel portafoglio attivo
+        _ptf_nomi = set(df_act["nome"].tolist())
+        _fp_funds = {k: v for k, v in _fp_all.items() if k in _ptf_nomi}
         if not _fp_funds:
-            st.info(
-                "Nessun dato fondi pensione disponibile. "
-                "Carica il Factbook Fondi Pensione PDF dalla barra laterale.",
-                icon="🏦")
+            if not _fp_all:
+                st.info(
+                    "Nessun dato fondi pensione disponibile. "
+                    "Carica il Factbook Fondi Pensione PDF dalla barra laterale.",
+                    icon="🏦")
+            else:
+                st.info(
+                    "Nessun fondo pensione nel portafoglio attivo. "
+                    "Aggiungili dal costruttore LIBERO.",
+                    icon="🏦")
         else:
             _fp_note = f"Fonte: Factbook Fondi Pensione · {_fp_ref}" if _fp_ref else "Fonte: Factbook Fondi Pensione"
             st.markdown(
                 f"<p style='{_note_style}'><b>🏦 Fondi Pensione</b> &nbsp;·&nbsp; {_fp_note}</p>",
                 unsafe_allow_html=True)
-            _fp_hdr = ["Fondo", "YTD", "1 Anno", "3 Anni", "5 Anni"]
-            _fp_ptf = [f"<b>{len(_fp_funds)} fondi</b>", "", "", "", ""]
+            _fp_hdr = ["Fondo", "Peso", "YTD", "1 Anno", "3 Anni", "5 Anni"]
+            _fp_ptf = [f"<b>{len(_fp_funds)} fondi</b>", "", "", "", "", ""]
 
             def _pv(val):
                 if not val or val == "-":
@@ -5816,10 +5825,16 @@ def main():
                 except Exception:
                     return val
 
+            # Peso dal portafoglio attivo (ordine per peso decrescente)
+            _fp_peso = {r["nome"]: r[wcol] for _, r in _df_sorted.iterrows()
+                        if r["nome"] in _fp_funds}
             _fp_rows = []
-            for _fn, _fv in sorted(_fp_funds.items()):
+            for _fn, _fv in sorted(_fp_funds.items(),
+                                   key=lambda x: _fp_peso.get(x[0], 0), reverse=True):
+                _wp = _fp_peso.get(_fn, 0)
                 _fp_rows.append([
                     f"<span style='font-weight:500;'>{_fn}</span>",
+                    f"{_wp*100:.1f}%",
                     _pv(_fv.get("ytd",     "")),
                     _pv(_fv.get("perf_1y", "")),
                     _pv(_fv.get("perf_3y", "")),
