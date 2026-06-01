@@ -253,6 +253,8 @@ def save_ms_cache(ms_data: dict):
 # ricaricamento solo quando ci sono aggiornamenti (mensile Excel, trimestrale GP).
 EXCEL_CACHE_FILE = Path("data/excel_cache.json")
 GP_CACHE_FILE    = Path("data/gp_cache.json")
+FP_CACHE_FILE    = Path("data/fp_factbook_cache.json")
+SAVED_PTF_FILE   = Path("data/saved_portfolios.json")
 
 
 def _df_to_records(df: pd.DataFrame) -> list:
@@ -347,6 +349,76 @@ def save_gp_cache(gp_data: dict, filename: str = ""):
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         _push_json_to_repo(payload, "data/gp_cache.json",
                            f"auto: aggiorna gp_cache {datetime.date.today().isoformat()}")
+    except Exception:
+        pass
+
+
+# ── FONDI PENSIONE FACTBOOK CACHE ────────────────────────────────────────────
+
+def load_fp_cache() -> dict:
+    """Carica i dati Factbook Fondi Pensione.
+    Returns dict {fund_name: {ytd, perf_1y, perf_3y, perf_5y, ...}, "_ref_date": "..."}
+    oppure {} se assente."""
+    try:
+        if FP_CACHE_FILE.exists() and FP_CACHE_FILE.stat().st_size > 10:
+            return json.loads(FP_CACHE_FILE.read_text(encoding="utf-8-sig"))
+    except Exception:
+        pass
+    return {}
+
+
+def save_fp_cache(fp_data: dict):
+    """Salva i dati Factbook Fondi Pensione su disco e li pusha su GitHub."""
+    try:
+        FP_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        FP_CACHE_FILE.write_text(
+            json.dumps(fp_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        _push_json_to_repo(fp_data, "data/fp_factbook_cache.json",
+                           f"auto: aggiorna fp_cache {datetime.date.today().isoformat()}")
+    except Exception:
+        pass
+
+
+# ── PORTAFOGLI LIBERI SALVATI ─────────────────────────────────────────────────
+
+def load_saved_portfolios() -> dict:
+    """Carica i portafogli liberi salvati.
+    Returns {nome: {"date": "YYYY-MM-DD", "fondi": [{"nome": ..., "peso": ...}, ...]}}"""
+    try:
+        if SAVED_PTF_FILE.exists() and SAVED_PTF_FILE.stat().st_size > 10:
+            return json.loads(SAVED_PTF_FILE.read_text(encoding="utf-8-sig"))
+    except Exception:
+        pass
+    return {}
+
+
+def save_portfolio(name: str, fondi: list):
+    """Salva un portafoglio libero con nome. fondi = [{"nome": ..., "peso": float}]"""
+    try:
+        saved = load_saved_portfolios()
+        saved[name] = {
+            "date":  datetime.date.today().isoformat(),
+            "fondi": fondi,
+        }
+        SAVED_PTF_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SAVED_PTF_FILE.write_text(
+            json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+        _push_json_to_repo(saved, "data/saved_portfolios.json",
+                           f"auto: salva portafoglio '{name}' {datetime.date.today().isoformat()}")
+    except Exception:
+        pass
+
+
+def delete_portfolio(name: str):
+    """Elimina un portafoglio salvato."""
+    try:
+        saved = load_saved_portfolios()
+        if name in saved:
+            del saved[name]
+            SAVED_PTF_FILE.write_text(
+                json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+            _push_json_to_repo(saved, "data/saved_portfolios.json",
+                               f"auto: elimina portafoglio '{name}' {datetime.date.today().isoformat()}")
     except Exception:
         pass
 
@@ -1244,6 +1316,95 @@ def factbook_from_excel(excel_bytes: bytes) -> dict:
         if entry:
             result[norm] = entry
 
+    return result
+
+
+# ── PARSER FACTBOOK FONDI PENSIONE ──────────────────────────────────────────
+
+def parse_fp_factbook(pdf_bytes: bytes) -> dict:
+    """Estrae rendimenti netti dal Factbook Fondi Pensione AZ.
+
+    Il formato atteso è una tabella con colonne:
+      Fondo | ... | YTD | 1 Anno | 3 Anni | 5 Anni | ...
+    Restituisce {nome_fondo: {ytd, perf_1y, perf_3y, perf_5y, "_ref_date": "..."}}
+    """
+    try:
+        import pdfplumber
+    except ImportError:
+        return {}
+
+    result: dict = {}
+    ref_date = ""
+
+    def _to_pct(s):
+        if not s:
+            return None
+        s = str(s).strip().replace('−', '-').replace('–', '-').replace(',', '.').replace('%', '').strip()
+        if s in ('-', 'n.d.', 'N/D', '', 'None', 'nd'):
+            return None
+        try:
+            return f"{float(s):+.2f}%"
+        except Exception:
+            return None
+
+    try:
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            full_text = "\n".join(p.extract_text() or "" for p in pdf.pages)
+            # Cerca data di riferimento (es. "al 31 marzo 2025" o "31/03/2025")
+            _dm = re.search(r'(\d{1,2}[\/\s]\w+[\/\s]\d{4}|\d{2}/\d{2}/\d{4})', full_text)
+            if _dm:
+                ref_date = _dm.group(1).strip()
+
+            for page in pdf.pages:
+                tables = page.extract_tables()
+                for table in tables:
+                    if not table or len(table) < 2:
+                        continue
+                    # Cerca la riga header con colonne di rendimento
+                    header = None
+                    header_idx = 0
+                    for i, row in enumerate(table):
+                        row_txt = [str(c or "").strip().lower() for c in row]
+                        if any(kw in " ".join(row_txt) for kw in
+                               ["anno", "ytd", "rend", "perf", "1 a", "3 a", "5 a"]):
+                            header = row
+                            header_idx = i
+                            break
+                    if header is None:
+                        continue
+                    # Mappa colonne
+                    def _col(kws):
+                        for j, h in enumerate(header):
+                            ht = str(h or "").lower().strip()
+                            if any(k in ht for k in kws):
+                                return j
+                        return None
+                    c_nome = _col(["fondo", "comparto", "linea", "nome"])
+                    if c_nome is None:
+                        c_nome = 0
+                    c_ytd   = _col(["ytd"])
+                    c_1y    = _col(["1 anno", "1anno", "12 m", "1 a"])
+                    c_3y    = _col(["3 ann", "3anno", "36 m", "3 a"])
+                    c_5y    = _col(["5 ann", "5anno", "60 m", "5 a"])
+
+                    for row in table[header_idx + 1:]:
+                        if not row or c_nome >= len(row):
+                            continue
+                        nome = str(row[c_nome] or "").strip()
+                        if not nome or len(nome) < 3:
+                            continue
+                        entry = {}
+                        if c_ytd  is not None and c_ytd  < len(row): entry["ytd"]     = _to_pct(row[c_ytd])
+                        if c_1y   is not None and c_1y   < len(row): entry["perf_1y"] = _to_pct(row[c_1y])
+                        if c_3y   is not None and c_3y   < len(row): entry["perf_3y"] = _to_pct(row[c_3y])
+                        if c_5y   is not None and c_5y   < len(row): entry["perf_5y"] = _to_pct(row[c_5y])
+                        if any(v for v in entry.values()):
+                            result[nome] = entry
+    except Exception:
+        pass
+
+    if ref_date:
+        result["_ref_date"] = ref_date
     return result
 
 
@@ -3267,6 +3428,57 @@ def free_portfolio_ui(data):
                 st.session_state.free_ptf.append({"nome":fname,"categoria":fd["categoria"] if fd is not None else "","macro_cat":mc,"az_pct":az,"w_input":w})
                 st.rerun()
 
+    # ── Carica portafoglio salvato ────────────────────────────────────────────
+    _saved = load_saved_portfolios()
+    if _saved:
+        _saved_names = ["— Nuovo portafoglio —"] + sorted(_saved.keys())
+        _sc1, _sc2 = st.columns([3, 1])
+        with _sc1:
+            _sel_saved = st.selectbox(
+                "📂  Carica portafoglio salvato",
+                options=_saved_names,
+                key="sel_saved_ptf",
+            )
+        with _sc2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("📂 Carica", key="btn_load_saved",
+                         use_container_width=True,
+                         disabled=(_sel_saved == "— Nuovo portafoglio —")):
+                _ptf_to_load = _saved.get(_sel_saved, {})
+                _fondi_saved = _ptf_to_load.get("fondi", [])
+                if _fondi_saved:
+                    new_free = []
+                    for _fs in _fondi_saved:
+                        _fn = _fs.get("nome", "")
+                        _fw = float(_fs.get("peso", 10.0))
+                        _fd_row = fida[fida["nome"] == _fn]
+                        if not _fd_row.empty:
+                            _fd_r = _fd_row.iloc[0]
+                            _mc = _fd_r["macro_cat"]
+                            _az = az_lookup.get(_fn, DEFAULT_AZ.get(_mc, 0.5))
+                            _cat = _fd_r["categoria"]
+                        else:
+                            _mc, _az, _cat = "Altro", 0.5, ""
+                        new_free.append({"nome": _fn, "categoria": _cat,
+                                         "macro_cat": _mc, "az_pct": _az,
+                                         "w_input": _fw})
+                    st.session_state.free_ptf = new_free
+                    st.toast(f"✅ Portafoglio '{_sel_saved}' caricato", icon="📂")
+                    st.rerun()
+        if _sel_saved != "— Nuovo portafoglio —":
+            _ptf_info = _saved.get(_sel_saved, {})
+            _ptf_date = _ptf_info.get("date", "")
+            _n_fondi_s = len(_ptf_info.get("fondi", []))
+            _dc1, _dc2 = st.columns([3, 1])
+            with _dc1:
+                st.caption(f"💾 Salvato il {_ptf_date} · {_n_fondi_s} fondi")
+            with _dc2:
+                if st.button("🗑️ Elimina", key="btn_del_saved",
+                             use_container_width=True):
+                    delete_portfolio(_sel_saved)
+                    st.toast(f"🗑️ '{_sel_saved}' eliminato", icon="🗑️")
+                    st.rerun()
+
     if not st.session_state.free_ptf: st.info("☝️ Aggiungi fondi."); return None
     st.markdown("**Fondi nel portafoglio:**")
     total_w = 0.0
@@ -3285,6 +3497,29 @@ def free_portfolio_ui(data):
     if diff<0.05: st.markdown(f'<div class="w-ok">✅ Somma pesi: <b>{total_w:.1f}%</b> — OK!</div>',unsafe_allow_html=True)
     else:         st.markdown(f'<div class="w-warn">⚠️ Somma pesi: <b>{total_w:.1f}%</b> (mancano {100-total_w:+.1f}%)</div>',unsafe_allow_html=True)
     if diff>0.5: return None
+
+    # ── Salva portafoglio ─────────────────────────────────────────────────────
+    st.markdown("---")
+    _sv1, _sv2, _sv3 = st.columns([2.5, 1, 1])
+    with _sv1:
+        _ptf_save_name = st.text_input(
+            "💾  Nome portafoglio",
+            placeholder="es. Pippo Rossi — Conservativo",
+            key="ptf_save_name",
+            label_visibility="collapsed",
+        )
+    with _sv2:
+        if st.button("💾 Salva", key="btn_save_ptf", use_container_width=True,
+                     disabled=not _ptf_save_name.strip()):
+            _fondi_to_save = [{"nome": f["nome"], "peso": f["w_input"]}
+                              for f in st.session_state.free_ptf]
+            save_portfolio(_ptf_save_name.strip(), _fondi_to_save)
+            st.toast(f"✅ Portafoglio '{_ptf_save_name.strip()}' salvato", icon="💾")
+            st.rerun()
+    with _sv3:
+        if st.button("🗑️ Svuota", key="btn_clear_ptf", use_container_width=True):
+            st.session_state.free_ptf = []
+            st.rerun()
 
     records = [{"nome":f["nome"],"categoria":f["categoria"],"gruppo":f["macro_cat"],"macro_cat":f["macro_cat"],"az_pct":f["az_pct"],"obb_pct":1-f["az_pct"],"r_weight":f["w_input"]/100,"w_cons":f["w_input"]/100,"w_equil":f["w_input"]/100,"w_accr":f["w_input"]/100} for f in st.session_state.free_ptf]
     df = pd.DataFrame(records)
@@ -4138,6 +4373,40 @@ def main():
             st.markdown(f"<div style='font-size:.76rem;color:#7DD3FC;margin:-4px 0 6px 0;"
                         f"padding:3px 8px;background:#0c2236;border-radius:4px;"
                         f"border-left:3px solid #3b82f6;'>📅 Factbook in cache &nbsp;·&nbsp; <b>{_fb_doc_date_sb}</b></div>",
+                        unsafe_allow_html=True)
+
+        # ── Uploader Factbook Fondi Pensione ─────────────────────────────────
+        _fp_cache       = load_fp_cache()
+        _fp_cache_date  = _fp_cache.get("_ref_date", "")
+        _fp_hint = (f"💾 Cache: {_fp_cache_date} · carica per aggiornare"
+                    if _fp_cache_date else "Carica il Factbook Fondi Pensione PDF.")
+        uploaded_fp = st.file_uploader(
+            "FACTBOOK FONDI PENSIONE PDF",
+            type=["pdf"],
+            help=_fp_hint,
+            key="uploader_fp",
+        )
+        if uploaded_fp is not None:
+            _fp_bytes = uploaded_fp.getvalue()
+            if _fp_bytes:
+                with st.spinner("Estraggo dati fondi pensione…"):
+                    _fp_parsed = parse_fp_factbook(_fp_bytes)
+                if _fp_parsed:
+                    save_fp_cache(_fp_parsed)
+                    st.session_state["_fp_data"] = _fp_parsed
+                    _fp_cache_date = _fp_parsed.get("_ref_date", "")
+                    st.success(f"✅ Estratti {len(_fp_parsed)-1} fondi pensione"
+                               + (f" · {_fp_cache_date}" if _fp_cache_date else ""))
+                else:
+                    st.warning("⚠️ Nessun dato estratto — verifica il formato del PDF.")
+        if not st.session_state.get("_fp_data") and _fp_cache:
+            st.session_state["_fp_data"] = _fp_cache
+        if _fp_cache_date or st.session_state.get("_fp_data", {}).get("_ref_date"):
+            _fp_dt = (_fp_cache_date
+                      or st.session_state.get("_fp_data", {}).get("_ref_date", ""))
+            st.markdown(f"<div style='font-size:.76rem;color:#7DD3FC;margin:-4px 0 6px 0;"
+                        f"padding:3px 8px;background:#0c2236;border-radius:4px;"
+                        f"border-left:3px solid #3b82f6;'>🏦 FP in cache &nbsp;·&nbsp; <b>{_fp_dt}</b></div>",
                         unsafe_allow_html=True)
 
         # ── Uploader GP ───────────────────────────────────────────────────────
@@ -5136,12 +5405,13 @@ def main():
             if _cu_ck and _cu_ck not in _qtl_concept_map:
                 _qtl_concept_map[_cu_ck] = _cu_url
 
-    tab1, tab_q, tab2, tab3, tab4 = st.tabs([
+    tab1, tab_q, tab2, tab3, tab4, tab_fp = st.tabs([
         "📊  Scomposizione Az/Obb",
         "🔗  Quantalys · Morningstar",
         "📈  Rendimenti",
         "⚠️  Rischio",
         "💰  UNP / IUNP",
+        "🏦  Fondi Pensione",
     ])
 
     # ── TAB 1 — SCOMPOSIZIONE ────────────────────────────────────────────────
@@ -5472,6 +5742,52 @@ def main():
             f"UNP = Utile Netto di Portafoglio · IUNP36 = indice su orizzonte triennale. "
             f"Fonte: Catalogo Prodotti &amp; Servizi Azimut, settembre 2025.</p>",
             unsafe_allow_html=True)
+
+    # ── TAB FP — FONDI PENSIONE ──────────────────────────────────────────────
+    with tab_fp:
+        _fp_data = st.session_state.get("_fp_data") or load_fp_cache()
+        _fp_ref  = (_fp_data or {}).get("_ref_date", "")
+        _fp_funds = {k: v for k, v in (_fp_data or {}).items()
+                     if k != "_ref_date" and isinstance(v, dict)}
+        if not _fp_funds:
+            st.info(
+                "Nessun dato fondi pensione disponibile. "
+                "Carica il Factbook Fondi Pensione PDF dalla barra laterale.",
+                icon="🏦")
+        else:
+            _fp_note = f"Fonte: Factbook Fondi Pensione · {_fp_ref}" if _fp_ref else "Fonte: Factbook Fondi Pensione"
+            st.markdown(
+                f"<p style='{_note_style}'><b>🏦 Fondi Pensione</b> &nbsp;·&nbsp; {_fp_note}</p>",
+                unsafe_allow_html=True)
+            _fp_hdr = ["Fondo", "YTD", "1 Anno", "3 Anni", "5 Anni"]
+            _fp_ptf = [f"<b>{len(_fp_funds)} fondi</b>", "", "", "", ""]
+
+            def _pv(val):
+                if not val or val == "-":
+                    return "<span style='color:#94A3B8;'>—</span>"
+                try:
+                    v = float(str(val).replace("%","").replace("+","").replace(",","."))
+                    c = "#1A7A4A" if v > 0 else ("#C0392B" if v < 0 else "#475569")
+                    return f"<span style='color:{c};font-weight:700;'>{val}</span>"
+                except Exception:
+                    return val
+
+            _fp_rows = []
+            for _fn, _fv in sorted(_fp_funds.items()):
+                _fp_rows.append([
+                    f"<span style='font-weight:500;'>{_fn}</span>",
+                    _pv(_fv.get("ytd",     "")),
+                    _pv(_fv.get("perf_1y", "")),
+                    _pv(_fv.get("perf_3y", "")),
+                    _pv(_fv.get("perf_5y", "")),
+                ])
+            st.markdown(
+                _html_table(_fp_hdr, _fp_ptf, _fp_rows),
+                unsafe_allow_html=True)
+            st.markdown(
+                f"<p style='{_note_style}'>{_fp_note} &nbsp;·&nbsp; "
+                f"Rendimenti netti di imposta.</p>",
+                unsafe_allow_html=True)
 
     # ── DOWNLOAD SECTION ─────────────────────────────────────
     st.markdown("<br>",unsafe_allow_html=True)
