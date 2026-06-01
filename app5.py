@@ -3406,6 +3406,24 @@ def free_portfolio_ui(data):
 
     options = fida_filtered.apply(_fund_option, axis=1).tolist()
 
+    # ── Aggiunge fondi pensione dalla cache FP ────────────────────────────────
+    _fp_free = st.session_state.get("_fp_data") or load_fp_cache()
+    _fp_names = [k for k in (_fp_free or {}) if k != "_ref_date"]
+
+    def _fp_az(nome: str) -> float:
+        """Stima az_pct dal nome del comparto pensionistico."""
+        n = nome.lower()
+        if "crescita"      in n: return 0.75
+        if "accrescitivo"  in n: return 0.65
+        if "equilibrato"   in n: return 0.50
+        if "bilanciato"    in n: return 0.50
+        if "conservativo"  in n: return 0.30
+        if "obbligazionario" in n: return 0.05
+        return 0.50
+
+    _fp_options = [f"{n}  [🏦 Pensione]" for n in _fp_names]
+    options = options + _fp_options
+
     # st.multiselect has native live search built into Streamlit (no Enter needed).
     # max_selections=1 limits it to a single fund, giving us a searchable picker.
     c1,c2,c3 = st.columns([3.5,1,0.8])
@@ -3414,7 +3432,7 @@ def free_portfolio_ui(data):
             "🔍  Seleziona / cerca fondo:",
             options=options,
             max_selections=1,
-            placeholder="Digita nome o ISIN, es. «glob», «LU0346»…",
+            placeholder="Digita nome, ISIN o «pensione»…",
             key="sel_fund_ms",
         )
         sel = _sel_list[0] if _sel_list else (options[0] if options else "")
@@ -3427,10 +3445,24 @@ def free_portfolio_ui(data):
             if any(f["nome"]==fname for f in st.session_state.free_ptf):
                 st.toast("⚠️ Fondo già presente!",icon="⚠️")
             else:
-                fd = fida[fida["nome"]==fname].iloc[0] if not fida[fida["nome"]==fname].empty else None
-                mc = fd["macro_cat"] if fd is not None else "Altro"
-                az = az_lookup.get(fname,DEFAULT_AZ.get(mc,0.5))
-                st.session_state.free_ptf.append({"nome":fname,"categoria":fd["categoria"] if fd is not None else "","macro_cat":mc,"az_pct":az,"w_input":w})
+                # Fondi pensione: non sono nel foglio FIDA
+                _is_fp_fund = fname in _fp_names
+                if _is_fp_fund:
+                    _az = _fp_az(fname)
+                    _mc = ("Obbligazionari" if _az < 0.15
+                           else "Bilanciati/Flessibili" if _az < 0.70
+                           else "Azionari")
+                    st.session_state.free_ptf.append({
+                        "nome": fname, "categoria": "Fondo Pensione",
+                        "macro_cat": _mc, "az_pct": _az, "w_input": w})
+                else:
+                    fd = fida[fida["nome"]==fname].iloc[0] if not fida[fida["nome"]==fname].empty else None
+                    mc = fd["macro_cat"] if fd is not None else "Altro"
+                    az = az_lookup.get(fname, DEFAULT_AZ.get(mc, 0.5))
+                    st.session_state.free_ptf.append({
+                        "nome": fname,
+                        "categoria": fd["categoria"] if fd is not None else "",
+                        "macro_cat": mc, "az_pct": az, "w_input": w})
                 st.rerun()
 
     # ── Carica portafoglio salvato ────────────────────────────────────────────
@@ -3462,6 +3494,13 @@ def free_portfolio_ui(data):
                             _mc = _fd_r["macro_cat"]
                             _az = az_lookup.get(_fn, DEFAULT_AZ.get(_mc, 0.5))
                             _cat = _fd_r["categoria"]
+                        elif _fn in _fp_names:
+                            # Fondo pensione salvato
+                            _az  = _fp_az(_fn)
+                            _mc  = ("Obbligazionari" if _az < 0.15
+                                    else "Bilanciati/Flessibili" if _az < 0.70
+                                    else "Azionari")
+                            _cat = "Fondo Pensione"
                         else:
                             _mc, _az, _cat = "Altro", 0.5, ""
                         new_free.append({"nome": _fn, "categoria": _cat,
