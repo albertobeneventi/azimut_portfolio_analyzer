@@ -44,6 +44,26 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Playwright / Chromium bootstrap (Streamlit Cloud) ───────
+@st.cache_resource(show_spinner=False)
+def _ensure_playwright_chromium():
+    """Installa il browser Chromium per Playwright (solo al primo avvio del server).
+    Usa solo 'install chromium' senza --with-deps: le dipendenze di sistema
+    sono gestite da packages.txt e --with-deps richiede sudo su Streamlit Cloud."""
+    import subprocess, sys
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True, timeout=180
+        )
+        print(f"[playwright install] rc={result.returncode}", flush=True)
+        if result.stderr:
+            print(f"[playwright install stderr] {result.stderr.decode('utf-8','replace')[:300]}", flush=True)
+    except Exception as _e:
+        print(f"[playwright install] errore: {_e}", flush=True)
+
+_ensure_playwright_chromium()
+
 # ── CONSTANTS ───────────────────────────────────────────────
 GROUP_NAMES = {"ALLOCATION", "AZIONARI (LONG)", "BOND"}
 COL_A, COL_B, COL_C, COL_G, COL_K, COL_O, COL_R = 0, 1, 2, 6, 10, 14, 17
@@ -74,6 +94,13 @@ MANUAL_ISIN_OVERRIDES: dict[str, str] = {
     "AZ Equity - Global Infrastructure":    "LU1621767737",
     "AZ Bond - CoCo Bonds (EUR-hedged)":    "LU2622195936",
     "AZ Bond - Convertible Bond":           "LU1422848470",
+    "AZ F.1 All. Balanced FoF A Cap EUR":   "LU0346933400",  # ISIN classe A (FondiDoc URL)
+    # Fondi GP (nome breve) senza ISIN nel foglio FIDA — necessari per Quantalys SUGGERITO
+    "AZ Allocation - Global Balanced":      "LU0262757841",
+    "AZ Bond - Aggregate Bond Euro":        "LU0194809330",
+    "AZ Bond - Income Dynamic":             "LU0108019232",
+    "AZ Equity - Global FoF":              "LU0262760399",
+    "AZ Equity - Global Healthcare":        "LU2384058314",
 }
 
 # Override for one fund whose FIDA sheet hyperlink points to class B
@@ -1294,6 +1321,124 @@ def load_quantalys_ratings() -> dict:
     return {}
 
 
+# ── Quantalys chart capture (Playwright) ────────────────────────────────────
+
+def _qtl_to_historique_url(url: str) -> str:
+    """Trasforma URL Quantalys fondo → URL pagina Historique con i 6 grafici."""
+    m = re.search(r'quantalys\.it/Fonds(?:/[A-Za-z]+)?/(\d+)', url)
+    if m:
+        return f"https://www.quantalys.it/Fonds/Historique/{m.group(1)}"
+    return url
+
+
+def _capture_qtl_6charts(hist_url: str) -> bytes | None:
+    """Screenshot viewport della sezione principale Quantalys Historique.
+    Approccio semplice: scroll al pannello → screenshot del viewport 1400×780.
+    Cache su file — scrive solo su successo."""
+    import hashlib, sys as _sys
+
+    _key       = hashlib.md5(hist_url.encode()).hexdigest()[:14]
+    _cache_dir = Path(__file__).parent / "data" / "qtl_chart_cache"
+    _cache_dir.mkdir(parents=True, exist_ok=True)
+    _cache_fp  = _cache_dir / f"{_key}.png"
+    if _cache_fp.exists() and _cache_fp.stat().st_size > 1000:
+        return _cache_fp.read_bytes()
+
+    try:
+        from playwright.sync_api import sync_playwright  # type: ignore
+    except ImportError as _e:
+        print(f"[QTL] Import error: {_e}", file=_sys.stderr)
+        return None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            # Viewport 1400×780 — mostra il pannello principale completo
+            page = browser.new_page(viewport={"width": 1400, "height": 780})
+            page.goto(hist_url, wait_until="domcontentloaded", timeout=45_000)
+
+            # Attende rendering amCharts
+            try:
+                page.wait_for_selector(".qtjs-panel-reloaded-graph svg", timeout=18_000)
+            except Exception:
+                pass
+            page.wait_for_timeout(3_000)
+
+            # Chiude cookie banner se presente
+            try:
+                _cb = page.locator(
+                    "button:has-text('Ok, accetta tutto'),"
+                    "button:has-text('Accetta tutto'),"
+                    "button:has-text('Accept all')"
+                )
+                if _cb.count() > 0:
+                    _cb.first.click()
+                    page.wait_for_timeout(700)
+            except Exception:
+                pass
+
+            # Scrolla al pannello principale (grafico storico)
+            page.evaluate("""() => {
+                const el = document.querySelector('.qtjs-panel-reloaded-graph')
+                        || document.querySelector('[class*="qtjs-panel"]');
+                if (el) el.scrollIntoView({behavior: 'instant', block: 'start'});
+            }""")
+            page.wait_for_timeout(400)
+
+            # Sposta mouse fuori dai grafici per evitare tooltip hover
+            page.mouse.move(10, 10)
+            page.wait_for_timeout(600)
+
+            # Calcola clip: bounds pannello (esclude margini grigi) × altezza fino alla toolbar
+            clip_info = page.evaluate("""() => {
+                const panel = document.querySelector('.qtjs-panel-reloaded-graph')
+                           || document.querySelector('[class*="qtjs-panel"]');
+                if (!panel) return null;
+                const pr = panel.getBoundingClientRect();
+
+                // Trova il top della toolbar blu (contiene <select>)
+                let toolbarY = null;
+                const ctrl = panel.querySelector('select')
+                          || panel.querySelector('input[type="text"]');
+                if (ctrl) {
+                    let el = ctrl;
+                    while (el.parentElement && el.parentElement !== panel) {
+                        el = el.parentElement;
+                    }
+                    toolbarY = Math.round(el.getBoundingClientRect().top);
+                }
+
+                const x = Math.max(0, Math.round(pr.left));
+                const y = Math.max(0, Math.round(pr.top));
+                const w = Math.round(pr.width);
+                const h = (toolbarY && toolbarY > 100)
+                          ? toolbarY - y - 2
+                          : Math.round(pr.height);
+                return { x, y, w, h: Math.max(80, h), toolbarY };
+            }""")
+
+            svg_n = page.evaluate("() => document.querySelectorAll('svg').length")
+            print(f"[QTL] SVG={svg_n}  clip={clip_info}  url={hist_url}", file=_sys.stderr)
+
+            if clip_info and clip_info["w"] > 100 and clip_info["h"] > 80:
+                png_bytes = page.screenshot(clip={
+                    "x":      clip_info["x"],
+                    "y":      clip_info["y"],
+                    "width":  clip_info["w"],
+                    "height": clip_info["h"],
+                })
+            else:
+                # Fallback: viewport intero
+                png_bytes = page.screenshot()
+            browser.close()
+
+        _cache_fp.write_bytes(png_bytes)
+        return png_bytes
+
+    except Exception as _ex:
+        print(f"[QTL] Errore capture {hist_url}: {_ex}", file=_sys.stderr)
+        return None
+
+
 def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
     ws = wb[sheet_name]
     rows = list(ws.iter_rows(values_only=True))
@@ -2042,7 +2187,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                  fida_df: pd.DataFrame = None,
                  factbook_data: dict = None,
                  cache_date: str = "",
-                 print_unp: bool = False) -> bytes:
+                 print_unp: bool = False,
+                 qtl_charts: bool = False,
+                 _progress_cb=None) -> bytes:
+    """_progress_cb(fraction: float, text: str) — chiamata durante la cattura
+    Quantalys per aggiornare una barra di avanzamento nell'UI."""
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -2056,16 +2205,17 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     EY = S("EY", fontName="Helvetica",       fontSize=8,  textColor=rl_colors.HexColor("#94A3B8"), spaceAfter=4,letterSpacing=1.5)
     SU = S("SU", fontName="Helvetica",       fontSize=10, textColor=rl_colors.HexColor("#64748B"), spaceAfter=4)
     SC = S("SC", fontName="Helvetica-Bold",  fontSize=11, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=14,spaceAfter=8)
-    BD = S("BD", fontName="Helvetica",       fontSize=8.5,textColor=rl_colors.HexColor("#1E293B"), leading=13)
-    SM  = S("SM",  fontName="Helvetica",      fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11)
+    BD = S("BD", fontName="Helvetica",       fontSize=8.5,textColor=rl_colors.HexColor("#1E293B"), leading=13, alignment=1)
+    SM  = S("SM",  fontName="Helvetica",      fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=1)
     SMC = S("SMC", fontName="Helvetica",      fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=1)
+    SML = S("SML", fontName="Helvetica",      fontSize=7.5,textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=0)
     FT = S("FT", fontName="Helvetica-Oblique",fontSize=7, textColor=rl_colors.HexColor("#94A3B8"), leading=10)
     FS = S("FS", fontName="Helvetica-Bold",  fontSize=13, textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=4,spaceAfter=2)
     FK = S("FK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#64748B"), spaceAfter=2)
     LK = S("LK", fontName="Helvetica",       fontSize=7.5,textColor=rl_colors.HexColor("#1B4FBB"), spaceAfter=2)
     # HDR: sempre bianco+grassetto — per celle intestazione su sfondo scuro
     # (TEXTCOLOR di TableStyle NON sovrascrive il colore dei Paragraph — serve lo stile dedicato)
-    HDR = S("HDR", fontName="Helvetica-Bold", fontSize=7.5,textColor=rl_colors.white, leading=11)
+    HDR = S("HDR", fontName="Helvetica-Bold", fontSize=7.5,textColor=rl_colors.white, leading=11, alignment=1)
     HDRC= S("HDRC",fontName="Helvetica-Bold", fontSize=7.5,textColor=rl_colors.white, leading=11, alignment=1)
 
     story = []
@@ -2078,6 +2228,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     if fida_df is not None and not fida_df.empty and "isin" in fida_df.columns:
         isin_map = {r["nome"]: str(r["isin"]).strip() for _, r in fida_df.iterrows()
                     if r.get("isin") and str(r.get("isin","")).strip()}
+    isin_map.update(MANUAL_ISIN_OVERRIDES)   # fondi senza ISIN nell'Excel
     w_az  = (d_act[wcol]*d_act["az_pct"]).sum()*100
     w_obb = (d_act[wcol]*d_act["obb_pct"]).sum()*100
 
@@ -2090,7 +2241,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     story.append(Spacer(1,14))
 
     # ── TITLE BLOCK ─────────────────────────────────────────
-    story.append(Paragraph("AZIMUT INVESTMENTS  ·  AAS EMILIA ROMAGNA MARCHE UMBRIA", EY))
+    story.append(Paragraph("DEMO ANALISI", EY))
     story.append(Spacer(1,4))
     story.append(Paragraph(f"Portafoglio {ptf_name}", T))
     story.append(Paragraph(
@@ -2263,18 +2414,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # ════════════════════════════════════════════════════════
     # PAGE 2: RENDIMENTI 1-3-5 ANNI
     # ════════════════════════════════════════════════════════
-    story.append(Paragraph("AZIMUT INVESTMENTS  ·  AAS EMILIA ROMAGNA MARCHE UMBRIA", EY))
+    story.append(Paragraph("DEMO ANALISI", EY))
     story.append(Spacer(1,4))
     story.append(Paragraph("Tavola dei Rendimenti", T))
     _fb_loaded = bool(factbook_data)
     _fb_ref    = (factbook_data or {}).get("_ref_date", "")      # data dal frontespizio
     _fd_ref    = cache_date or datetime.date.today().strftime("%d/%m/%Y")  # data FondiDoc
     if _fb_loaded:
-        _rend_src = (f"Rendimenti: Factbook AZ Investments"
-                     + (f" al {_fb_ref}" if _fb_ref else "")
-                     + f"  ·  Rischio: FondiDoc aggiornata al {_fd_ref}")
+        _rend_src = (f"Fonte: FondiDoc aggiornata al {_fd_ref}"
+                     + f"  ·  Fallback: Factbook AZ Investments"
+                     + (f" al {_fb_ref}" if _fb_ref else ""))
     else:
-        _rend_src = f"Fonte: FIDA FondiDoc aggiornata al {_fd_ref}"
+        _rend_src = f"Fonte: FondiDoc aggiornata al {_fd_ref}"
     story.append(Paragraph(
         f"Performance per fondo  ·  Profilo {profile.title()}  ·  {_rend_src}", SU))
     story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=12))
@@ -2303,7 +2454,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     # ── Helper: weighted average of a metric across all funds ─────────────────
     def ptf_wavg(keys_list):
-        """Weighted average per metric. Prefers factbook for return keys."""
+        """Weighted average per metric. Priorità FondiDoc; Factbook come fallback."""
         totals = {k: 0.0 for k in keys_list}
         cov_w  = {k: 0.0 for k in keys_list}
         for _, row in d_sorted.iterrows():
@@ -2311,7 +2462,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             ana = fd.get("analysis", {})
             w   = row[wcol]
             for k in keys_list:
-                raw = get_fb(row["nome"], k) or ana.get(k, "")
+                raw = ana.get(k, "") or get_fb(row["nome"], k)
                 try:
                     num = float(raw.replace("%","").replace(",",".").strip())
                     totals[k] += num * w
@@ -2324,7 +2475,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         return out
 
     # Paragraph style for portfolio summary row
-    WH  = S("WH",  fontName="Helvetica-Bold", fontSize=8, textColor=rl_colors.white, leading=11)
+    WH  = S("WH",  fontName="Helvetica-Bold", fontSize=8, textColor=rl_colors.white, leading=11, alignment=1)
     WHC = S("WHC", fontName="Helvetica-Bold", fontSize=8, textColor=rl_colors.white, leading=11, alignment=1)
 
     def pstyle_w(val):
@@ -2371,8 +2522,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         fd  = (fund_data or {}).get(row["nome"], {})
         ana = fd.get("analysis", {})
         def gv(key, nome=row["nome"]):
-            # Return factbook value (for return metrics) or FondiDoc value
-            return get_fb(nome, key) or ana.get(key, "-")
+            # Priorità FondiDoc; Factbook come fallback
+            return ana.get(key, "") or get_fb(nome, key) or "-"
         perf_rows.append([
             Paragraph(row["nome"][:48], SM),
             Paragraph(f"<b>{row[wcol]*100:.1f}%</b>", SM),
@@ -2399,7 +2550,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ("PADDING",(0,0),(-1,-1),   5),
         ("ROWBACKGROUNDS",(0,2),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
         ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-        ("ALIGN",(1,0),(-1,-1),     "CENTER"),
+        ("ALIGN",(0,0),(-1,-1),     "CENTER"),
         ("VALIGN",(0,0),(-1,-1),    "MIDDLE"),
     ]
     perf_tbl.setStyle(TableStyle(ts_perf))
@@ -2462,7 +2613,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ("PADDING",(0,0),(-1,-1),   5),
         ("ROWBACKGROUNDS",(0,2),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
         ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-        ("ALIGN",(1,0),(-1,-1),     "CENTER"),
+        ("ALIGN",(0,0),(-1,-1),     "CENTER"),
         ("VALIGN",(0,0),(-1,-1),    "MIDDLE"),
     ]
     risk_tbl.setStyle(TableStyle(ts_risk))
@@ -2572,12 +2723,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             return Paragraph(
                 _v,
                 S(f"SMF{_v}", fontName="Helvetica-Bold", fontSize=7.5,
-                  textColor=rl_colors.white, leading=11))
+                  textColor=rl_colors.white, leading=11, alignment=1))
         if _v in ("1", "2"):
             return Paragraph(
                 _v,
                 S(f"SMF{_v}", fontName="Helvetica-Bold", fontSize=7.5,
-                  textColor=rl_colors.HexColor("#1E293B"), leading=11))
+                  textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=1))
         return Paragraph(val, SM)   # "—" or unknown
 
     # Morningstar data for PDF (loaded from cache / session state)
@@ -2599,11 +2750,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             return Paragraph(
                 label,
                 S(f"SMMSP{v}", fontName="Helvetica-Bold", fontSize=7,
-                  textColor=rl_colors.white, leading=11))
+                  textColor=rl_colors.white, leading=11, alignment=1))
         return Paragraph(
             label,
             S(f"SMMSd{v}", fontName="Helvetica", fontSize=7,
-              textColor=rl_colors.HexColor("#475569"), leading=11))
+              textColor=rl_colors.HexColor("#475569"), leading=11, alignment=1))
 
     alloc_fund_rows = []
     _fida_vals = []   # keep to build BACKGROUND commands after the loop
@@ -2676,7 +2827,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         ("ROWBACKGROUNDS", (0,2), (-1,-1),
          [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
         ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-        ("ALIGN",          (1,0), (-1,-1), "CENTER"),
+        ("ALIGN",          (0,0), (-1,-1), "CENTER"),
         ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
         *_fida_bg_cmds,   # coloured cell backgrounds — placed last to override
     ]))
@@ -2777,7 +2928,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             ("ROWBACKGROUNDS", (0,2), (-1,-1),
              [rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
             ("LINEBELOW",      (0,0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-            ("ALIGN",          (1,0), (-1,-1), "CENTER"),
+            ("ALIGN",          (0,0), (-1,-1), "CENTER"),
             ("VALIGN",         (0,0), (-1,-1), "MIDDLE"),
             *_unp_bg_cmds,
         ]))
@@ -2802,7 +2953,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # ════════════════════════════════════════════════════════
     # PAGES 3+: SCHEDE SINGOLI FONDI
     # ════════════════════════════════════════════════════════
-    story.append(Paragraph("AZIMUT INVESTMENTS  ·  AAS EMILIA ROMAGNA MARCHE UMBRIA", EY))
+    story.append(Paragraph("DEMO ANALISI", EY))
     story.append(Spacer(1,4))
     story.append(Paragraph("Schede Analitiche dei Fondi", T))
     story.append(Paragraph(
@@ -2812,6 +2963,18 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         '🔍 <link href="https://www.morningstar.it/it/funds/SecuritySearchResults.aspx">'
         '<u>Motore di ricerca Morningstar</u></link>', LK))
     story.append(Spacer(1, 6))
+
+    # ── Pre-conteggio per barra avanzamento Quantalys ───────────────────────
+    _qtl_total = 0
+    _qtl_done  = 0
+    if qtl_charts and _progress_cb:
+        for _, _pr in d_sorted.iterrows():
+            _fd_pre   = (fund_data or {}).get(_pr["nome"], {})
+            _isin_pre = _fd_pre.get("isin", "") or isin_map.get(_pr["nome"], "")
+            if _isin_pre and _pdf_qtl.get(_isin_pre, ""):
+                _qtl_total += 1
+        if _qtl_total:
+            _progress_cb(0.0, f"📊 Cattura grafici Quantalys (0/{_qtl_total})…")
 
     for idx, (_, row) in enumerate(d_sorted.iterrows()):
         fd  = (fund_data or {}).get(row["nome"], {})
@@ -2877,17 +3040,17 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             ("PADDING",(0,0),(-1,-1),   3),
             ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white,rl_colors.HexColor("#F8FAFC")]),
             ("LINEBELOW",(0,0),(-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-            ("ALIGN",(1,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+            ("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
         ]))
 
         det_data = [
             [Paragraph("<b>Dettagli Fondo</b>", BD)],
-            [Paragraph(f"Data avvio: {gv('start_date',ov,'—')}", SM)],
-            [Paragraph(f"Distribuzione: {gv('income',ov,'—')}", SM)],
-            [Paragraph(f"Categoria: {gv('cat_assog',ov,'—')}", SM)],
-            [Paragraph(f"Gestione: {gv('mgmt_fee',ov,'—')}  |  Perf.: {gv('perf_fee',ov,'—')}", SM)],
-            [Paragraph(f"Sottoscrizione: {gv('sub_fee',ov,'—')}", SM)],
-            [Paragraph(f"<b>FIDArating:</b> {gv('fida_rating',ov,'—')}  |  Score: {gv('fida_score',ov,'—')}", SM)],
+            [Paragraph(f"Data avvio: {gv('start_date',ov,'—')}", SML)],
+            [Paragraph(f"Distribuzione: {gv('income',ov,'—')}", SML)],
+            [Paragraph(f"Categoria: {gv('cat_assog',ov,'—')}", SML)],
+            [Paragraph(f"Gestione: {gv('mgmt_fee',ov,'—')}  |  Perf.: {gv('perf_fee',ov,'—')}", SML)],
+            [Paragraph(f"Sottoscrizione: {gv('sub_fee',ov,'—')}", SML)],
+            [Paragraph(f"<b>FIDArating:</b> {gv('fida_rating',ov,'—')}  |  Score: {gv('fida_score',ov,'—')}", SML)],
         ]
         det_tbl = Table([[d[0]] for d in det_data], colWidths=[DET_W])
         det_tbl.setStyle(TableStyle([
@@ -2914,6 +3077,38 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             card += [Spacer(1,3),
                      Paragraph("<b>Performance Annuale (%)</b>", SM),
                      RLImage(bar_buf, width=PW, height=2.4*cm)]
+
+        # ── Grafici Quantalys (serie storica + performance comparata) ───────────
+        if qtl_charts and isin:
+            _qurl_chart = _pdf_qtl.get(isin, "")
+            if _qurl_chart:
+                _qtl_done += 1
+                if _progress_cb and _qtl_total > 0:
+                    _nm_short = row["nome"][:38] + ("…" if len(row["nome"]) > 38 else "")
+                    _progress_cb(
+                        (_qtl_done - 1) / _qtl_total,
+                        f"📊 {_nm_short}  ({_qtl_done}/{_qtl_total})"
+                    )
+                _hist_url  = _qtl_to_historique_url(_qurl_chart)
+                _qtl_png   = _capture_qtl_6charts(_hist_url)
+                if _qtl_png:
+                    _qtl_io  = io.BytesIO(_qtl_png)
+                    # Calcola aspect ratio dall'immagine reale (include eventuale strip legenda)
+                    try:
+                        from PIL import Image as _PILImg
+                        _qtl_pil = _PILImg.open(io.BytesIO(_qtl_png))
+                        _qtl_ar  = _qtl_pil.height / max(_qtl_pil.width, 1)
+                    except Exception:
+                        _qtl_ar  = 739 / 1186   # fallback empirico
+                    _qtl_w   = PW * 0.98
+                    _qtl_h   = _qtl_w * _qtl_ar
+                    card += [Spacer(1,4),
+                             Paragraph(
+                                 "<b>Analisi Quantalys</b>"
+                                 " · Serie Storica &amp; Performance Comparata",
+                                 SM),
+                             RLImage(_qtl_io, width=_qtl_w, height=_qtl_h)]
+
         story.append(KeepTogether(card))
 
         # Separatore sottile tra schede
@@ -2930,6 +3125,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         "(fondidoc.it). I pesi indicati sono riferiti al portafoglio modello e non costituiscono offerta o consulenza "
         "di investimento. Rendimenti passati non garantiscono risultati futuri. © Azimut Group — uso interno.", FT))
 
+    if _progress_cb:
+        _progress_cb(0.97, "⚡ Assemblo PDF…")
     doc.build(story)
     buf.seek(0)
     return buf.read()
@@ -4774,7 +4971,7 @@ def main():
             _w   = _row[wcol]
             _ana = _get_ana(_row["nome"])
             for k in keys:
-                raw = _fb_metric(_row["nome"], k) or _ana.get(k, "")
+                raw = _ana.get(k, "") or _fb_metric(_row["nome"], k)
                 try:
                     num = float(str(raw).replace("%", "").replace(",", ".").strip())
                     totals[k] += num * _w
@@ -5171,7 +5368,7 @@ def main():
             _np  = _pr["nome"]
             _ana = _get_ana(_np)
             def _gp(k, _n=_np, _a=_ana):
-                v = _fb_metric(_n, k) or _a.get(k, "") or ""
+                v = _a.get(k, "") or _fb_metric(_n, k) or ""
                 return str(v) if v else "-"
             _p_funds.append([
                 _fund_link(_np),
@@ -5186,7 +5383,7 @@ def main():
         st.markdown(_html_table(_p_hdr, _p_ptf, _p_funds), unsafe_allow_html=True)
         st.markdown(
             f"<p style='{_note_style}'>"
-            f"YTD, 1A, 3A, 5A: {_note_fb} &nbsp;·&nbsp; Vol. e Sharpe: {_note_fd}</p>",
+            f"Rendimenti &amp; Rischio: {_note_fd} &nbsp;·&nbsp; Fallback: {_note_fb}</p>",
             unsafe_allow_html=True)
 
     # ── TAB 3 — RISCHIO ──────────────────────────────────────────────────────
@@ -5313,9 +5510,86 @@ def main():
         key="_pdf_print_unp",
         help="Aggiunge una tabella con i dati UNP e IUNP per ogni fondo (commissioni nette consulente).",
     )
+    _qtl_charts_pdf = st.checkbox(
+        "Includi grafici Quantalys nel PDF",
+        value=False,
+        key="_pdf_qtl_charts",
+        help=(
+            "Aggiunge sotto ogni scheda fondo i 6 grafici Quantalys "
+            "(serie storiche 1/3/5 anni + fondo vs categoria). "
+            "Richiede Playwright — la prima generazione può richiedere ~1 min."
+        ),
+    )
+    if _qtl_charts_pdf:
+        # Test Playwright visibile — clicca per verificare
+        if st.button("🔍 Verifica Playwright", key="_btn_pw_test", help="Testa se Chromium è disponibile sul server"):
+            with st.spinner("Test Playwright in corso…"):
+                _pw_ok = False
+                _pw_msg = ""
+                try:
+                    from playwright.sync_api import sync_playwright  # type: ignore
+                    with sync_playwright() as _p:
+                        _b = _p.chromium.launch(headless=True)
+                        _pg = _b.new_page()
+                        _pg.goto("https://www.quantalys.it/Fonds/Historique/825616",
+                                 wait_until="domcontentloaded", timeout=30_000)
+                        _pg.wait_for_selector(".qtjs-chart-histo svg", timeout=15_000)
+                        _svg_n = _pg.evaluate("() => document.querySelectorAll('svg').length")
+                        _b.close()
+                    _pw_ok  = True
+                    _pw_msg = f"✅ Playwright OK — SVG trovati: {_svg_n}"
+                except ImportError:
+                    _pw_msg = "❌ Playwright non installato (ImportError)"
+                except Exception as _ex:
+                    _pw_msg = f"❌ Errore: {_ex}"
+            if _pw_ok:
+                st.success(_pw_msg)
+            else:
+                st.error(_pw_msg)
+    if _qtl_charts_pdf:
+        # Verifica rapida: quanti fondi hanno URL Quantalys?
+        _qtl_chk  = load_quantalys_cache()
+        _fida_tmp = raw.get("FIDA", pd.DataFrame())
+        _imap_tmp = ({r["nome"]: str(r["isin"]).strip()
+                      for _, r in _fida_tmp.iterrows()
+                      if str(r.get("isin","")).strip()}
+                     if not _fida_tmp.empty and "isin" in _fida_tmp.columns else {})
+        _imap_tmp.update(MANUAL_ISIN_OVERRIDES)
+
+        _qtl_ok, _qtl_miss = [], []
+        for _, _rr in df_act.iterrows():
+            _rn   = _rr["nome"]
+            _risin = _imap_tmp.get(_rn, "")
+            if _qtl_chk.get(_risin, ""):
+                _qtl_ok.append(_rn)
+            else:
+                _qtl_miss.append((_rn, _risin or "ISIN mancante"))
+
+        if not _qtl_ok:
+            st.warning(
+                "⚠️ Nessun fondo del portafoglio ha un URL Quantalys in cache. "
+                "I grafici non verranno inclusi.",
+                icon="⚠️"
+            )
+        else:
+            st.info(
+                f"📊 Grafici Quantalys per **{len(_qtl_ok)}/{len(df_act)}** fondi. "
+                "Prima cattura ~10s/fondo, poi in cache su disco.",
+                icon="ℹ️"
+            )
+
+        if _qtl_miss:
+            with st.expander(f"▸ {len(_qtl_miss)} fondo/i senza URL Quantalys — clicca per vedere"):
+                st.markdown(
+                    "Incollami il link Quantalys (es. `https://www.quantalys.it/Fonds/12345`) "
+                    "per ciascuno e lo aggiungo alla cache:\n"
+                )
+                for _mn, _mi in _qtl_miss:
+                    st.markdown(f"- **{_mn}** · ISIN: `{_mi}`")
 
     # ── Cache key: invalidate when portfolio/profile/fund-data changes ──────
-    _pdf_cache_key = (f"{_ptf_key}|{len(df_act)}|{len(_fd_live)}|unp{int(_print_unp)}"
+    _pdf_cache_key = (f"{_ptf_key}|{len(df_act)}|{len(_fd_live)}"
+                      f"|unp{int(_print_unp)}|qtl{int(_qtl_charts_pdf)}"
                       + (f"|{hash(tuple(sorted(df_act['nome'].tolist())))}"
                          if _is_free else ""))
 
@@ -5324,20 +5598,26 @@ def main():
     if not _is_free and st.session_state.get("_pdf_cache_key") != _pdf_cache_key:
         _fname_auto = (f"Azimut_{ptf_label.replace(' ','_').replace('—','')}"
                        f"_{profile}_{datetime.date.today().strftime('%Y%m%d')}.pdf")
-        with st.spinner("⚡ Genero PDF…"):
-            try:
-                _pdf_auto = generate_pdf(
-                    df_act, wcol, profile, ptf_label, _fd_live,
-                    fida_df=fida_df, factbook_data=factbook_data,
-                    cache_date=cache_date, print_unp=_print_unp)
-                st.session_state["_pdf_bytes_ready"]  = _pdf_auto
-                st.session_state["_pdf_fname_ready"]  = _fname_auto
-                st.session_state["_pdf_lbl"]          = (
-                    f"{len(_fd_live)} schede da FondiDoc" if _fd_live
-                    else "dati base (lancia Aggiorna Dati per arricchire)")
-                st.session_state["_pdf_cache_key"]    = _pdf_cache_key
-            except Exception as _pe:
-                st.error(f"Errore generazione PDF: {_pe}")
+        _pb_auto = st.progress(0, text="⚡ Genero PDF…")
+        def _upd_auto(v, txt="⚡ Genero PDF…"):
+            _pb_auto.progress(min(float(v), 1.0), text=txt)
+        try:
+            _pdf_auto = generate_pdf(
+                df_act, wcol, profile, ptf_label, _fd_live,
+                fida_df=fida_df, factbook_data=factbook_data,
+                cache_date=cache_date, print_unp=_print_unp,
+                qtl_charts=_qtl_charts_pdf,
+                _progress_cb=_upd_auto)
+            _upd_auto(1.0, "✅ PDF pronto")
+            st.session_state["_pdf_bytes_ready"]  = _pdf_auto
+            st.session_state["_pdf_fname_ready"]  = _fname_auto
+            st.session_state["_pdf_lbl"]          = (
+                f"{len(_fd_live)} schede da FondiDoc" if _fd_live
+                else "dati base (lancia Aggiorna Dati per arricchire)")
+            st.session_state["_pdf_cache_key"]    = _pdf_cache_key
+        except Exception as _pe:
+            st.error(f"Errore generazione PDF: {_pe}")
+        _pb_auto.empty()
 
     with col_btn:
         if st.session_state.get("_pdf_bytes_ready") and not _is_free:
@@ -5368,14 +5648,18 @@ def main():
                 pb = st.progress(0, text="Scarico dati FondiDoc…")
                 def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
                 fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
-                pb.progress(1.0, text="✅ Genero PDF…")
                 save_fund_cache(fund_data)
                 st.session_state["_scomp_fd"] = fund_data
+                pb.progress(0.0, text="⚡ Genero PDF…")
+                def _upd_pdf(v, txt="⚡ Genero PDF…"):
+                    pb.progress(min(float(v), 1.0), text=txt)
                 try:
                     pdf_bytes = generate_pdf(
                         df_act, wcol, profile, ptf_label, fund_data,
                         fida_df=fida_df, factbook_data=factbook_data,
-                        cache_date=cache_date, print_unp=_print_unp)
+                        cache_date=cache_date, print_unp=_print_unp,
+                        qtl_charts=_qtl_charts_pdf,
+                        _progress_cb=_upd_pdf)
                     fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
                              f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
                     st.session_state["_pdf_bytes_ready"]  = pdf_bytes
