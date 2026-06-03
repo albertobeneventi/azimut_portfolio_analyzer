@@ -5619,6 +5619,26 @@ def main():
             st.error(f"Errore generazione PDF: {_pe}")
         _pb_auto.empty()
 
+    # ── Export AdvisorElite CSV ───────────────────────────────────────────────
+    with col_btn:
+        try:
+            _ae_lines = ["ISIN,Amount,"]
+            for _, _r in df_act.iterrows():
+                _ae_isin = str(_r.get("isin","") or "").strip()
+                _ae_peso = round(float(_r.get(wcol, 0)) * 100)
+                if _ae_isin and _ae_peso > 0:
+                    _ae_lines.append(f"{_ae_isin},{_ae_peso}")
+            _ae_csv = "\n".join(_ae_lines).encode("utf-8")
+            st.download_button(
+                "📋 File per AdvisorElite",
+                data=_ae_csv,
+                file_name="file per advisorelite.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        except Exception:
+            pass
+
     with col_btn:
         if st.session_state.get("_pdf_bytes_ready") and not _is_free:
             # One-click download for stable portfolios
