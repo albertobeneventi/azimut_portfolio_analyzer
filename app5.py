@@ -5999,7 +5999,7 @@ def main():
         try:
             _ae_lines = ['ISIN,Amount,']
             for _, _r in df_act.iterrows():
-                _ae_isin = isin_map.get(_r.get('nome',''), '')
+                _ae_isin = (_ae_fm := {**MANUAL_ISIN_OVERRIDES, **{r['nome']:str(r['isin']).strip() for _,r in raw.get('FIDA',pd.DataFrame()).iterrows() if r.get('isin')}}).get(_r.get('nome',''),'')
                 _ae_peso = round(float(_r.get(wcol, 0)) * 100)
                 if _ae_isin and _ae_peso > 0:
                     _ae_lines.append(str(_ae_isin) + ',' + str(_ae_peso))
