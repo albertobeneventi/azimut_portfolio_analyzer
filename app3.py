@@ -3965,14 +3965,21 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                     if isinstance(_fv2, dict) and _sk in _k2.lower() and _fv2.get("url"):
                         nome = _k2
                         break
+        # az_pct: usa DEFAULT_AZ per gruppo per evitare valori errati nella cache GP
+        # (versioni precedenti salvavano 0.92 per tutti i fondi BOND)
+        _gp_az = {
+            "BOND":           DEFAULT_AZ["Obbligazionari"],       # 0.06
+            "AZIONARI (LONG)": DEFAULT_AZ["Azionari"],            # 0.92
+            "ALLOCATION":     DEFAULT_AZ["Bilanciati/Flessibili"],# 0.50
+        }.get(f["gruppo"], f["az_pct"])
         records.append({
             "nome":      nome,
             "nome_orig": f["nome"],   # GP-format name for display in composition panel
             "categoria": f["categoria"],
             "gruppo":    f["gruppo"],
             "macro_cat": get_macro(f["categoria"]),
-            "az_pct":    f["az_pct"],
-            "obb_pct":   f["obb_pct"],
+            "az_pct":    _gp_az,
+            "obb_pct":   1.0 - _gp_az,
             "r_weight":  peso / 100.0,
             "w_cons":    peso / 100.0,
             "w_equil":   peso / 100.0,
