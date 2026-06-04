@@ -4540,6 +4540,28 @@ def main():
                        if s in raw and not raw[s].empty]
             _df_all = (pd.concat(_sheets, ignore_index=True)
                        .drop_duplicates(subset=["nome"]) if _sheets else pd.DataFrame())
+            _gp_for_fetch = st.session_state.get("_gp_data") or _gp_cache_data or {}
+            if _gp_for_fetch and _fida_urls_all:
+                _existing = set(_df_all["nome"].tolist()) if not _df_all.empty else set()
+                _gp_extra = set()
+                for _sc_val in _gp_for_fetch.values():
+                    if not isinstance(_sc_val, dict): continue
+                    for _gf in _sc_val.get("funds", []):
+                        _gn = _gf.get("nome", "")
+                        if not _gn: continue
+                        _gn_norm = _normalize_for_unp(_gn)
+                        _best, _bl = None, 0
+                        for _fk in _fida_urls_all:
+                            _fk_norm = _normalize_for_unp(_fk)
+                            if _fk_norm == _gn_norm:
+                                _best = _fk; break
+                            if (_fk_norm in _gn_norm or _gn_norm in _fk_norm) and len(_fk_norm) > _bl:
+                                _best, _bl = _fk, len(_fk_norm)
+                        if _best and _best not in _existing:
+                            _gp_extra.add(_best)
+                if _gp_extra:
+                    _df_gp = pd.DataFrame([{"nome": n} for n in _gp_extra])
+                    _df_all = pd.concat([_df_all, _df_gp], ignore_index=True).drop_duplicates(subset=["nome"])
             if not _df_all.empty:
                 _pb_fd = st.progress(0, text="Scarico dati FondiDoc…")
                 def _upd_fd(v): _pb_fd.progress(v, text=f"FondiDoc: {int(v*100)}%…")
