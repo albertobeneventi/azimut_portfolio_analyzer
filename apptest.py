@@ -3957,7 +3957,6 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
         if peso <= 0:
             continue
         nome = _resolve_nome_for_fd(f["nome"], fund_data)
-        # Fuzzy fallback: usa la chiave che ha effettivamente dati (URL/overview)
         if not (fund_data or {}).get(nome, {}).get("url"):
             _sk = re.sub(r'^AZ\s+\S+\s*[-–]\s*', '', f["nome"], flags=re.I).strip().lower()
             if _sk:
@@ -3965,6 +3964,18 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
                     if isinstance(_fv2, dict) and _sk in _k2.lower() and _fv2.get("url"):
                         nome = _k2
                         break
+        if extra_urls and nome == f["nome"]:
+            _gp_norm = _normalize_for_unp(f["nome"])
+            _best_k, _best_l = None, 0
+            for _fk in extra_urls:
+                _fk_norm = _normalize_for_unp(_fk)
+                if _fk_norm == _gp_norm:
+                    _best_k = _fk
+                    break
+                if (_fk_norm in _gp_norm or _gp_norm in _fk_norm) and len(_fk_norm) > _best_l:
+                    _best_k, _best_l = _fk, len(_fk_norm)
+            if _best_k:
+                nome = _best_k
         _gp_az = {
             "BOND":           DEFAULT_AZ["Obbligazionari"],
             "AZIONARI (LONG)": DEFAULT_AZ["Azionari"],
