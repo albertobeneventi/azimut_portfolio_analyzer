@@ -149,6 +149,36 @@ _REPO   = "albertobeneventi/azimut_portfolio_analyzer"
 _BRANCH = "master"
 
 
+def _fetch_json_from_repo(repo_path: str) -> dict | None:
+    """Legge un JSON direttamente da GitHub (fonte di verità), bypassando la
+    copia su disco del container.
+
+    Il container Streamlit Cloud non rilegge mai da GitHub i file che lui
+    stesso ha pushato: la copia locale resta quella del checkout iniziale.
+    Se due run (o due container) fanno "Aggiorna Dati" partendo dalla copia
+    locale stale, il merge+push successivo può sovrascrivere su GitHub dati
+    più recenti con dati vecchi/parziali (race condition osservata il
+    16/06/2026: la cache è oscillata 41→2→5→41 fondi in due ore). Usare
+    sempre questa funzione come base per i merge prima di un push evita
+    il problema. Ritorna None se il fetch fallisce (token assente, rete, ecc).
+    """
+    try:
+        token = st.secrets.get("GITHUB_TOKEN", "")
+        if not token:
+            return None
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3.raw",
+        }
+        url = f"https://api.github.com/repos/{_REPO}/contents/{repo_path}"
+        r = requests.get(url, headers=headers, params={"ref": _BRANCH}, timeout=10)
+        if r.status_code != 200:
+            return None
+        return json.loads(r.text)
+    except Exception:
+        return None
+
+
 def _push_json_to_repo(payload: dict, repo_path: str, commit_msg: str) -> bool:
     """Commita un JSON su GitHub via Contents API (crea o aggiorna il file).
 
@@ -187,8 +217,18 @@ def _push_json_to_repo(payload: dict, repo_path: str, commit_msg: str) -> bool:
 # ── FUND DATA CACHE ──────────────────────────────────────────────────────────
 CACHE_FILE = Path("data/fund_cache.json")
 
-def load_fund_cache() -> tuple:
-    """Load cached FondiDoc data. Returns (fund_data_dict, last_updated_str)."""
+def load_fund_cache(fresh: bool = False) -> tuple:
+    """Load cached FondiDoc data. Returns (fund_data_dict, last_updated_str).
+
+    fresh=True forza una lettura da GitHub (fonte di verità) invece della
+    copia locale del container, che può essere stale rispetto a push fatti
+    da altre run/container — vedi nota in _fetch_json_from_repo. Usare
+    fresh=True ogni volta che il risultato verrà fuso e ripubblicato
+    (save_fund_cache), per non clobberare dati più recenti."""
+    if fresh:
+        payload = _fetch_json_from_repo("data/fund_cache.json")
+        if payload is not None:
+            return payload.get("fund_data", {}), payload.get("last_updated", "")
     try:
         if CACHE_FILE.exists():
             # utf-8-sig strips BOM se presente (file creato su Windows)
@@ -4567,7 +4607,10 @@ def main():
                 def _upd_fd(v): _pb_fd.progress(v, text=f"FondiDoc: {int(v*100)}%…")
                 _fd_new = fetch_all_fund_data(_df_all, _fida_urls_all, _upd_fd)
                 _pb_fd.empty()
-                _fd_base_existing = load_fund_cache()[0]
+                # fresh=True: rilegge da GitHub, non dalla copia locale del
+                # container (può essere stale e causare un push che clobbera
+                # dati più recenti — vedi nota in _fetch_json_from_repo).
+                _fd_base_existing = load_fund_cache(fresh=True)[0]
                 _fd_merged_new = dict(_fd_base_existing)
                 for _fk, _fv in _fd_new.items():
                     if _fv and (_fv.get("analysis") or not _fd_merged_new.get(_fk, {}).get("analysis")):
@@ -4617,7 +4660,11 @@ def main():
     # ── GP fund FondiDoc lookup (runs with or without Excel) ─────────────────
     if st.session_state.pop("_fetch_gp_requested", False):
         _gp_src  = st.session_state.get("_gp_data", {})
-        _fd_base = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
+        # Base sempre da GitHub fresco (non da session_state, che in questa
+        # stessa sessione potrebbe già contenere un set parziale/stale se un
+        # fetch precedente è stato interrotto) — evita di pushare un merge
+        # che clobbera dati più recenti con un sottoinsieme vecchio.
+        _fd_base = load_fund_cache(fresh=True)[0] or st.session_state.get("_scomp_fd", {})
         if _gp_src:
             _pb_gp = st.progress(0, text="Cerco fondi GP su FondiDoc…")
             def _upd_gp(v):
@@ -5708,8 +5755,23 @@ def main():
                 pb = st.progress(0, text="Scarico dati FondiDoc…")
                 def upd(v): pb.progress(v, text=f"FondiDoc: {int(v*100)}%…")
                 fund_data = fetch_all_fund_data(df_act, fida_urls, upd)
-                save_fund_cache(fund_data)
-                st.session_state["_scomp_fd"] = fund_data
+                # Merge sulla cache GitHub fresca: salvare fund_data da solo
+                # (solo i fondi del portafoglio attivo) sovrascriverebbe
+                # l'intera cache con un sottoinsieme minuscolo — bug che ha
+                # causato il crollo a 2-5 fondi osservato il 16/06/2026.
+                _fd_base_pdf = load_fund_cache(fresh=True)[0]
+                _fd_merged_pdf = dict(_fd_base_pdf)
+                for _fk, _fv in fund_data.items():
+                    _existing_pdf = _fd_merged_pdf.get(_fk, {})
+                    if _existing_pdf.get("analysis") and not (_fv or {}).get("analysis"):
+                        _upd_pdf2 = dict(_existing_pdf)
+                        if (_fv or {}).get("url"):  _upd_pdf2["url"]  = _fv["url"]
+                        if (_fv or {}).get("isin"): _upd_pdf2["isin"] = _fv["isin"]
+                        _fd_merged_pdf[_fk] = _upd_pdf2
+                    else:
+                        _fd_merged_pdf[_fk] = _fv
+                save_fund_cache(_fd_merged_pdf)
+                st.session_state["_scomp_fd"] = _fd_merged_pdf
                 pb.progress(0.0, text="⚡ Genero PDF…")
                 def _upd_pdf(v, txt="⚡ Genero PDF…"):
                     pb.progress(min(float(v), 1.0), text=txt)
