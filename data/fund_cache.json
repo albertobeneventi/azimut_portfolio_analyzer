@@ -8,6 +8,691 @@
     "AZ F.1 Bd Frontier Markets Debt A-HU Cap EUR Hdg": {
       "url": "https://www.fondidoc.it/d/Index/FIDFM440/LU2458358681_az-f1-bd-frontier-markets-debt-a-hu-cap-eur-hdg",
       "isin": "LU2458358681"
+    },
+    "AZ F.1 Eq. Global Dividend A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03297/LU3081740188_az-f1-eq-global-dividend-a-cap-eur",
+      "isin": "LU3081740188"
+    },
+    "AZ F.1 Eq. Escalator A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZEESCAC/LU1867654516_az-f1-eq-escalator-a-cap-eur",
+      "isin": "LU1867654516"
+    },
+    "AZ F.1 Eq. Best Value A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12190/LU2056383347_az-f1-eq-best-value-a-cap-eur",
+      "isin": "LU2056383347"
+    },
+    "AZ F.1 Bd High Yield A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12199/LU2056382372_az-f1-bd-high-yield-a-cap-eur",
+      "isin": "LU2056382372",
+      "overview": {
+        "cat_assog": "Bond Balanced",
+        "srri": "2",
+        "start_date": "1/13/2020",
+        "income": "Accumulation",
+        "fida_rating": "4",
+        "fida_score": "80.39",
+        "fida_cat": "Bond World - Corporate High Yield",
+        "mgmt_fee": "1.20%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 Eq. Industrial Revolution 4.0 A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM4112/LU2622500598_az-f1-eq-industrial-revolution-40-a-cap-eur",
+      "isin": "LU2622500598"
+    },
+    "AZ F.1 All. Balanced Brave A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/IARNM02/LU2148611275_az-f1-all-balanced-brave-a-cap-eur",
+      "isin": "LU2148611275"
+    },
+    "AZ F.1 Bd Global Macro Bond A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12175/LU2085663008_az-f1-bd-global-macro-bond-a-cap-eur",
+      "isin": "LU2085663008"
+    },
+    "AZ F.1 Bd Hybrids A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZZI06/LU2056384311_az-f1-bd-hybrids-a-cap-eur",
+      "isin": "LU2056384311",
+      "overview": {
+        "cat_assog": "International Corporate Investment Grade Bond",
+        "srri": "2",
+        "start_date": "2/7/2020",
+        "income": "Accumulation",
+        "fida_rating": "3",
+        "fida_score": "54.53",
+        "fida_cat": "Total Return ESG",
+        "mgmt_fee": "1.20%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 Bd Bond Value A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03290/LU3081730460_az-f1-bd-bond-value-a-cap-eur",
+      "isin": "LU3081730460",
+      "overview": {
+        "cat_assog": "Others",
+        "srri": "2",
+        "start_date": "-",
+        "income": "Accumulation",
+        "fida_rating": "-",
+        "fida_score": "-",
+        "fida_cat": "-",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 Bd Target 2029 A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM9064/LU2951609937_az-f1-bd-target-2029-a-cap-eur",
+      "isin": "LU2951609937",
+      "overview": {
+        "cat_assog": "Others",
+        "srri": "2",
+        "start_date": "3/6/2025",
+        "income": "Accumulation",
+        "fida_rating": "-",
+        "fida_score": "-",
+        "fida_cat": "-",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 Bd Patriot A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZF1005/LU0738951036_az-f1-bd-patriot-a-cap-eur",
+      "isin": "LU0738951036",
+      "overview": {
+        "cat_assog": "Euro M/L Government Bond",
+        "srri": "3",
+        "start_date": "2/15/2012",
+        "income": "Accumulation",
+        "fida_rating": "-",
+        "fida_score": "-",
+        "fida_cat": "Bond - Other",
+        "mgmt_fee": "1.20%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 All. Balanced FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZPOA/LU0346933400_az-f1-allocation-balanced-fof-a-az-fund-cap-eur",
+      "isin": "LU0346933400"
+    },
+    "AZ F.1 All. Trend A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZFALT/LU2168564065_az-f1-all-trend-a-cap-eur",
+      "isin": "LU2168564065"
+    },
+    "AZ F.1 Eq. Emerging Markets Technology A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03296/LU3081725973_az-f1-eq-emerging-markets-technology-a-cap-eur",
+      "isin": "LU3081725973"
+    },
+    "AZ F.1 All. Flexible Equity A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U13782/LU2168558927_az-f1-all-flexible-equity-a-cap-eur",
+      "isin": "LU2168558927"
+    },
+    "AZ F.1 All. Risk Parity Factors A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12930/LU2102340044_az-f1-all-risk-parity-factors-a-cap-eur",
+      "isin": "LU2102340044"
+    },
+    "AZ F.1 Bd High Income FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/ATUT4347/LU2244841198_az-f1-bd-high-income-fof-a-cap-eur",
+      "isin": "LU2244841198",
+      "overview": {
+        "cat_assog": "Flexible Bond",
+        "srri": "3",
+        "start_date": "12/4/2020",
+        "income": "Accumulation",
+        "fida_rating": "1",
+        "fida_score": "12.00",
+        "fida_cat": "Bond World - Corporate & Government High Yield",
+        "mgmt_fee": "1.20%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 All. Escalator 2030 A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03293/LU3081792221_az-f1-all-escalator-2030-a-cap-eur",
+      "isin": "LU3081792221"
+    },
+    "AZ F.1 All. Potential Income Upside 2030 A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM3145/LU2637786422_az-f1-all-potential-income-upside-2030-a-cap-eur",
+      "isin": "LU2637786422"
+    },
+    "AZ Bond - Convertible Bond": {
+      "url": "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg",
+      "isin": "LU1422848470"
+    },
+    "AZ F.1 All. Balanced Plus A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03292/LU3081370317_az-f1-all-balanced-plus-a-cap-eur",
+      "isin": "LU3081370317",
+      "overview": {
+        "cat_assog": "Others",
+        "srri": "3",
+        "start_date": "-",
+        "income": "Accumulation",
+        "fida_rating": "-",
+        "fida_score": "-",
+        "fida_cat": "-",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 Eq. Global Emerging FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZ1278/LU1225037040_az-f1-eq-global-emerging-fof-a-cap-eur",
+      "isin": "LU1225037040",
+      "overview": {
+        "cat_assog": "Emerging Market Equity",
+        "srri": "3",
+        "start_date": "6/19/2015",
+        "income": "Accumulation",
+        "fida_rating": "1",
+        "fida_score": "25.95",
+        "fida_cat": "Equity World (Emerging Markets) - Large & Mid Cap",
+        "mgmt_fee": "1.80%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 Eq. Global Value FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM4094/LU2622203623_az-f1-eq-global-value-fof-a-cap-eur",
+      "isin": "LU2622203623",
+      "overview": {
+        "cat_assog": "Others",
+        "srri": "3",
+        "start_date": "5/27/2024",
+        "income": "Accumulation",
+        "fida_rating": "-",
+        "fida_score": "-",
+        "fida_cat": "-",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 Eq. Brazil Trend A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12973/LU2097822436_az-f1-eq-brazil-trend-a-cap-eur",
+      "isin": "LU2097822436",
+      "overview": {
+        "cat_assog": "Emerging Market Equity",
+        "srri": "5",
+        "start_date": "5/7/2020",
+        "income": "Accumulation",
+        "fida_rating": "2",
+        "fida_score": "20.84",
+        "fida_cat": "Equity Brazil",
+        "mgmt_fee": "1.80%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      },
+      "analysis": {
+        "nav": "6.256",
+        "last_update": "6/12/2026",
+        "daily_change": "3.01%",
+        "ytd": "5.19%",
+        "perf_1y": "16.75%",
+        "perf_3y": "7.81%",
+        "perf_5y": "-6.28%",
+        "vol_1y": "24.94%",
+        "vol_3y": "20.71%",
+        "vol_5y": "23.09%",
+        "neg_vol_1y": "15.51%",
+        "neg_vol_3y": "13.28%",
+        "neg_vol_5y": "16.48%",
+        "sharpe_1y": "0.82",
+        "sharpe_3y": "0.29",
+        "sharpe_5y": "0.02",
+        "sortino_1y": "1.32",
+        "annual_perf": {
+          "2021": "-15.96%",
+          "2022": "3.13%",
+          "2023": "16.18%",
+          "2024": "-22.12%",
+          "2025": "21.77%"
+        }
+      }
+    },
+    "AZ F.1 Eq. World Minimum Volatility A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZFABAAZ/LU0262757098_az-f1-eq-world-minimum-volatility-a-cap-eur",
+      "isin": "LU0262757098",
+      "overview": {
+        "cat_assog": "Flexible",
+        "srri": "3",
+        "start_date": "9/1/2006",
+        "income": "Accumulation",
+        "fida_rating": "1",
+        "fida_score": "24.15",
+        "fida_cat": "Total Return (High Volatility)",
+        "mgmt_fee": "1.80%",
+        "sub_fee": "3.00%",
+        "perf_fee": "20.00%"
+      },
+      "analysis": {
+        "nav": "6.143",
+        "last_update": "6/12/2026",
+        "daily_change": "0.62%",
+        "ytd": "2.18%",
+        "perf_1y": "-1.38%",
+        "perf_3y": "9.45%",
+        "perf_5y": "11.68%",
+        "vol_1y": "8.41%",
+        "vol_3y": "8.31%",
+        "vol_5y": "9.09%",
+        "neg_vol_1y": "6.59%",
+        "neg_vol_3y": "5.78%",
+        "neg_vol_5y": "6.33%",
+        "sharpe_1y": "Neg",
+        "sharpe_3y": "0.03",
+        "sharpe_5y": "0.09",
+        "sortino_1y": "Neg",
+        "annual_perf": {
+          "2021": "16.43%",
+          "2022": "-6.44%",
+          "2023": "0.73%",
+          "2024": "11.74%",
+          "2025": "-4.41%"
+        }
+      }
+    },
+    "AZ F.1 Bd Income Dynamic A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZ1RESE/LU0108019232_az-f1-bd-income-dynamic-a-cap-eur",
+      "isin": "LU0108019232",
+      "overview": {
+        "cat_assog": "International Government Bond",
+        "srri": "2",
+        "start_date": "7/28/2000",
+        "income": "Accumulation",
+        "fida_rating": "3",
+        "fida_score": "42.72",
+        "fida_cat": "Bond Eurozone - Government (1-3 Years)",
+        "mgmt_fee": "0.24%",
+        "sub_fee": "0.00%",
+        "perf_fee": "20.00%"
+      },
+      "analysis": {
+        "nav": "6.618",
+        "last_update": "6/12/2026",
+        "daily_change": "0.05%",
+        "ytd": "-0.51%",
+        "perf_1y": "-0.03%",
+        "perf_3y": "9.16%",
+        "perf_5y": "6.05%",
+        "vol_1y": "2.59%",
+        "vol_3y": "2.15%",
+        "vol_5y": "2.25%",
+        "neg_vol_1y": "2.49%",
+        "neg_vol_3y": "1.62%",
+        "neg_vol_5y": "1.70%",
+        "sharpe_1y": "Neg",
+        "sharpe_3y": "0.07",
+        "sharpe_5y": "Neg",
+        "sortino_1y": "Neg",
+        "annual_perf": {
+          "2021": "0.54%",
+          "2022": "-3.14%",
+          "2023": "4.20%",
+          "2024": "4.13%",
+          "2025": "2.08%"
+        }
+      }
+    },
+    "AZ F.1 Bd Total Return Bond A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZF1BNDC/LU2168561392_az-f1-bd-total-return-bond-a-cap-eur",
+      "isin": "LU2168561392",
+      "overview": {
+        "cat_assog": "International Government Bond",
+        "srri": "2",
+        "start_date": "5/19/2021",
+        "income": "Accumulation",
+        "fida_rating": "-",
+        "fida_score": "-",
+        "fida_cat": "Bond - Other",
+        "mgmt_fee": "1.20%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      },
+      "analysis": {
+        "nav": "6.061",
+        "last_update": "6/12/2026",
+        "daily_change": "0.00%",
+        "ytd": "0.62%",
+        "perf_1y": "2.23%",
+        "perf_3y": "15.94%",
+        "perf_5y": "22.93%",
+        "vol_1y": "2.18%",
+        "vol_3y": "2.34%",
+        "vol_5y": "3.89%",
+        "neg_vol_1y": "1.76%",
+        "neg_vol_3y": "1.44%",
+        "neg_vol_5y": "2.76%",
+        "sharpe_1y": "0.31",
+        "sharpe_3y": "0.96",
+        "sharpe_5y": "0.54",
+        "sortino_1y": "0.38",
+        "annual_perf": {
+          "2021": "-1.98%",
+          "2022": "6.26%",
+          "2023": "4.86%",
+          "2024": "7.07%",
+          "2025": "2.86%"
+        }
+      }
+    },
+    "AZ Bond - CoCo Bonds (EUR-hedged)": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM4346/LU2622195936_az-f1-bd-coco-bonds-a-az-fund-cap-eur-hdg",
+      "isin": "LU2622195936",
+      "overview": {
+        "cat_assog": "Others",
+        "srri": "2",
+        "start_date": "10/7/2024",
+        "income": "Accumulation",
+        "fida_rating": "-",
+        "fida_score": "-",
+        "fida_cat": "-",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      },
+      "analysis": {
+        "nav": "5.457",
+        "last_update": "6/12/2026",
+        "daily_change": "-0.04%",
+        "ytd": "0.28%",
+        "perf_1y": "4.47%",
+        "perf_3y": "0.00%",
+        "perf_5y": "0.00%",
+        "vol_1y": "5.11%",
+        "vol_3y": "0.00%",
+        "vol_5y": "0.00%",
+        "neg_vol_1y": "4.05%",
+        "neg_vol_3y": "0.00%",
+        "neg_vol_5y": "0.00%",
+        "sharpe_1y": "0.78",
+        "sharpe_3y": "-",
+        "sharpe_5y": "-",
+        "sortino_1y": "0.98",
+        "annual_perf": {
+          "2024": "0.00%",
+          "2025": "0.62%",
+          "2026": "7.89%"
+        }
+      }
+    },
+    "AZ F.1 Eq. Future Opportunities A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U16575/LU2332973481_az-f1-eq-future-opportunities-a-cap-eur",
+      "isin": "LU2332973481",
+      "overview": {
+        "cat_assog": "US Equity",
+        "srri": "6",
+        "start_date": "5/19/2021",
+        "income": "Accumulation",
+        "fida_rating": "5",
+        "fida_score": "83.73",
+        "fida_cat": "Equity Usa - Large & Mid Cap",
+        "mgmt_fee": "1.80%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 Eq. Global Healthcare A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZEGHAZ/LU2384058314_az-f1-eq-global-healthcare-a-cap-eur",
+      "isin": "LU2384058314",
+      "overview": {
+        "cat_assog": "Health-Care Equity",
+        "srri": "4",
+        "start_date": "2/3/2021",
+        "income": "Accumulation",
+        "fida_rating": "3",
+        "fida_score": "42.33",
+        "fida_cat": "Equity Sector - Healthcare",
+        "mgmt_fee": "1.80%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      },
+      "analysis": {
+        "nav": "4.854",
+        "last_update": "6/12/2026",
+        "daily_change": "1.22%",
+        "ytd": "-0.95%",
+        "perf_1y": "15.31%",
+        "perf_3y": "2.28%",
+        "perf_5y": "0.00%",
+        "vol_1y": "13.86%",
+        "vol_3y": "12.94%",
+        "vol_5y": "12.62%",
+        "neg_vol_1y": "7.10%",
+        "neg_vol_3y": "9.64%",
+        "neg_vol_5y": "9.38%",
+        "sharpe_1y": "0.86",
+        "sharpe_3y": "Neg",
+        "sharpe_5y": "Neg",
+        "sortino_1y": "1.68",
+        "annual_perf": {
+          "2021": "2.64%",
+          "2022": "-4.13%",
+          "2023": "-5.83%",
+          "2024": "4.60%",
+          "2025": "1.67%"
+        }
+      }
+    },
+    "AZ Equity - Global Infrastructure": {
+      "url": "https://www.fondidoc.it/d/Index/GIU_5366/LU1621767737_az-f1-eq-gl-infrastructure-a-az-fund-cap-eur",
+      "isin": "LU1621767737",
+      "overview": {
+        "cat_assog": "Balanced",
+        "srri": "3",
+        "start_date": "9/26/2017",
+        "income": "Accumulation",
+        "fida_rating": "3",
+        "fida_score": "31.70",
+        "fida_cat": "Equity Sector - Infrastructure",
+        "mgmt_fee": "1.65%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      },
+      "analysis": {
+        "nav": "6.344",
+        "last_update": "6/12/2026",
+        "daily_change": "0.11%",
+        "ytd": "9.22%",
+        "perf_1y": "9.34%",
+        "perf_3y": "25.47%",
+        "perf_5y": "30.24%",
+        "vol_1y": "11.41%",
+        "vol_3y": "10.31%",
+        "vol_5y": "10.84%",
+        "neg_vol_1y": "4.94%",
+        "neg_vol_3y": "5.67%",
+        "neg_vol_5y": "7.05%",
+        "sharpe_1y": "0.50",
+        "sharpe_3y": "0.54",
+        "sharpe_5y": "0.40",
+        "sortino_1y": "1.15",
+        "annual_perf": {
+          "2021": "12.14%",
+          "2022": "-0.32%",
+          "2023": "-0.82%",
+          "2024": "15.23%",
+          "2025": "0.59%"
+        }
+      }
+    },
+    "AZ F.1 Bd Aggregate Bond Euro A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZLOBOA/LU0194809330_az-f1-bd-aggregate-bond-euro-a-cap-eur",
+      "isin": "LU0194809330",
+      "overview": {
+        "cat_assog": "International Government Bond",
+        "srri": "2",
+        "start_date": "6/18/2004",
+        "income": "Accumulation",
+        "fida_rating": "1",
+        "fida_score": "-",
+        "fida_cat": "Bond Eurozone - Corporate & Government",
+        "mgmt_fee": "1.20%",
+        "sub_fee": "1.50%",
+        "perf_fee": "20.00%"
+      },
+      "analysis": {
+        "nav": "6.298",
+        "last_update": "6/12/2026",
+        "daily_change": "0.21%",
+        "ytd": "-0.35%",
+        "perf_1y": "-1.38%",
+        "perf_3y": "1.85%",
+        "perf_5y": "-14.46%",
+        "vol_1y": "3.54%",
+        "vol_3y": "4.21%",
+        "vol_5y": "5.74%",
+        "neg_vol_1y": "3.31%",
+        "neg_vol_3y": "3.31%",
+        "neg_vol_5y": "4.79%",
+        "sharpe_1y": "Neg",
+        "sharpe_3y": "Neg",
+        "sharpe_5y": "Neg",
+        "sortino_1y": "Neg",
+        "annual_perf": {
+          "2021": "-3.51%",
+          "2022": "-16.35%",
+          "2023": "5.26%",
+          "2024": "0.09%",
+          "2025": "-0.97%"
+        }
+      }
+    },
+    "AZ F.1 All. Global Balanced A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZSTRAAZ/LU0262757841_az-f1-all-global-balanced-a-cap-eur",
+      "isin": "LU0262757841",
+      "overview": {
+        "cat_assog": "Flexible",
+        "srri": "3",
+        "start_date": "9/1/2006",
+        "income": "Accumulation",
+        "fida_rating": "1",
+        "fida_score": "12.34",
+        "fida_cat": "Diversified Balanced",
+        "mgmt_fee": "1.50%",
+        "sub_fee": "3.00%",
+        "perf_fee": "20.00%"
+      },
+      "analysis": {
+        "nav": "7.513",
+        "last_update": "6/12/2026",
+        "daily_change": "0.17%",
+        "ytd": "1.49%",
+        "perf_1y": "-0.23%",
+        "perf_3y": "7.48%",
+        "perf_5y": "8.19%",
+        "vol_1y": "6.91%",
+        "vol_3y": "6.06%",
+        "vol_5y": "6.07%",
+        "neg_vol_1y": "5.64%",
+        "neg_vol_3y": "4.51%",
+        "neg_vol_5y": "4.49%",
+        "sharpe_1y": "Neg",
+        "sharpe_3y": "Neg",
+        "sharpe_5y": "0.00",
+        "sortino_1y": "Neg",
+        "annual_perf": {
+          "2021": "8.63%",
+          "2022": "-3.19%",
+          "2023": "2.65%",
+          "2024": "5.93%",
+          "2025": "-2.11%"
+        }
+      }
+    },
+    "AZ F.1 Eq. Global FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZCOAAZ/LU0262760399_az-f1-eq-global-fof-a-cap-eur",
+      "isin": "LU0262760399",
+      "overview": {
+        "cat_assog": "Flexible",
+        "srri": "3",
+        "start_date": "9/1/2006",
+        "income": "Accumulation",
+        "fida_rating": "3",
+        "fida_score": "46.51",
+        "fida_cat": "Equity World (Emerging & Developed Markets) - Large & Mid Cap",
+        "mgmt_fee": "1.80%",
+        "sub_fee": "3.00%",
+        "perf_fee": "20.00%"
+      },
+      "analysis": {
+        "nav": "11.504",
+        "last_update": "6/12/2026",
+        "daily_change": "-0.34%",
+        "ytd": "12.71%",
+        "perf_1y": "20.65%",
+        "perf_3y": "36.23%",
+        "perf_5y": "26.42%",
+        "vol_1y": "14.40%",
+        "vol_3y": "11.67%",
+        "vol_5y": "10.87%",
+        "neg_vol_1y": "8.18%",
+        "neg_vol_3y": "7.39%",
+        "neg_vol_5y": "7.34%",
+        "sharpe_1y": "1.46",
+        "sharpe_3y": "0.82",
+        "sharpe_5y": "0.38",
+        "sortino_1y": "2.58",
+        "annual_perf": {
+          "2021": "13.50%",
+          "2022": "-11.78%",
+          "2023": "3.86%",
+          "2024": "15.19%",
+          "2025": "2.06%"
+        }
+      }
+    },
+    "AZ F.1 Eq. Global Growth A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZFGGSA/LU0804221488_az-f1-eq-global-growth-a-cap-eur",
+      "isin": "LU0804221488"
+    },
+    "AZ F.1 Bd Frontier Markets Debt A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZFBFMND/LU2458359069_az-f1-bd-frontier-markets-debt-a-cap-eur",
+      "isin": "LU2458359069",
+      "overview": {
+        "cat_assog": "Others",
+        "srri": "3",
+        "start_date": "10/26/2022",
+        "income": "Accumulation",
+        "fida_rating": "4",
+        "fida_score": "41.39",
+        "fida_cat": "Bond World (Emerging Markets) - Corporate & Government",
+        "mgmt_fee": "1.65%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 Bd Target 2029 USD A-HU Cap EUR Hdg": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12265/LU2097826429_az-f1-bd-target-2029-usd-a-hu-cap-eur-hdg",
+      "isin": "LU2097826429"
+    },
+    "AZ F.1 Eq. Europe A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZEPEQ/LU0107996786_az-f1-eq-europe-a-cap-eur",
+      "isin": "LU0107996786",
+      "overview": {
+        "cat_assog": "Flexible",
+        "srri": "4",
+        "start_date": "7/28/2000",
+        "income": "Accumulation",
+        "fida_rating": "1",
+        "fida_score": "31.51",
+        "fida_cat": "Equity Europe (Developed Markets) - Large & Mid Cap",
+        "mgmt_fee": "1.80%",
+        "sub_fee": "3.00%",
+        "perf_fee": "20.00%"
+      }
+    },
+    "AZ F.1 Eq. Small Cap Europe FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZSEUAAZ/LU0262753857_az-f1-eq-small-cap-europe-fof-a-cap-eur",
+      "isin": "LU0262753857",
+      "overview": {
+        "cat_assog": "Europe Equity",
+        "srri": "3",
+        "start_date": "9/1/2006",
+        "income": "Accumulation",
+        "fida_rating": "4",
+        "fida_score": "44.66",
+        "fida_cat": "Equity Europe (Developed Markets) - Mid & Small Cap",
+        "mgmt_fee": "1.80%",
+        "sub_fee": "2.00%",
+        "perf_fee": "20.00%"
+      }
     }
   },
   "ms_data": {
