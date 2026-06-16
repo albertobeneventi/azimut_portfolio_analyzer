@@ -10,13 +10,160 @@
       "isin": "LU2458358681"
     },
     "AZ Bond - Convertible Bond": {
-      "url": "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg"
+      "url": "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg",
+      "isin": "LU1422848470"
     },
     "AZ Equity - Global Infrastructure": {
-      "url": "https://www.fondidoc.it/d/Index/GIU_5366/LU1621767737_az-f1-eq-gl-infrastructure-a-az-fund-cap-eur"
+      "url": "https://www.fondidoc.it/d/Index/GIU_5366/LU1621767737_az-f1-eq-gl-infrastructure-a-az-fund-cap-eur",
+      "isin": "LU1621767737"
     },
     "AZ Bond - CoCo Bonds (EUR-hedged)": {
-      "url": "https://www.fondidoc.it/d/Index/FDFM4346/LU2622195936_az-f1-bd-coco-bonds-a-az-fund-cap-eur-hdg"
+      "url": "https://www.fondidoc.it/d/Index/FDFM4346/LU2622195936_az-f1-bd-coco-bonds-a-az-fund-cap-eur-hdg",
+      "isin": "LU2622195936"
+    },
+    "AZ F.1 All. Potential Income Upside 2030 A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM3145/LU2637786422_az-f1-all-potential-income-upside-2030-a-cap-eur",
+      "isin": "LU2637786422"
+    },
+    "AZ F.1 Bd Patriot A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZF1005/LU0738951036_az-f1-bd-patriot-a-cap-eur",
+      "isin": "LU0738951036"
+    },
+    "AZ F.1 Eq. Escalator A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZEESCAC/LU1867654516_az-f1-eq-escalator-a-cap-eur",
+      "isin": "LU1867654516"
+    },
+    "AZ F.1 Bd Target 2029 A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM9064/LU2951609937_az-f1-bd-target-2029-a-cap-eur",
+      "isin": "LU2951609937"
+    },
+    "AZ F.1 Eq. Industrial Revolution 4.0 A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM4112/LU2622500598_az-f1-eq-industrial-revolution-40-a-cap-eur",
+      "isin": "LU2622500598"
+    },
+    "AZ F.1 Eq. Emerging Markets Technology A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03296/LU3081725973_az-f1-eq-emerging-markets-technology-a-cap-eur",
+      "isin": "LU3081725973"
+    },
+    "AZ F.1 All. Trend A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZFALT/LU2168564065_az-f1-all-trend-a-cap-eur",
+      "isin": "LU2168564065"
+    },
+    "AZ F.1 All. Balanced FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZPOA/LU0346933400_az-f1-allocation-balanced-fof-a-az-fund-cap-eur",
+      "isin": "LU0346933400"
+    },
+    "AZ F.1 Bd High Income FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/ATUT4347/LU2244841198_az-f1-bd-high-income-fof-a-cap-eur",
+      "isin": "LU2244841198"
+    },
+    "AZ F.1 Eq. Global Dividend A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03297/LU3081740188_az-f1-eq-global-dividend-a-cap-eur",
+      "isin": "LU3081740188"
+    },
+    "AZ F.1 Bd Hybrids A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZZI06/LU2056384311_az-f1-bd-hybrids-a-cap-eur",
+      "isin": "LU2056384311"
+    },
+    "AZ F.1 All. Balanced Brave A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/IARNM02/LU2148611275_az-f1-all-balanced-brave-a-cap-eur",
+      "isin": "LU2148611275"
+    },
+    "AZ F.1 All. Flexible Equity A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U13782/LU2168558927_az-f1-all-flexible-equity-a-cap-eur",
+      "isin": "LU2168558927"
+    },
+    "AZ F.1 Bd Bond Value A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03290/LU3081730460_az-f1-bd-bond-value-a-cap-eur",
+      "isin": "LU3081730460"
+    },
+    "AZ F.1 All. Escalator 2030 A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03293/LU3081792221_az-f1-all-escalator-2030-a-cap-eur",
+      "isin": "LU3081792221"
+    },
+    "AZ F.1 All. Risk Parity Factors A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12930/LU2102340044_az-f1-all-risk-parity-factors-a-cap-eur",
+      "isin": "LU2102340044"
+    },
+    "AZ F.1 Bd Global Macro Bond A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12175/LU2085663008_az-f1-bd-global-macro-bond-a-cap-eur",
+      "isin": "LU2085663008"
+    },
+    "AZ F.1 Eq. Best Value A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12190/LU2056383347_az-f1-eq-best-value-a-cap-eur",
+      "isin": "LU2056383347"
+    },
+    "AZ F.1 Bd High Yield A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12199/LU2056382372_az-f1-bd-high-yield-a-cap-eur",
+      "isin": "LU2056382372"
+    },
+    "AZ F.1 All. Balanced Plus A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03292/LU3081370317_az-f1-all-balanced-plus-a-cap-eur",
+      "isin": "LU3081370317"
+    },
+    "AZ F.1 Eq. Global Emerging FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZ1278/LU1225037040_az-f1-eq-global-emerging-fof-a-cap-eur",
+      "isin": "LU1225037040"
+    },
+    "AZ F.1 Eq. Global Value FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM4094/LU2622203623_az-f1-eq-global-value-fof-a-cap-eur",
+      "isin": "LU2622203623"
+    },
+    "AZ F.1 Eq. Brazil Trend A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12973/LU2097822436_az-f1-eq-brazil-trend-a-cap-eur",
+      "isin": "LU2097822436"
+    },
+    "AZ F.1 Eq. World Minimum Volatility A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZFABAAZ/LU0262757098_az-f1-eq-world-minimum-volatility-a-cap-eur",
+      "isin": "LU0262757098"
+    },
+    "AZ F.1 Bd Income Dynamic A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZ1RESE/LU0108019232_az-f1-bd-income-dynamic-a-cap-eur",
+      "isin": "LU0108019232"
+    },
+    "AZ F.1 Bd Total Return Bond A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZF1BNDC/LU2168561392_az-f1-bd-total-return-bond-a-cap-eur",
+      "isin": "LU2168561392"
+    },
+    "AZ F.1 Eq. Future Opportunities A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/G1U16575/LU2332973481_az-f1-eq-future-opportunities-a-cap-eur",
+      "isin": "LU2332973481"
+    },
+    "AZ F.1 Eq. Global Healthcare A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZEGHAZ/LU2384058314_az-f1-eq-global-healthcare-a-cap-eur",
+      "isin": "LU2384058314"
+    },
+    "AZ F.1 Bd Aggregate Bond Euro A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZLOBOA/LU0194809330_az-f1-bd-aggregate-bond-euro-a-cap-eur",
+      "isin": "LU0194809330"
+    },
+    "AZ F.1 All. Global Balanced A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZSTRAAZ/LU0262757841_az-f1-all-global-balanced-a-cap-eur",
+      "isin": "LU0262757841"
+    },
+    "AZ F.1 Eq. Global FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZCOAAZ/LU0262760399_az-f1-eq-global-fof-a-cap-eur",
+      "isin": "LU0262760399"
+    },
+    "AZ F.1 Bd Frontier Markets Debt A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZFBFMND/LU2458359069_az-f1-bd-frontier-markets-debt-a-cap-eur",
+      "isin": "LU2458359069"
+    },
+    "AZ F.1 Eq. Europe A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZEPEQ/LU0107996786_az-f1-eq-europe-a-cap-eur",
+      "isin": "LU0107996786"
+    },
+    "AZ F.1 Bd Target 2029 USD A-HU Cap EUR Hdg": {
+      "url": "https://www.fondidoc.it/d/Index/G1U12265/LU2097826429_az-f1-bd-target-2029-usd-a-hu-cap-eur-hdg",
+      "isin": "LU2097826429"
+    },
+    "AZ F.1 Eq. Small Cap Europe FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZSEUAAZ/LU0262753857_az-f1-eq-small-cap-europe-fof-a-cap-eur",
+      "isin": "LU0262753857"
+    },
+    "AZ F.1 Eq. Global Growth A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZFGGSA/LU0804221488_az-f1-eq-global-growth-a-cap-eur",
+      "isin": "LU0804221488"
     }
   },
   "ms_data": {
