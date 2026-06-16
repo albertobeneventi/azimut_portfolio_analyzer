@@ -8,6 +8,15 @@
     "AZ F.1 Bd Frontier Markets Debt A-HU Cap EUR Hdg": {
       "url": "https://www.fondidoc.it/d/Index/FIDFM440/LU2458358681_az-f1-bd-frontier-markets-debt-a-hu-cap-eur-hdg",
       "isin": "LU2458358681"
+    },
+    "AZ Bond - Convertible Bond": {
+      "url": "https://www.fondidoc.it/d/Index/AZF11671/LU1422848470_az-f1-bd-convertible-a-hu-cap-eur-hdg"
+    },
+    "AZ Equity - Global Infrastructure": {
+      "url": "https://www.fondidoc.it/d/Index/GIU_5366/LU1621767737_az-f1-eq-gl-infrastructure-a-az-fund-cap-eur"
+    },
+    "AZ Bond - CoCo Bonds (EUR-hedged)": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM4346/LU2622195936_az-f1-bd-coco-bonds-a-az-fund-cap-eur-hdg"
     }
   },
   "ms_data": {
