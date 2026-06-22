@@ -1,653 +1,652 @@
 {
   "az allocation asset timing 2026": {
-    "ytd": "+3.66%",
-    "perf_1y": "+14.66%",
+    "ytd": "+8.41%",
+    "perf_1y": "+15.69%",
     "perf_3y": null,
     "perf_5y": null,
-    "fb_az_pct": 0.9,
-    "fb_obb_pct": 0.13
+    "fb_az_pct": 0.95,
+    "fb_obb_pct": 0.11
   },
   "az allocation asset timing 2028": {
-    "ytd": "+1.14%",
+    "ytd": "+3.24%",
     "perf_1y": null,
     "perf_3y": null,
     "perf_5y": null
   },
   "az allocation balanced brave": {
-    "ytd": "+3.65%",
-    "perf_1y": "+12.44%",
-    "perf_3y": "+6.72%",
-    "perf_5y": "+3.71%",
-    "fb_az_pct": 0.3,
-    "fb_obb_pct": 0.48
+    "ytd": "+4.00%",
+    "perf_1y": "+9.94%",
+    "perf_3y": "+6.40%",
+    "perf_5y": "+3.69%",
+    "fb_az_pct": 0.31,
+    "fb_obb_pct": 0.47
   },
   "az allocation balanced fof": {
-    "ytd": "+3.38%",
-    "perf_1y": "+7.00%",
-    "perf_3y": "+3.45%",
-    "perf_5y": "+4.97%",
-    "fb_az_pct": 0.44,
-    "fb_obb_pct": 0.31
+    "ytd": "+6.70%",
+    "perf_1y": "+9.37%",
+    "perf_3y": "+5.02%",
+    "perf_5y": "+5.66%",
+    "fb_az_pct": 0.38,
+    "fb_obb_pct": 0.33
   },
   "az allocation balanced plus": {
-    "ytd": "+2.63%",
+    "ytd": "+8.34%",
     "perf_1y": null,
     "perf_3y": null,
     "perf_5y": null
   },
   "az allocation escalator 2026": {
-    "ytd": "+3.04%",
-    "perf_1y": "+15.22%",
-    "perf_3y": "+8.23%",
+    "ytd": "+7.57%",
+    "perf_1y": "+15.48%",
+    "perf_3y": "+9.59%",
     "perf_5y": null,
-    "fb_az_pct": 0.87,
-    "fb_obb_pct": 0.13
+    "fb_az_pct": 0.89,
+    "fb_obb_pct": 0.11
   },
   "az allocation escalator 2028": {
-    "ytd": "+2.14%",
-    "perf_1y": "+9.40%",
+    "ytd": "+5.18%",
+    "perf_1y": "+9.99%",
     "perf_3y": null,
     "perf_5y": null,
     "fb_az_pct": 0.52,
-    "fb_obb_pct": 0.5
+    "fb_obb_pct": 0.49
   },
   "az allocation escalator 2030": {
-    "ytd": "+0.44%",
+    "ytd": "+2.00%",
     "perf_1y": null,
     "perf_3y": null,
     "perf_5y": null
   },
   "az allocation flexible equity": {
-    "ytd": "+2.93%",
-    "perf_1y": "+25.58%",
-    "perf_3y": "+14.39%",
-    "perf_5y": "+6.19%",
-    "fb_az_pct": 0.83,
-    "fb_obb_pct": 0.25
+    "ytd": "+6.57%",
+    "perf_1y": "+24.28%",
+    "perf_3y": "+15.31%",
+    "perf_5y": "+6.60%",
+    "fb_az_pct": 0.79,
+    "fb_obb_pct": 0.28
   },
   "az allocation global aggressive": {
-    "ytd": "+3.40%",
-    "perf_1y": "+13.37%",
-    "perf_3y": "+7.71%",
-    "perf_5y": "+3.41%",
+    "ytd": "+6.75%",
+    "perf_1y": "+13.35%",
+    "perf_3y": "+8.44%",
+    "perf_5y": "+4.10%",
     "fb_az_pct": 0.76,
-    "fb_obb_pct": 0.43
+    "fb_obb_pct": 0.42
   },
   "az allocation escalator": {
     "ytd": null,
-    "perf_1y": "+0.10%",
+    "perf_1y": "+1.84%",
     "perf_3y": null,
     "perf_5y": null
   },
   "az allocation global balanced": {
-    "ytd": "-0.12%",
-    "perf_1y": "-2.15%",
-    "perf_3y": "+2.17%",
-    "perf_5y": "+1.56%",
-    "fb_az_pct": 0.61,
+    "ytd": "+1.04%",
+    "perf_1y": "-1.49%",
+    "perf_3y": "+2.47%",
+    "perf_5y": "+1.76%",
+    "fb_az_pct": 0.56,
     "fb_obb_pct": 0.46
   },
   "az allocation global conservative": {
-    "ytd": "+0.21%",
-    "perf_1y": "+4.02%",
-    "perf_3y": "+4.42%",
-    "perf_5y": "+0.72%",
-    "fb_az_pct": 0.24,
-    "fb_obb_pct": 0.72
+    "ytd": "+1.72%",
+    "perf_1y": "+4.41%",
+    "perf_3y": "+4.93%",
+    "perf_5y": "+1.01%",
+    "fb_az_pct": 0.23,
+    "fb_obb_pct": 0.74
   },
   "az allocation italian long term opp": {
-    "ytd": "-0.74%",
-    "perf_1y": "+17.90%",
-    "perf_3y": "+11.28%",
+    "ytd": "+5.59%",
+    "perf_1y": "+13.98%",
+    "perf_3y": "+14.18%",
     "perf_5y": null
   },
   "az allocation italian trend": {
-    "ytd": "+3.97%",
-    "perf_1y": "+24.23%",
-    "perf_3y": "+14.89%",
-    "perf_5y": "+10.51%",
-    "fb_az_pct": 0.95,
+    "ytd": "+8.10%",
+    "perf_1y": "+19.84%",
+    "perf_3y": "+17.60%",
+    "perf_5y": "+10.05%",
+    "fb_az_pct": 0.98,
     "fb_obb_pct": 0.07
   },
   "az allocation life plan 2040": {
-    "ytd": "+4.03%",
+    "ytd": "+8.12%",
     "perf_1y": null,
     "perf_3y": null,
     "perf_5y": null
   },
   "az allocation long term credit opp": {
-    "ytd": "+2.01%",
-    "perf_1y": "+9.96%",
-    "perf_3y": "+8.14%",
+    "ytd": "+2.59%",
+    "perf_1y": "+8.86%",
+    "perf_3y": "+8.62%",
     "perf_5y": null,
-    "ytm": 6.44,
+    "ytm": 6.73,
     "credit_rating": "BB-",
-    "duration": 4.5,
-    "fb_az_pct": 0.01,
-    "fb_obb_pct": 0.99
+    "duration": 4.53,
+    "fb_obb_pct": 0.98
   },
   "az allocation long term equity opp": {
-    "ytd": "+3.29%",
-    "perf_1y": "+11.30%",
-    "perf_3y": "+3.23%",
+    "ytd": "+7.92%",
+    "perf_1y": "+11.67%",
+    "perf_3y": "+4.69%",
     "perf_5y": null,
-    "fb_az_pct": 0.97,
-    "fb_obb_pct": 0.12
+    "fb_az_pct": 0.95,
+    "fb_obb_pct": 0.13
   },
   "az allocation pir italian excellence 70": {
-    "ytd": "+2.38%",
-    "perf_1y": "+18.00%",
-    "perf_3y": "+12.35%",
-    "perf_5y": "+7.60%",
-    "fb_az_pct": 0.67,
-    "fb_obb_pct": 0.27
+    "ytd": "+6.86%",
+    "perf_1y": "+16.38%",
+    "perf_3y": "+14.32%",
+    "perf_5y": "+7.75%",
+    "fb_az_pct": 0.69,
+    "fb_obb_pct": 0.26
   },
   "az allocation potential income upside 2030": {
-    "ytd": "-0.45%",
-    "perf_1y": "+6.19%",
+    "ytd": "+0.69%",
+    "perf_1y": "+5.72%",
     "perf_3y": null,
     "perf_5y": null,
-    "ytm": 5.58,
+    "ytm": 5.4,
     "credit_rating": "BB+",
-    "duration": 5.61
+    "duration": 5.63
   },
   "az allocation risk parity factors": {
-    "ytd": "+5.96%",
-    "perf_1y": "+15.95%",
-    "perf_3y": "+8.49%",
-    "perf_5y": "+5.99%",
-    "fb_az_pct": 0.51,
-    "fb_obb_pct": 0.45
+    "ytd": "+10.34%",
+    "perf_1y": "+18.34%",
+    "perf_3y": "+9.78%",
+    "perf_5y": "+6.76%",
+    "fb_az_pct": 0.53,
+    "fb_obb_pct": 0.43
   },
   "az allocation trend": {
-    "ytd": "+0.37%",
-    "perf_1y": "+17.99%",
-    "perf_3y": "+8.73%",
-    "perf_5y": "+5.21%",
-    "fb_az_pct": 0.88
+    "ytd": "+4.22%",
+    "perf_1y": "+16.49%",
+    "perf_3y": "+10.96%",
+    "perf_5y": "+5.72%",
+    "fb_az_pct": 0.84
   },
   "az allocation turkey": {
-    "ytd": "+4.96%",
-    "perf_1y": "+17.34%",
-    "perf_3y": "+11.65%",
-    "perf_5y": "+11.83%",
-    "fb_az_pct": 0.24,
-    "fb_obb_pct": 0.39
+    "ytd": "+5.25%",
+    "perf_1y": "+15.89%",
+    "perf_3y": "+11.26%",
+    "perf_5y": "+12.08%",
+    "fb_az_pct": 0.16,
+    "fb_obb_pct": 0.4
   },
   "az alternative capital enhanced": {
-    "ytd": "+1.68%",
-    "perf_1y": "+4.56%",
-    "perf_3y": "+1.07%",
-    "perf_5y": "+1.70%"
+    "ytd": "+1.80%",
+    "perf_1y": "+4.08%",
+    "perf_3y": "+0.97%",
+    "perf_5y": "+1.65%"
   },
   "az alternative commodity": {
-    "ytd": "+21.68%",
-    "perf_1y": "+43.96%",
-    "perf_3y": "+11.58%",
-    "perf_5y": "+7.79%",
-    "fb_obb_pct": 0.55
+    "ytd": "+18.65%",
+    "perf_1y": "+41.46%",
+    "perf_3y": "+12.79%",
+    "perf_5y": "+6.81%",
+    "fb_obb_pct": 0.65
   },
   "az bond abs": {
-    "ytd": "+0.58%",
-    "perf_1y": "+2.80%",
-    "perf_3y": "+3.88%",
-    "perf_5y": "+1.84%",
-    "ytm": 7.61,
-    "credit_rating": "A+",
-    "duration": 2.3
+    "ytd": "+0.65%",
+    "perf_1y": "+2.53%",
+    "perf_3y": "+3.79%",
+    "perf_5y": "+1.82%",
+    "ytm": 6.24,
+    "credit_rating": "A",
+    "duration": 2.1
   },
   "az bond aggregate bond euro": {
-    "ytd": "-0.57%",
-    "perf_1y": "-1.62%",
-    "perf_3y": "+0.50%",
-    "perf_5y": "-3.05%",
-    "ytm": 3.43,
+    "ytd": "+0.30%",
+    "perf_1y": "-0.72%",
+    "perf_3y": "+0.74%",
+    "perf_5y": "-2.85%",
+    "ytm": 3.33,
     "credit_rating": "A+",
-    "duration": 6.49
+    "duration": 6.82
   },
   "az bond asian bond": {
-    "ytd": "+0.10%",
-    "perf_1y": "+0.29%",
-    "perf_3y": "+0.52%",
+    "ytd": "+0.59%",
+    "perf_1y": "+0.66%",
+    "perf_3y": "-0.20%",
     "perf_5y": null,
-    "ytm": 4.99,
-    "credit_rating": "A-",
-    "duration": 4.52
-  },
-  "az bond bond value": {
-    "ytd": "-1.81%",
-    "perf_1y": null,
-    "perf_3y": null,
-    "perf_5y": null,
-    "ytm": 3.84,
-    "credit_rating": "A+",
-    "duration": 15.0
-  },
-  "az bond coco bonds": {
-    "ytd": "+0.58%",
-    "perf_1y": "+5.77%",
-    "perf_3y": null,
-    "perf_5y": null,
-    "ytm": 7.32,
-    "credit_rating": "BBB-",
-    "duration": 5.5
-  },
-  "az bond convertible": {
-    "ytd": "+1.90%",
-    "perf_1y": "+10.18%",
-    "perf_3y": "+3.82%",
-    "perf_5y": "+0.48%",
-    "credit_rating": "BBB"
-  },
-  "az bond enhanced yield": {
-    "ytd": "-0.14%",
-    "perf_1y": "+0.52%",
-    "perf_3y": "+2.23%",
-    "perf_5y": "+1.17%",
-    "ytm": 2.73,
-    "credit_rating": "A-",
-    "duration": 2.54
-  },
-  "az bond euro corporate": {
-    "ytd": "-0.35%",
-    "perf_1y": "+0.13%",
-    "perf_3y": "+2.21%",
-    "perf_5y": "-1.29%",
-    "ytm": 3.7,
+    "ytm": 4.87,
     "credit_rating": "A-",
     "duration": 4.56
   },
-  "az bond frontier markets debt": {
-    "ytd": "+3.44%",
-    "perf_1y": "+16.79%",
-    "perf_3y": "+9.47%",
+  "az bond bond value": {
+    "ytd": "-0.80%",
+    "perf_1y": null,
+    "perf_3y": null,
     "perf_5y": null,
-    "ytm": 12.38,
+    "ytm": 3.74,
+    "credit_rating": "A+",
+    "duration": 14.69
+  },
+  "az bond coco bonds": {
+    "ytd": "+2.02%",
+    "perf_1y": "+5.33%",
+    "perf_3y": null,
+    "perf_5y": null,
+    "ytm": 6.98,
+    "credit_rating": "BBB-",
+    "duration": 5.24
+  },
+  "az bond convertible": {
+    "ytd": "+6.86%",
+    "perf_1y": "+13.50%",
+    "perf_3y": "+5.54%",
+    "perf_5y": "+1.52%",
+    "credit_rating": "BBB"
+  },
+  "az bond enhanced yield": {
+    "ytd": "+0.38%",
+    "perf_1y": "+0.90%",
+    "perf_3y": "+2.30%",
+    "perf_5y": "+1.31%",
+    "ytm": 2.59,
+    "credit_rating": "A-",
+    "duration": 2.69
+  },
+  "az bond euro corporate": {
+    "ytd": "+0.40%",
+    "perf_1y": "+0.64%",
+    "perf_3y": "+2.47%",
+    "perf_5y": "-1.13%",
+    "ytm": 3.64,
+    "credit_rating": "A-",
+    "duration": 4.83
+  },
+  "az bond frontier markets debt": {
+    "ytd": "+4.70%",
+    "perf_1y": "+14.42%",
+    "perf_3y": "+8.09%",
+    "perf_5y": null,
+    "ytm": 12.26,
     "credit_rating": "BB",
-    "duration": 3.59
+    "duration": 3.47
   },
   "az bond global macro bond": {
-    "ytd": "-0.13%",
-    "perf_1y": "+2.61%",
-    "perf_3y": "+4.11%",
-    "perf_5y": "+1.45%",
-    "ytm": 4.55,
+    "ytd": "+0.44%",
+    "perf_1y": "+2.50%",
+    "perf_3y": "+4.17%",
+    "perf_5y": "+1.57%",
+    "ytm": 4.5,
     "credit_rating": "BBB",
-    "duration": 3.55
+    "duration": 3.77
   },
   "az bond high income fof": {
-    "ytd": "-1.79%",
-    "perf_1y": "-1.14%",
-    "perf_3y": "+1.67%",
-    "perf_5y": "+3.99%",
-    "ytm": 5.5,
-    "duration": 7.28,
+    "ytd": "-0.24%",
+    "perf_1y": "+0.24%",
+    "perf_3y": "+1.27%",
+    "perf_5y": "+4.61%",
+    "ytm": 5.6,
+    "duration": 7.7,
     "credit_rating": "A"
   },
   "az bond high yield": {
-    "ytd": "-0.05%",
-    "perf_1y": "+3.86%",
-    "perf_3y": "+7.07%",
+    "ytd": "+0.69%",
+    "perf_1y": "+3.32%",
+    "perf_3y": "+6.96%",
     "perf_5y": null,
     "ytm": 5.6,
     "credit_rating": "BB",
-    "duration": 3.62
+    "duration": 4.0
   },
   "az bond high yield target 2028 climate transition": {
-    "ytd": "-0.30%",
+    "ytd": "+0.12%",
     "perf_1y": null,
     "perf_3y": null,
     "perf_5y": null,
-    "ytm": 4.22,
+    "ytm": 4.1,
     "credit_rating": "BB+",
-    "duration": 2.25
+    "duration": 2.19
   },
   "az bond sustainable hybrid": {
-    "ytd": "-0.65%",
-    "perf_1y": "+4.04%",
-    "perf_3y": "+6.14%",
-    "perf_5y": "+1.57%",
-    "ytm": 5.1,
+    "ytd": "+0.42%",
+    "perf_1y": "+4.16%",
+    "perf_3y": "+6.59%",
+    "perf_5y": "+1.87%",
+    "ytm": 5.01,
     "credit_rating": "BBB",
-    "duration": 5.94
+    "duration": 6.13
   },
   "az bond income dynamic": {
-    "ytd": "-0.89%",
-    "perf_1y": "+0.15%",
-    "perf_3y": "+3.05%",
-    "perf_5y": "+1.19%",
-    "ytm": 3.6,
+    "ytd": "-0.20%",
+    "perf_1y": "+0.49%",
+    "perf_3y": "+3.15%",
+    "perf_5y": "+1.29%",
+    "ytm": 3.45,
     "credit_rating": "BBB",
-    "duration": 2.81
+    "duration": 2.74
   },
   "az bond international fof": {
-    "ytd": "-2.31%",
-    "perf_1y": "-2.56%",
-    "perf_3y": "+0.71%",
-    "perf_5y": "+3.62%",
-    "ytm": 4.86,
-    "duration": 7.16,
+    "ytd": "-1.10%",
+    "perf_1y": "-1.44%",
+    "perf_3y": "-0.21%",
+    "perf_5y": "+4.22%",
+    "ytm": 4.97,
+    "duration": 7.45,
     "credit_rating": "A"
   },
   "az bond latin america bonds": {
-    "ytd": "+0.50%",
-    "perf_1y": "+2.12%",
+    "ytd": "+0.78%",
+    "perf_1y": "+1.98%",
     "perf_3y": null,
     "perf_5y": null,
-    "ytm": 5.94,
-    "credit_rating": "BBB-",
-    "duration": 5.6
+    "ytm": 6.37,
+    "credit_rating": "BB+",
+    "duration": 5.98
   },
   "az bond patriot": {
-    "ytd": "-1.66%",
-    "perf_1y": "+0.50%",
-    "perf_3y": "+3.44%",
-    "perf_5y": "+0.52%",
-    "ytm": 4.15,
+    "ytd": "+0.01%",
+    "perf_1y": "+1.11%",
+    "perf_3y": "+3.76%",
+    "perf_5y": "+0.80%",
+    "ytm": 4.12,
     "credit_rating": "BBB",
-    "duration": 9.73
+    "duration": 10.05
   },
   "az bond renminbi opportunities": {
-    "ytd": "+2.39%",
-    "perf_1y": "+2.42%",
-    "perf_3y": "-2.30%",
-    "perf_5y": "-2.06%",
-    "ytm": 4.22,
+    "ytd": "+4.07%",
+    "perf_1y": "+3.03%",
+    "perf_3y": "-1.75%",
+    "perf_5y": "-1.79%",
+    "ytm": 4.35,
     "credit_rating": "A+",
-    "duration": 0.67
+    "duration": 0.73
   },
   "az bond short term investment grade climate transition": {
-    "ytd": "-0.48%",
+    "ytd": "-0.12%",
     "perf_1y": null,
     "perf_3y": null,
     "perf_5y": null,
-    "ytm": 3.54,
+    "ytm": 3.46,
     "credit_rating": "BBB",
-    "duration": 2.1
+    "duration": 2.06
   },
   "az bond target 2026": {
-    "ytd": "+0.29%",
-    "perf_1y": "+3.34%",
-    "perf_3y": "+6.41%",
+    "ytd": "+0.55%",
+    "perf_1y": "+2.77%",
+    "perf_3y": "+6.48%",
     "perf_5y": null,
-    "ytm": 3.92,
+    "ytm": 3.93,
     "credit_rating": "BBB-",
-    "duration": 1.22
+    "duration": 1.28
   },
   "az bond target 2028": {
-    "ytd": "+0.40%",
-    "perf_1y": "+4.78%",
+    "ytd": "+1.01%",
+    "perf_1y": "+4.42%",
     "perf_3y": null,
     "perf_5y": null,
-    "ytm": 4.81,
+    "ytm": 4.76,
     "credit_rating": "BB+",
-    "duration": 3.11
+    "duration": 3.17
   },
   "az bond target 2029": {
-    "ytd": "-0.14%",
-    "perf_1y": "+4.54%",
+    "ytd": "+0.72%",
+    "perf_1y": "+4.29%",
     "perf_3y": null,
-    "perf_5y": null,
-    "ytm": 4.92,
-    "credit_rating": "BB+",
-    "duration": 4.21
-  },
-  "az bond target 2029 usd": {
-    "ytd": "+0.59%",
-    "perf_1y": "+2.43%",
-    "perf_3y": "+2.69%",
-    "perf_5y": "+1.80%",
-    "ytm": 6.1,
-    "credit_rating": "BBB",
-    "duration": 3.82
-  },
-  "az bond target 2031": {
-    "ytd": "-0.37%",
-    "perf_1y": "+5.10%",
-    "perf_3y": null,
-    "perf_5y": null,
-    "ytm": 5.1,
-    "credit_rating": "BBB-",
-    "duration": 5.71
-  },
-  "az bond total return bond": {
-    "ytd": "+0.22%",
-    "perf_1y": "+3.08%",
-    "perf_3y": "+5.10%",
     "perf_5y": null,
     "ytm": 4.88,
-    "credit_rating": "BBB-",
-    "duration": 2.7
+    "credit_rating": "BB+",
+    "duration": 4.27
   },
-  "az bond us dollar aggregate": {
-    "ytd": "-0.34%",
-    "perf_1y": "-0.58%",
+  "az bond target 2029 usd": {
+    "ytd": "+1.68%",
+    "perf_1y": "+2.83%",
+    "perf_3y": "+1.68%",
+    "perf_5y": "+2.22%",
+    "ytm": 6.15,
+    "credit_rating": "BBB",
+    "duration": 3.72
+  },
+  "az bond target 2031": {
+    "ytd": "+0.64%",
+    "perf_1y": "+4.71%",
     "perf_3y": null,
     "perf_5y": null,
-    "ytm": 5.1,
+    "ytm": 5.06,
+    "credit_rating": "BBB-",
+    "duration": 5.74
+  },
+  "az bond total return bond": {
+    "ytd": "+0.65%",
+    "perf_1y": "+2.66%",
+    "perf_3y": "+5.31%",
+    "perf_5y": "+4.03%",
+    "ytm": 4.77,
+    "credit_rating": "BBB-",
+    "duration": 2.71
+  },
+  "az bond us dollar aggregate": {
+    "ytd": "+0.54%",
+    "perf_1y": "+0.72%",
+    "perf_3y": "-0.35%",
+    "perf_5y": null,
+    "ytm": 3.55,
     "credit_rating": "A+",
-    "duration": 6.04
+    "duration": 6.34
   },
   "az equity american opportunities": {
-    "ytd": "+1.90%",
-    "perf_1y": "+18.91%",
-    "perf_3y": "+8.92%",
-    "perf_5y": "+3.01%"
+    "ytd": "+9.39%",
+    "perf_1y": "+20.07%",
+    "perf_3y": "+11.53%",
+    "perf_5y": "+4.88%"
   },
   "az equity asean countries": {
-    "ytd": "-1.71%",
-    "perf_1y": "+2.90%",
-    "perf_3y": "-0.98%",
-    "perf_5y": "-4.75%"
+    "ytd": "-1.49%",
+    "perf_1y": "-1.35%",
+    "perf_3y": "+0.14%",
+    "perf_5y": "-4.26%"
   },
   "az equity best value": {
-    "ytd": "+15.21%",
-    "perf_1y": "+46.60%",
-    "perf_3y": "+21.82%",
-    "perf_5y": "+15.88%"
+    "ytd": "+15.87%",
+    "perf_1y": "+36.61%",
+    "perf_3y": "+23.68%",
+    "perf_5y": "+14.79%"
   },
   "az equity biotechnology": {
-    "ytd": "+0.02%",
-    "perf_1y": "+35.20%",
+    "ytd": "+4.84%",
+    "perf_1y": "+47.09%",
     "perf_3y": null,
     "perf_5y": null
   },
   "az allocation life plan": {
     "ytd": null,
-    "perf_1y": "+3.34%",
+    "perf_1y": "+7.82%",
     "perf_3y": null,
     "perf_5y": null
   },
   "az allocation potential income upside": {
     "ytd": null,
-    "perf_1y": "-0.80%",
+    "perf_1y": "+0.75%",
     "perf_3y": null,
     "perf_5y": null
   },
   "az bond target": {
     "ytd": null,
-    "perf_1y": "-0.65%",
+    "perf_1y": "+0.67%",
     "perf_3y": null,
     "perf_5y": null
   },
   "az equity borletti global lifestyle": {
-    "ytd": "-5.63%",
-    "perf_1y": "-2.25%",
-    "perf_3y": "-2.30%",
-    "perf_5y": "-2.00%"
+    "ytd": "-4.19%",
+    "perf_1y": "-6.18%",
+    "perf_3y": "-1.53%",
+    "perf_5y": "-1.73%"
   },
   "az equity brazil trend": {
-    "ytd": "+18.81%",
-    "perf_1y": "+37.89%",
-    "perf_3y": "+11.96%",
-    "perf_5y": "+3.05%"
+    "ytd": "+7.43%",
+    "perf_1y": "+21.38%",
+    "perf_3y": "+7.10%",
+    "perf_5y": "-0.28%"
   },
   "az equity china": {
-    "ytd": "-3.65%",
-    "perf_1y": "+10.85%",
-    "perf_3y": "+1.73%",
-    "perf_5y": "-8.75%"
+    "ytd": "-5.19%",
+    "perf_1y": "+6.10%",
+    "perf_3y": "+3.72%",
+    "perf_5y": "-9.36%"
   },
   "az equity egypt": {
-    "ytd": "+11.91%",
-    "perf_1y": "+50.27%",
-    "perf_3y": "+19.84%",
-    "perf_5y": "+10.66%"
+    "ytd": "+19.67%",
+    "perf_1y": "+54.03%",
+    "perf_3y": "+20.57%",
+    "perf_5y": "+11.86%"
   },
   "az equity emerging asia fof": {
-    "ytd": "+16.64%",
-    "perf_1y": "+38.45%",
-    "perf_3y": "+9.85%",
-    "perf_5y": "+1.68%"
+    "ytd": "+30.58%",
+    "perf_1y": "+48.87%",
+    "perf_3y": "+13.97%",
+    "perf_5y": "+4.12%"
   },
   "az equity emerging markets technology": {
-    "ytd": "+3.67%",
+    "ytd": "+14.60%",
     "perf_1y": null,
     "perf_3y": null,
     "perf_5y": null
   },
   "az equity escalator": {
-    "ytd": "+4.03%",
-    "perf_1y": "+18.40%",
-    "perf_3y": "+10.50%",
-    "perf_5y": "+4.55%",
-    "fb_az_pct": 0.88,
-    "fb_obb_pct": 0.12
+    "ytd": "+8.85%",
+    "perf_1y": "+17.89%",
+    "perf_3y": "+11.71%",
+    "perf_5y": "+5.49%",
+    "fb_az_pct": 0.89,
+    "fb_obb_pct": 0.11
   },
   "az equity europe": {
-    "ytd": "+1.59%",
-    "perf_1y": "+9.77%",
-    "perf_3y": "+5.55%",
-    "perf_5y": "+3.02%"
+    "ytd": "+4.59%",
+    "perf_1y": "+8.73%",
+    "perf_3y": "+7.38%",
+    "perf_5y": "+3.21%"
   },
   "az equity food agriculture": {
-    "ytd": "+8.00%",
-    "perf_1y": "+2.62%",
-    "perf_3y": "-2.18%",
-    "perf_5y": "-1.53%"
+    "ytd": "+5.68%",
+    "perf_1y": "-2.52%",
+    "perf_3y": "-1.48%",
+    "perf_5y": "-2.12%"
   },
   "az equity future opportunities": {
-    "ytd": "+5.49%",
-    "perf_1y": "+33.65%",
-    "perf_3y": "+20.72%",
-    "perf_5y": null
+    "ytd": "+17.68%",
+    "perf_1y": "+34.62%",
+    "perf_3y": "+21.97%",
+    "perf_5y": "+3.86%"
   },
   "az equity global dividend": {
-    "ytd": "+5.12%",
+    "ytd": "+6.31%",
     "perf_1y": null,
     "perf_3y": null,
     "perf_5y": null
   },
   "az equity global emerging fof": {
-    "ytd": "+16.42%",
-    "perf_1y": "+39.13%",
-    "perf_3y": "+11.85%",
-    "perf_5y": "+3.59%"
+    "ytd": "+29.28%",
+    "perf_1y": "+48.71%",
+    "perf_3y": "+15.18%",
+    "perf_5y": "+5.75%"
   },
   "az equity global esg fof": {
-    "ytd": "+5.40%",
-    "perf_1y": "+17.67%",
-    "perf_3y": "+8.97%",
-    "perf_5y": "+3.76%"
+    "ytd": "+13.70%",
+    "perf_1y": "+20.33%",
+    "perf_3y": "+11.73%",
+    "perf_5y": "+5.34%"
   },
   "az equity global fof": {
-    "ytd": "+7.90%",
-    "perf_1y": "+21.26%",
-    "perf_3y": "+9.72%",
-    "perf_5y": "+4.16%"
+    "ytd": "+15.83%",
+    "perf_1y": "+24.52%",
+    "perf_3y": "+12.51%",
+    "perf_5y": "+5.55%"
   },
   "az equity global growth": {
-    "ytd": "+3.68%",
-    "perf_1y": "+29.61%",
-    "perf_3y": "+20.73%",
-    "perf_5y": "+6.87%"
+    "ytd": "+12.82%",
+    "perf_1y": "+28.78%",
+    "perf_3y": "+20.48%",
+    "perf_5y": "+9.69%"
   },
   "az equity global healthcare": {
-    "ytd": "-7.27%",
-    "perf_1y": "+4.48%",
-    "perf_3y": "-1.85%",
+    "ytd": "-3.37%",
+    "perf_1y": "+13.85%",
+    "perf_3y": "+0.04%",
     "perf_5y": null
   },
   "az equity global infrastructure": {
-    "ytd": "+11.30%",
-    "perf_1y": "+11.42%",
-    "perf_3y": "+7.87%",
-    "perf_5y": "+5.98%"
+    "ytd": "+9.20%",
+    "perf_1y": "+7.33%",
+    "perf_3y": "+8.36%",
+    "perf_5y": "+5.81%"
   },
   "az equity global value fof": {
-    "ytd": "+6.69%",
-    "perf_1y": "+24.23%",
+    "ytd": "+13.93%",
+    "perf_1y": "+26.76%",
     "perf_3y": null,
     "perf_5y": null
   },
   "az equity industrial revolution 4 0": {
-    "ytd": "+8.41%",
-    "perf_1y": "+26.32%",
+    "ytd": "+14.38%",
+    "perf_1y": "+21.70%",
     "perf_3y": null,
     "perf_5y": null
   },
   "az equity japan": {
-    "ytd": "+11.73%",
-    "perf_1y": "+23.58%",
-    "perf_3y": "+11.22%",
-    "perf_5y": "+3.00%"
+    "ytd": "+17.66%",
+    "perf_1y": "+24.98%",
+    "perf_3y": "+11.00%",
+    "perf_5y": "+4.38%"
   },
   "az equity mena": {
-    "ytd": "-0.84%",
-    "perf_1y": "-7.09%",
-    "perf_3y": "+0.88%",
+    "ytd": "+1.40%",
+    "perf_1y": "-2.95%",
+    "perf_3y": "+1.21%",
     "perf_5y": null
   },
   "az equity mexico": {
-    "ytd": "+8.06%",
-    "perf_1y": "+29.92%",
+    "ytd": "+12.23%",
+    "perf_1y": "+26.79%",
     "perf_3y": null,
     "perf_5y": null
   },
   "az equity momentum": {
-    "ytd": "+9.70%",
-    "perf_1y": "+25.50%",
-    "perf_3y": "+15.77%",
-    "perf_5y": "+6.39%"
+    "ytd": "+17.85%",
+    "perf_1y": "+25.68%",
+    "perf_3y": "+18.58%",
+    "perf_5y": "+8.31%"
   },
   "az equity small cap europe fof": {
-    "ytd": "+5.50%",
-    "perf_1y": "+19.88%",
-    "perf_3y": "+6.89%",
-    "perf_5y": "+1.19%"
+    "ytd": "+10.38%",
+    "perf_1y": "+16.27%",
+    "perf_3y": "+9.34%",
+    "perf_5y": "+1.84%"
   },
   "az equity special needs inclusion": {
-    "ytd": "+2.51%",
-    "perf_1y": "+16.69%",
+    "ytd": "+6.63%",
+    "perf_1y": "+15.07%",
     "perf_3y": null,
     "perf_5y": null
   },
   "az equity water renewable resources": {
-    "ytd": "+1.96%",
-    "perf_1y": "+5.14%",
-    "perf_3y": "+5.76%",
-    "perf_5y": "+4.08%"
+    "ytd": "-0.57%",
+    "perf_1y": "-1.94%",
+    "perf_3y": "+4.74%",
+    "perf_5y": "+3.26%"
   },
   "az equity world minimum volatility": {
-    "ytd": "-0.45%",
-    "perf_1y": "-4.50%",
-    "perf_3y": "+2.89%",
-    "perf_5y": "+2.05%"
+    "ytd": "+0.83%",
+    "perf_1y": "-4.10%",
+    "perf_3y": "+2.92%",
+    "perf_5y": "+2.35%"
   },
   "az islamic global sukuk": {
-    "ytd": "-0.39%",
-    "perf_1y": "-0.16%",
-    "perf_3y": "+1.40%",
-    "perf_5y": "+1.24%",
-    "credit_rating": "BBB",
-    "ytm": 5.57,
-    "duration": 4.5
+    "ytd": "+0.39%",
+    "perf_1y": "+0.49%",
+    "perf_3y": "+0.56%",
+    "perf_5y": "+1.72%",
+    "credit_rating": "BBB-",
+    "ytm": 5.75,
+    "duration": 4.55
   },
   "az islamic mamg global sukuk": {
-    "ytm": 5.57,
-    "credit_rating": "BBB",
-    "duration": 4.5
+    "ytm": 5.75,
+    "credit_rating": "BBB-",
+    "duration": 4.55
   },
-  "az allocation long term credit opportunities 6 44 bb 4 50 trimestrale": {},
-  "_ref_date": "30/04/2026"
+  "az allocation long term credit opportunities 6 73 bb 4 53 trimestrale": {},
+  "_ref_date": "29/05/2026"
 }
