@@ -2405,6 +2405,149 @@ def _ibbotson_table_rows(mu: float, sigma: float, capitale: float,
     return rows
 
 
+# ── Prior forward-looking per sottocategoria ──────────────────────────────────
+_AZ_SUBCAT_PRIOR: list[tuple[str, float]] = [
+    ("emergent",        0.090), ("frontier",        0.095), ("asia",            0.085),
+    ("pacifico",        0.085), ("cina",            0.090), ("china",           0.090),
+    ("india",           0.095), ("latam",           0.090), ("latin",           0.090),
+    ("africa",          0.095), ("giappone",        0.075), ("japan",           0.075),
+    ("usa",             0.080), ("america",         0.080), ("nord america",    0.080),
+    ("europa",          0.070), ("europe",          0.070), ("eurozona",        0.070),
+    ("italia",          0.070), ("globali",         0.075), ("global",          0.075),
+    ("worldwide",       0.075), ("internazional",   0.075),
+    ("infrastructure",  0.065), ("infrastruttur",   0.065),
+    ("healthcare",      0.075), ("technology",      0.080), ("tech",            0.080),
+    ("thematic",        0.075), ("tematic",         0.075),
+    ("high yield",      0.055), ("alto rendimento", 0.055), ("convertibil",     0.055),
+    ("subordinati",     0.050), ("at1",             0.060), ("coco",            0.060),
+    ("corporate",       0.035), ("societar",        0.035),
+    ("inflation",       0.030), ("indicizzat",      0.030),
+    ("governativ",      0.025), ("governo",         0.025), ("statali",         0.025),
+    ("treasury",        0.025), ("aggregate",       0.030), ("income",          0.040),
+    ("aggressiv",       0.060), ("dinamic",         0.058), ("moderato",        0.050),
+    ("equilibrat",      0.050), ("conservativ",     0.035), ("prudente",        0.035),
+    ("flessibil",       0.050), ("multi-asset",     0.050), ("multi asset",     0.050),
+    ("allocation",      0.050), ("balanced",        0.050), ("fof",             0.050),
+    ("absolute return", 0.040), ("ritorno assoluto",0.040), ("long short",      0.045),
+    ("market neutral",  0.035), ("real asset",      0.050), ("commodit",        0.050),
+    ("materie prime",   0.050), ("oro",             0.045), ("gold",            0.045),
+    ("immobiliar",      0.055), ("reit",            0.055),
+    ("monetar",         0.025), ("liquidit",        0.025), ("money market",    0.025),
+]
+_AZ_MU_MACRO: dict[str, float] = {
+    "Azionari":            0.075,
+    "Obbligazionari":      0.030,
+    "Bilanciati/Flessibili": 0.050,
+    "Alternativi":         0.040,
+    "Altro":               0.050,
+}
+_AZ_VOL_FLOOR: dict[str, float] = {
+    "Azionari": 0.110, "Bilanciati/Flessibili": 0.065,
+    "Obbligazionari": 0.030, "Alternativi": 0.060, "Altro": 0.080,
+}
+_AZ_VOL_DEFAULT: dict[str, float] = {
+    "Azionari": 0.150, "Bilanciati/Flessibili": 0.080,
+    "Obbligazionari": 0.045, "Alternativi": 0.070, "Altro": 0.100,
+}
+_AZ_CAT_CORR: dict[tuple, float] = {
+    ("Azionari",             "Azionari"):             0.78,
+    ("Azionari",             "Bilanciati/Flessibili"): 0.55,
+    ("Azionari",             "Obbligazionari"):       -0.10,
+    ("Azionari",             "Alternativi"):           0.22,
+    ("Azionari",             "Altro"):                 0.30,
+    ("Bilanciati/Flessibili","Bilanciati/Flessibili"): 0.68,
+    ("Bilanciati/Flessibili","Obbligazionari"):        0.42,
+    ("Bilanciati/Flessibili","Alternativi"):           0.28,
+    ("Bilanciati/Flessibili","Altro"):                 0.35,
+    ("Obbligazionari",       "Obbligazionari"):        0.62,
+    ("Obbligazionari",       "Alternativi"):           0.18,
+    ("Obbligazionari",       "Altro"):                 0.20,
+    ("Alternativi",          "Alternativi"):           0.32,
+    ("Alternativi",          "Altro"):                 0.25,
+    ("Altro",                "Altro"):                 0.50,
+}
+
+
+def _az_subcat_prior(nome: str, macro: str) -> float:
+    n_low = nome.lower()
+    for kw, prior in _AZ_SUBCAT_PRIOR:
+        if kw in n_low:
+            return prior
+    return _AZ_MU_MACRO.get(macro, 0.060)
+
+
+def _az_cat_corr(m1: str, m2: str) -> float:
+    c = _AZ_CAT_CORR.get((m1, m2)) or _AZ_CAT_CORR.get((m2, m1))
+    return c if c is not None else 0.25
+
+
+def _az_portfolio_mu_sigma(
+    d_sorted: "pd.DataFrame",
+    wcol: str,
+    fund_data: dict,
+    factbook_data: dict,
+    get_fb_val,
+) -> tuple[float, float, int, int]:
+    """
+    μ e σ forward-looking del portafoglio con prior categoriali.
+    Stesso approccio di portafogli_efficienti (optimizer.py).
+    """
+    import numpy as np
+
+    rows_active = [(row["nome"], row.get("macro_cat","Altro"), float(row[wcol]))
+                   for _, row in d_sorted.iterrows() if float(row[wcol]) > 0.001]
+    if not rows_active:
+        return 0.06, 0.10, 0, 0
+
+    nomi  = [r[0] for r in rows_active]
+    macro = [r[1] for r in rows_active]
+    w     = np.array([r[2] for r in rows_active])
+    w    /= w.sum()
+    n     = len(nomi)
+
+    def _get_vol(nome: str, mc: str) -> tuple[float, bool]:
+        fd  = (fund_data or {}).get(nome, {})
+        ana = fd.get("analysis", {})
+        floor   = _AZ_VOL_FLOOR.get(mc, 0.080)
+        default = _AZ_VOL_DEFAULT.get(mc, 0.100)
+        for key in ("vol_3y", "vol_1y"):
+            raw = ana.get(key, "") or get_fb_val(nome, key) or ""
+            if raw and raw != "-":
+                try:
+                    v = float(str(raw).replace("%","").replace(",",".").strip())
+                    if v > 1:
+                        v /= 100.0
+                    if v > 0:
+                        return max(v, floor), True
+                except Exception:
+                    pass
+        return default, False
+
+    mu_vec  = np.array([_az_subcat_prior(nm, mc) for nm, mc in zip(nomi, macro)])
+    vol_vec = []
+    n_with_vol = 0
+    for nm, mc in zip(nomi, macro):
+        v, ok = _get_vol(nm, mc)
+        vol_vec.append(v)
+        if ok:
+            n_with_vol += 1
+    vol_vec = np.array(vol_vec)
+
+    cov = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                cov[i, j] = vol_vec[i] ** 2
+            else:
+                rho = _az_cat_corr(macro[i], macro[j])
+                cov[i, j] = vol_vec[i] * vol_vec[j] * rho
+
+    mu_ptf    = float(w @ mu_vec)
+    var_ptf   = float(w @ cov @ w)
+    sigma_ptf = float(np.sqrt(max(var_ptf, 0.0)))
+    return mu_ptf, sigma_ptf, n_with_vol, n
+
+
 # ════════════════════════════════════════════════════════════
 # PDF GENERATION
 # ════════════════════════════════════════════════════════════
@@ -3179,101 +3322,84 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # CONO DI IBBOTSON
     # ════════════════════════════════════════════════════════
     try:
-        def _pv(s):
-            """Parse percentage string like '+5.23%' → float 0.0523, or None."""
-            if not s or s == "-":
-                return None
-            try:
-                return float(str(s).replace("%","").replace(",",".").strip()) / 100
-            except Exception:
-                return None
+        _ib_mu, _ib_sig, _ib_n_ok, _ib_n_tot = _az_portfolio_mu_sigma(
+            d_sorted, wcol, fund_data, factbook_data, get_fb)
+        _ib_cap = 100_000.0
+        _ib_hor = 10
 
-        _ib_mu3  = _pv(ptf_p.get("perf_3y", "-"))
-        _ib_mu5  = _pv(ptf_p.get("perf_5y", "-"))
-        _ib_sig  = _pv(ptf_r.get("vol_1y",  "-"))
+        CONE_H1 = S("CONE_H1", fontName="Helvetica-Bold", fontSize=14,
+                    textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=6, spaceAfter=4)
+        CONE_NT = S("CONE_NT", fontName="Helvetica-Oblique", fontSize=7,
+                    textColor=rl_colors.HexColor("#64748B"), leading=10)
+        CONE_SM = S("CONE_SM", fontName="Helvetica", fontSize=7.5,
+                    textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=1)
+        CONE_HD = S("CONE_HD", fontName="Helvetica-Bold", fontSize=7.5,
+                    textColor=rl_colors.white, leading=11, alignment=1)
 
-        if _ib_mu3 is not None and _ib_sig is not None and _ib_sig > 0:
-            _ib_mu = ((_ib_mu3 + _ib_mu5) / 2) if _ib_mu5 is not None else _ib_mu3
-            _ib_cap = 100_000.0
-            _ib_hor = 10
+        _ib_png = _ibbotson_cone_png(_ib_mu, _ib_sig, _ib_cap, _ib_hor,
+                                     label=f"Portafoglio {ptf_name}")
+        _ib_img = RLImage(io.BytesIO(_ib_png), width=18*cm, height=6.5*cm)
 
-            CONE_H1 = S("CONE_H1", fontName="Helvetica-Bold", fontSize=14,
-                        textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=6, spaceAfter=4)
-            CONE_NT = S("CONE_NT", fontName="Helvetica-Oblique", fontSize=7,
-                        textColor=rl_colors.HexColor("#64748B"), leading=10)
-            CONE_SM = S("CONE_SM", fontName="Helvetica", fontSize=7.5,
-                        textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=1)
-            CONE_HD = S("CONE_HD", fontName="Helvetica-Bold", fontSize=7.5,
-                        textColor=rl_colors.white, leading=11, alignment=1)
+        _ib_rows = _ibbotson_table_rows(_ib_mu, _ib_sig, _ib_cap, years=(1, 3, 5, 10))
+        _ib_hdr_row = [
+            Paragraph(f"<b>{h}</b>", CONE_HD)
+            for h in ["Anni",
+                       "Scenario molto\nsfavorevole",
+                       "Scenario\nsfavorevole",
+                       "Caso centrale\n(più probabile)",
+                       "Scenario\nfavorevole",
+                       "Scenario molto\nfavorevole"]
+        ]
+        _ib_tbl_rows = [_ib_hdr_row]
+        for _yr, _d2, _d1, _md, _u1, _u2 in _ib_rows:
+            def _fmt(v): return f"€ {v:,.0f}".replace(",", ".")
+            _ib_tbl_rows.append([
+                Paragraph(str(_yr), CONE_SM),
+                Paragraph(_fmt(_d2), CONE_SM),
+                Paragraph(_fmt(_d1), CONE_SM),
+                Paragraph(_fmt(_md), CONE_SM),
+                Paragraph(_fmt(_u1), CONE_SM),
+                Paragraph(_fmt(_u2), CONE_SM),
+            ])
+        _ib_tbl = Table(_ib_tbl_rows,
+            colWidths=[1.4*cm, 3.2*cm, 3.2*cm, 3.2*cm, 3.2*cm, 3.2*cm])
+        _ib_tbl.setStyle(TableStyle([
+            ("BACKGROUND",  (0, 0), (-1, 0), rl_colors.HexColor("#0D1B2A")),
+            ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE",    (0, 0), (-1,-1), 8),
+            ("PADDING",     (0, 0), (-1,-1), 5),
+            ("ALIGN",       (0, 0), (-1,-1), "CENTER"),
+            ("VALIGN",      (0, 0), (-1,-1), "MIDDLE"),
+            ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
+            ("LINEBELOW",   (0, 0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+            ("LINEBELOW",   (0, 0), (-1, 0), 1.5, rl_colors.HexColor("#C9A84C")),
+        ]))
 
-            _ib_png = _ibbotson_cone_png(_ib_mu, _ib_sig, _ib_cap, _ib_hor,
-                                         label=f"Portafoglio {ptf_name}")
-            _ib_img = RLImage(io.BytesIO(_ib_png), width=18*cm, height=6.5*cm)
+        _ib_rel = round(40 + 35 * (_ib_n_ok / max(_ib_n_tot, 1)))
 
-            _ib_rows = _ibbotson_table_rows(_ib_mu, _ib_sig, _ib_cap, years=(1, 3, 5, 10))
-            _ib_hdr_row = [
-                Paragraph(f"<b>{h}</b>", CONE_HD)
-                for h in ["Anni",
-                           "Scenario molto\nsfavorevole",
-                           "Scenario\nsfavorevole",
-                           "Caso centrale\n(più probabile)",
-                           "Scenario\nfavorevole",
-                           "Scenario molto\nfavorevole"]
-            ]
-            _ib_tbl_rows = [_ib_hdr_row]
-            for _yr, _d2, _d1, _md, _u1, _u2 in _ib_rows:
-                def _fmt(v): return f"€ {v:,.0f}".replace(",", ".")
-                _ib_tbl_rows.append([
-                    Paragraph(str(_yr), CONE_SM),
-                    Paragraph(_fmt(_d2), CONE_SM),
-                    Paragraph(_fmt(_d1), CONE_SM),
-                    Paragraph(_fmt(_md), CONE_SM),
-                    Paragraph(_fmt(_u1), CONE_SM),
-                    Paragraph(_fmt(_u2), CONE_SM),
-                ])
-            _ib_tbl = Table(_ib_tbl_rows,
-                colWidths=[1.4*cm, 3.2*cm, 3.2*cm, 3.2*cm, 3.2*cm, 3.2*cm])
-            _ib_tbl.setStyle(TableStyle([
-                ("BACKGROUND",  (0, 0), (-1, 0), rl_colors.HexColor("#0D1B2A")),
-                ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE",    (0, 0), (-1,-1), 8),
-                ("PADDING",     (0, 0), (-1,-1), 5),
-                ("ALIGN",       (0, 0), (-1,-1), "CENTER"),
-                ("VALIGN",      (0, 0), (-1,-1), "MIDDLE"),
-                ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
-                ("LINEBELOW",   (0, 0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
-                ("LINEBELOW",   (0, 0), (-1, 0), 1.5, rl_colors.HexColor("#C9A84C")),
-            ]))
-
-            _ib_n_ok = sum(
-                1 for _, _rr in d_sorted.iterrows()
-                if _pv((fund_data or {}).get(_rr["nome"], {}).get("analysis", {}).get("perf_3y", "")) is not None
-            )
-            _ib_n_tot = len(d_sorted)
-            _ib_rel   = round(40 + 35 * (_ib_n_ok / max(_ib_n_tot, 1)))
-
-            story.append(PageBreak())
-            story.append(Paragraph("DEMO ANALISI", EY))
-            story.append(Spacer(1, 4))
-            story.append(Paragraph(
-                f"Cono di Ibbotson — Proiezione futura  |  Attendibilita' della stima: {_ib_rel}%",
-                CONE_H1))
-            story.append(Paragraph(
-                f"Proiezione statistica del valore del portafoglio nel tempo, "
-                f"basata su rendimento atteso {_ib_mu*100:+.1f}% e volatilita' {_ib_sig*100:.1f}%. "
-                f"La banda chiara mostra il 95% dei possibili percorsi, "
-                f"quella scura il 68%. Il capitale di riferimento e' € {_ib_cap:,.0f}.".replace(",", "."),
-                CONE_NT))
-            story.append(Spacer(1, 6))
-            story.append(_ib_img)
-            story.append(Spacer(1, 10))
-            story.append(_ib_tbl)
-            story.append(Spacer(1, 6))
-            story.append(Paragraph(
-                "La proiezione si basa su un modello log-normale (Ibbotson). "
-                "Non costituisce previsione garantita. "
-                "Rendimento atteso stimato come media ponderata dei rendimenti storici a 3-5 anni; "
-                "volatilita' stimata come media ponderata della volatilita' annua a 1 anno.",
+        story.append(PageBreak())
+        story.append(Paragraph("DEMO ANALISI", EY))
+        story.append(Spacer(1, 4))
+        story.append(Paragraph(
+            f"Cono di Ibbotson — Proiezione futura  |  Attendibilita' della stima: {_ib_rel}%",
+            CONE_H1))
+        story.append(Paragraph(
+            f"Proiezione statistica del valore del portafoglio nel tempo, "
+            f"basata su rendimento atteso {_ib_mu*100:+.1f}% e volatilita' {_ib_sig*100:.1f}%. "
+            f"La banda chiara mostra il 95% dei possibili percorsi, "
+            f"quella scura il 68%. Il capitale di riferimento e' € {_ib_cap:,.0f}.".replace(",", "."),
+            CONE_NT))
+        story.append(Spacer(1, 6))
+        story.append(_ib_img)
+        story.append(Spacer(1, 10))
+        story.append(_ib_tbl)
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(
+            "La proiezione si basa su un modello log-normale (Ibbotson). "
+            "Non costituisce previsione garantita. "
+            "Rendimento atteso: prior forward-looking per categoria (non rendimenti storici recenti). "
+            "Volatilita': dati storici con floor categoriali. "
+            "Correlazioni tra fondi: stima categoriale (non empirica).",
                 CONE_NT))
     except Exception:
         pass
@@ -5908,52 +6034,26 @@ def main():
 
         # ── Cono di Ibbotson ─────────────────────────────────────────────────
         with st.expander("📐 Cono di Ibbotson — Proiezione futura", expanded=False):
-            _ib_pk   = ["perf_3y", "perf_5y", "vol_1y"]
-            _ib_pavg = _perf_wavg(_ib_pk)
+            _ib_mu, _ib_sig, _ib_n_ok, _ib_n_tot = _az_portfolio_mu_sigma(
+                _df_sorted, wcol, _fd_live, factbook_data,
+                lambda nome, key: _fb_metric(nome, key) or "")
 
-            def _ib_pv(s):
-                if not s or s == "-":
-                    return None
-                try:
-                    return float(str(s).replace("%","").replace(",",".").strip()) / 100
-                except Exception:
-                    return None
-
-            _ib_mu3  = _ib_pv(_ib_pavg.get("perf_3y", "-"))
-            _ib_mu5  = _ib_pv(_ib_pavg.get("perf_5y", "-"))
-            _ib_sig  = _ib_pv(_ib_pavg.get("vol_1y",  "-"))
-
-            if _ib_mu3 is None and _ib_mu5 is None:
-                st.info("Dati di rendimento non sufficienti per il cono. Aggiorna i dati FondiDoc.")
-            elif _ib_sig is None or _ib_sig <= 0:
-                st.info("Dati di volatilità non sufficienti per il cono.")
-            else:
-                _ib_mu = ((_ib_mu3 + _ib_mu5) / 2) if (_ib_mu3 is not None and _ib_mu5 is not None) \
-                          else (_ib_mu3 or _ib_mu5)
-
-                _c1, _c2 = st.columns([1, 2])
-                with _c1:
-                    _ib_cap = st.number_input("Capitale iniziale (€)", min_value=1_000,
-                                              max_value=10_000_000, value=100_000, step=5_000,
-                                              key="_ib_cap_az")
-                    _ib_hor = st.slider("Orizzonte (anni)", 1, 30, 10, key="_ib_hor_az")
-                with _c2:
-                    _ib_n_ok  = sum(1 for _, _rr in _df_sorted.iterrows()
-                                    if _ib_pv(_get_ana(_rr["nome"]).get("perf_3y","")) is not None)
-                    _ib_n_tot = len(_df_sorted)
-                    _ib_rel   = round(40 + 35 * (_ib_n_ok / max(_ib_n_tot, 1)))
-                    if _ib_rel >= 65:
-                        _ib_badge = "🟢"
-                    elif _ib_rel >= 50:
-                        _ib_badge = "🟡"
-                    else:
-                        _ib_badge = "🟠"
-                    st.metric("Attendibilità stima", f"{_ib_badge} {_ib_rel}%",
-                              help=f"Basata su {_ib_n_ok}/{_ib_n_tot} fondi con dati storici disponibili. "
-                                   "Il rendimento atteso è sempre stimato dai dati storici (max 75%).")
-                    st.caption(
-                        f"Rendimento atteso portafoglio: **{_ib_mu*100:+.2f}%** &nbsp;·&nbsp; "
-                        f"Volatilità: **{_ib_sig*100:.2f}%**")
+            _c1, _c2 = st.columns([1, 2])
+            with _c1:
+                _ib_cap = st.number_input("Capitale iniziale (€)", min_value=1_000,
+                                          max_value=10_000_000, value=100_000, step=5_000,
+                                          key="_ib_cap_az")
+                _ib_hor = st.slider("Orizzonte (anni)", 1, 30, 10, key="_ib_hor_az")
+            with _c2:
+                _ib_rel   = round(40 + 35 * (_ib_n_ok / max(_ib_n_tot, 1)))
+                _ib_badge = "🟢" if _ib_rel >= 65 else ("🟡" if _ib_rel >= 50 else "🟠")
+                st.metric("Attendibilità stima", f"{_ib_badge} {_ib_rel}%",
+                          help=f"σ disponibile per {_ib_n_ok}/{_ib_n_tot} fondi. "
+                               "μ sempre stimato da prior categoriali (non dati storici).")
+                st.caption(
+                    f"Rendimento atteso portafoglio: **{_ib_mu*100:+.2f}%** &nbsp;·&nbsp; "
+                    f"Volatilità: **{_ib_sig*100:.2f}%** &nbsp;·&nbsp; "
+                    f"_Prior forward-looking per categoria_")
 
                 import numpy as np
                 import plotly.graph_objects as go
