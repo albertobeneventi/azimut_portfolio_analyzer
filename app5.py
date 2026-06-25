@@ -2345,6 +2345,67 @@ def _mpl_annual_bar(annual_perf: dict, fund_name: str) -> io.BytesIO | None:
 
 
 # ════════════════════════════════════════════════════════════
+# IBBOTSON CONE HELPERS
+# ════════════════════════════════════════════════════════════
+
+def _ibbotson_cone_png(mu: float, sigma: float, capitale: float,
+                       orizzonte: int = 10, label: str = "Portafoglio") -> bytes:
+    """PNG matplotlib del cono di Ibbotson (log-normal). Nessuna dipendenza da kaleido."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    t  = np.linspace(0, orizzonte, 300)
+    mu_log = mu - sigma ** 2 / 2
+    med   = capitale * np.exp(mu_log * t)
+    up1   = capitale * np.exp((mu_log + sigma) * t)
+    down1 = capitale * np.exp((mu_log - sigma) * t)
+    up2   = capitale * np.exp((mu_log + 2 * sigma) * t)
+    down2 = capitale * np.exp((mu_log - 2 * sigma) * t)
+
+    fig, ax = plt.subplots(figsize=(11, 4), facecolor="white")
+    ax.fill_between(t, down2, up2,   color="#BFDBFE", alpha=0.5, label="95% dei percorsi (±2σ)")
+    ax.fill_between(t, down1, up1,   color="#3B82F6", alpha=0.35, label="68% dei percorsi (±1σ)")
+    ax.plot(t, med,   color="#1B4FBB", lw=2,   label="Percorso centrale (mediana)")
+    ax.axhline(capitale, color="#94A3B8", lw=1, ls="--", label=f"Capitale iniziale: € {capitale:,.0f}".replace(",", "."))
+    y_min = min(capitale * 0.40, down2.min() * 0.92)
+    y_max = up2.max() * 1.05
+    ax.set_ylim(y_min, y_max)
+    ax.set_xlim(0, orizzonte)
+    ax.set_xlabel("Anni", fontsize=9)
+    ax.set_ylabel("Valore portafoglio (€)", fontsize=9)
+    ax.set_title(f"Cono di Ibbotson — {label}", fontsize=10, fontweight="bold", color="#0D1B2A")
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"€ {v:,.0f}".replace(",", ".")))
+    ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+    ax.legend(fontsize=7.5, loc="upper left")
+    ax.grid(alpha=0.25, linestyle="--")
+    fig.patch.set_facecolor("white")
+    plt.tight_layout(pad=0.5)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=140, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
+def _ibbotson_table_rows(mu: float, sigma: float, capitale: float,
+                         years=(1, 3, 5, 10)) -> list[list]:
+    """List of rows (one per year horizon) with log-normal scenario values."""
+    import numpy as np
+    mu_log = mu - sigma ** 2 / 2
+    rows = []
+    for y in years:
+        med   = capitale * np.exp(mu_log * y)
+        up1   = capitale * np.exp((mu_log + sigma) * y)
+        down1 = capitale * np.exp((mu_log - sigma) * y)
+        up2   = capitale * np.exp((mu_log + 2 * sigma) * y)
+        down2 = capitale * np.exp((mu_log - 2 * sigma) * y)
+        rows.append([y, down2, down1, med, up1, up2])
+    return rows
+
+
+# ════════════════════════════════════════════════════════════
 # PDF GENERATION
 # ════════════════════════════════════════════════════════════
 
@@ -3113,6 +3174,109 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                 "Il simbolo — indica che il fondo non è presente nel catalogo.",
                 NOTE_U),
         ]))
+
+    # ════════════════════════════════════════════════════════
+    # CONO DI IBBOTSON
+    # ════════════════════════════════════════════════════════
+    try:
+        def _pv(s):
+            """Parse percentage string like '+5.23%' → float 0.0523, or None."""
+            if not s or s == "-":
+                return None
+            try:
+                return float(str(s).replace("%","").replace(",",".").strip()) / 100
+            except Exception:
+                return None
+
+        _ib_mu3  = _pv(ptf_p.get("perf_3y", "-"))
+        _ib_mu5  = _pv(ptf_p.get("perf_5y", "-"))
+        _ib_sig  = _pv(ptf_r.get("vol_1y",  "-"))
+
+        if _ib_mu3 is not None and _ib_sig is not None and _ib_sig > 0:
+            _ib_mu = ((_ib_mu3 + _ib_mu5) / 2) if _ib_mu5 is not None else _ib_mu3
+            _ib_cap = 100_000.0
+            _ib_hor = 10
+
+            CONE_H1 = S("CONE_H1", fontName="Helvetica-Bold", fontSize=14,
+                        textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=6, spaceAfter=4)
+            CONE_NT = S("CONE_NT", fontName="Helvetica-Oblique", fontSize=7,
+                        textColor=rl_colors.HexColor("#64748B"), leading=10)
+            CONE_SM = S("CONE_SM", fontName="Helvetica", fontSize=7.5,
+                        textColor=rl_colors.HexColor("#1E293B"), leading=11, alignment=1)
+            CONE_HD = S("CONE_HD", fontName="Helvetica-Bold", fontSize=7.5,
+                        textColor=rl_colors.white, leading=11, alignment=1)
+
+            _ib_png = _ibbotson_cone_png(_ib_mu, _ib_sig, _ib_cap, _ib_hor,
+                                         label=f"Portafoglio {ptf_name}")
+            _ib_img = RLImage(io.BytesIO(_ib_png), width=18*cm, height=6.5*cm)
+
+            _ib_rows = _ibbotson_table_rows(_ib_mu, _ib_sig, _ib_cap, years=(1, 3, 5, 10))
+            _ib_hdr_row = [
+                Paragraph(f"<b>{h}</b>", CONE_HD)
+                for h in ["Anni",
+                           "Scenario molto\nsfavorevole",
+                           "Scenario\nsfavorevole",
+                           "Caso centrale\n(più probabile)",
+                           "Scenario\nfavorevole",
+                           "Scenario molto\nfavorevole"]
+            ]
+            _ib_tbl_rows = [_ib_hdr_row]
+            for _yr, _d2, _d1, _md, _u1, _u2 in _ib_rows:
+                def _fmt(v): return f"€ {v:,.0f}".replace(",", ".")
+                _ib_tbl_rows.append([
+                    Paragraph(str(_yr), CONE_SM),
+                    Paragraph(_fmt(_d2), CONE_SM),
+                    Paragraph(_fmt(_d1), CONE_SM),
+                    Paragraph(_fmt(_md), CONE_SM),
+                    Paragraph(_fmt(_u1), CONE_SM),
+                    Paragraph(_fmt(_u2), CONE_SM),
+                ])
+            _ib_tbl = Table(_ib_tbl_rows,
+                colWidths=[1.4*cm, 3.2*cm, 3.2*cm, 3.2*cm, 3.2*cm, 3.2*cm])
+            _ib_tbl.setStyle(TableStyle([
+                ("BACKGROUND",  (0, 0), (-1, 0), rl_colors.HexColor("#0D1B2A")),
+                ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE",    (0, 0), (-1,-1), 8),
+                ("PADDING",     (0, 0), (-1,-1), 5),
+                ("ALIGN",       (0, 0), (-1,-1), "CENTER"),
+                ("VALIGN",      (0, 0), (-1,-1), "MIDDLE"),
+                ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
+                ("LINEBELOW",   (0, 0), (-1,-1), 0.4, rl_colors.HexColor("#E2E8F0")),
+                ("LINEBELOW",   (0, 0), (-1, 0), 1.5, rl_colors.HexColor("#C9A84C")),
+            ]))
+
+            _ib_n_ok = sum(
+                1 for _, _rr in d_sorted.iterrows()
+                if _pv((fund_data or {}).get(_rr["nome"], {}).get("analysis", {}).get("perf_3y", "")) is not None
+            )
+            _ib_n_tot = len(d_sorted)
+            _ib_rel   = round(40 + 35 * (_ib_n_ok / max(_ib_n_tot, 1)))
+
+            story.append(PageBreak())
+            story.append(Paragraph("DEMO ANALISI", EY))
+            story.append(Spacer(1, 4))
+            story.append(Paragraph(
+                f"Cono di Ibbotson — Proiezione futura  |  Attendibilita' della stima: {_ib_rel}%",
+                CONE_H1))
+            story.append(Paragraph(
+                f"Proiezione statistica del valore del portafoglio nel tempo, "
+                f"basata su rendimento atteso {_ib_mu*100:+.1f}% e volatilita' {_ib_sig*100:.1f}%. "
+                f"La banda chiara mostra il 95% dei possibili percorsi, "
+                f"quella scura il 68%. Il capitale di riferimento e' € {_ib_cap:,.0f}.".replace(",", "."),
+                CONE_NT))
+            story.append(Spacer(1, 6))
+            story.append(_ib_img)
+            story.append(Spacer(1, 10))
+            story.append(_ib_tbl)
+            story.append(Spacer(1, 6))
+            story.append(Paragraph(
+                "La proiezione si basa su un modello log-normale (Ibbotson). "
+                "Non costituisce previsione garantita. "
+                "Rendimento atteso stimato come media ponderata dei rendimenti storici a 3-5 anni; "
+                "volatilita' stimata come media ponderata della volatilita' annua a 1 anno.",
+                CONE_NT))
+    except Exception:
+        pass
 
     story.append(PageBreak())
 
@@ -5741,6 +5905,111 @@ def main():
             f"<p style='{_note_style}'>"
             f"Rendimenti &amp; Rischio: {_note_fd} &nbsp;·&nbsp; Fallback: {_note_fb}</p>",
             unsafe_allow_html=True)
+
+        # ── Cono di Ibbotson ─────────────────────────────────────────────────
+        with st.expander("📐 Cono di Ibbotson — Proiezione futura", expanded=False):
+            _ib_pk   = ["perf_3y", "perf_5y", "vol_1y"]
+            _ib_pavg = _perf_wavg(_ib_pk)
+
+            def _ib_pv(s):
+                if not s or s == "-":
+                    return None
+                try:
+                    return float(str(s).replace("%","").replace(",",".").strip()) / 100
+                except Exception:
+                    return None
+
+            _ib_mu3  = _ib_pv(_ib_pavg.get("perf_3y", "-"))
+            _ib_mu5  = _ib_pv(_ib_pavg.get("perf_5y", "-"))
+            _ib_sig  = _ib_pv(_ib_pavg.get("vol_1y",  "-"))
+
+            if _ib_mu3 is None and _ib_mu5 is None:
+                st.info("Dati di rendimento non sufficienti per il cono. Aggiorna i dati FondiDoc.")
+            elif _ib_sig is None or _ib_sig <= 0:
+                st.info("Dati di volatilità non sufficienti per il cono.")
+            else:
+                _ib_mu = ((_ib_mu3 + _ib_mu5) / 2) if (_ib_mu3 is not None and _ib_mu5 is not None) \
+                          else (_ib_mu3 or _ib_mu5)
+
+                _c1, _c2 = st.columns([1, 2])
+                with _c1:
+                    _ib_cap = st.number_input("Capitale iniziale (€)", min_value=1_000,
+                                              max_value=10_000_000, value=100_000, step=5_000,
+                                              key="_ib_cap_az")
+                    _ib_hor = st.slider("Orizzonte (anni)", 1, 30, 10, key="_ib_hor_az")
+                with _c2:
+                    _ib_n_ok  = sum(1 for _, _rr in _df_sorted.iterrows()
+                                    if _ib_pv(_get_ana(_rr["nome"]).get("perf_3y","")) is not None)
+                    _ib_n_tot = len(_df_sorted)
+                    _ib_rel   = round(40 + 35 * (_ib_n_ok / max(_ib_n_tot, 1)))
+                    if _ib_rel >= 65:
+                        _ib_badge = "🟢"
+                    elif _ib_rel >= 50:
+                        _ib_badge = "🟡"
+                    else:
+                        _ib_badge = "🟠"
+                    st.metric("Attendibilità stima", f"{_ib_badge} {_ib_rel}%",
+                              help=f"Basata su {_ib_n_ok}/{_ib_n_tot} fondi con dati storici disponibili. "
+                                   "Il rendimento atteso è sempre stimato dai dati storici (max 75%).")
+                    st.caption(
+                        f"Rendimento atteso portafoglio: **{_ib_mu*100:+.2f}%** &nbsp;·&nbsp; "
+                        f"Volatilità: **{_ib_sig*100:.2f}%**")
+
+                import numpy as np
+                import plotly.graph_objects as go
+
+                _t  = np.linspace(0, _ib_hor, 300)
+                _mu_log = _ib_mu - _ib_sig ** 2 / 2
+                _med    = _ib_cap * np.exp(_mu_log * _t)
+                _up1    = _ib_cap * np.exp((_mu_log + _ib_sig) * _t)
+                _dn1    = _ib_cap * np.exp((_mu_log - _ib_sig) * _t)
+                _up2    = _ib_cap * np.exp((_mu_log + 2 * _ib_sig) * _t)
+                _dn2    = _ib_cap * np.exp((_mu_log - 2 * _ib_sig) * _t)
+
+                _fig_ib = go.Figure()
+                _fig_ib.add_trace(go.Scatter(
+                    x=np.concatenate([_t, _t[::-1]]),
+                    y=np.concatenate([_up2, _dn2[::-1]]),
+                    fill="toself", fillcolor="rgba(191,219,254,0.45)",
+                    line=dict(width=0), name="95% dei percorsi (±2σ)"))
+                _fig_ib.add_trace(go.Scatter(
+                    x=np.concatenate([_t, _t[::-1]]),
+                    y=np.concatenate([_up1, _dn1[::-1]]),
+                    fill="toself", fillcolor="rgba(59,130,246,0.30)",
+                    line=dict(width=0), name="68% dei percorsi (±1σ)"))
+                _fig_ib.add_trace(go.Scatter(
+                    x=_t, y=_med, mode="lines",
+                    line=dict(color="#1B4FBB", width=2),
+                    name="Percorso centrale (mediana)"))
+                _fig_ib.add_hline(y=_ib_cap, line_dash="dot", line_color="#94A3B8",
+                                  annotation_text=f"Capitale: € {_ib_cap:,.0f}".replace(",","."))
+                _y_min = min(_ib_cap * 0.40, float(_dn2.min()) * 0.92)
+                _y_max = float(_up2.max()) * 1.05
+                _fig_ib.update_layout(
+                    height=380,
+                    margin=dict(l=10, r=10, t=30, b=10),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
+                    xaxis=dict(title="Anni"),
+                    yaxis=dict(title="Valore (€)", range=[_y_min, _y_max],
+                               tickformat=",.0f"),
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                )
+                st.plotly_chart(_fig_ib, use_container_width=True)
+
+                _ib_scen_rows = _ibbotson_table_rows(_ib_mu, _ib_sig, float(_ib_cap), years=(1,3,5,10))
+                _ib_df = pd.DataFrame(
+                    _ib_scen_rows,
+                    columns=["Anni","Scenario molto sfavorevole","Scenario sfavorevole",
+                             "Caso centrale (più probabile)","Scenario favorevole","Scenario molto favorevole"])
+                for _col in _ib_df.columns[1:]:
+                    _ib_df[_col] = _ib_df[_col].apply(lambda v: f"€ {v:,.0f}".replace(",","."))
+                _ib_df["Anni"] = _ib_df["Anni"].astype(str)
+                st.dataframe(_ib_df, hide_index=True, use_container_width=True)
+                st.caption(
+                    "Le proiezioni si basano sul modello log-normale di Ibbotson. "
+                    "Non costituiscono previsione garantita — i valori reali dipenderanno "
+                    "dall'andamento di mercato futuro.")
 
     # ── TAB 3 — RISCHIO ──────────────────────────────────────────────────────
     with tab3:
