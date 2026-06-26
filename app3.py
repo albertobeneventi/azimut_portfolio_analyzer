@@ -2352,7 +2352,7 @@ def _az_portfolio_mu_sigma(
         v1 = str(ana.get("vol_1y", "") or "").strip()
         if not v1 or v1 in ("-", "n.d.", "N/D", "nd"):
             return "fondo con storico inferiore a 1 anno"
-        return "dati di volatilità non disponibili"
+        return "fondo con storico inferiore a 1 anno"
 
     mu_vec  = np.array([_az_subcat_prior(nm, mc) for nm, mc in zip(nomi, macro)])
     vol_vec = []
