@@ -3372,7 +3372,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             ("LINEBELOW",   (0, 0), (-1, 0), 1.5, rl_colors.HexColor("#C9A84C")),
         ]))
 
-        _ib_rel = round(55 + 30 * (_ib_n_ok / max(_ib_n_tot, 1)))
+        _ib_rel = round(40 + 35 * (_ib_n_ok / max(_ib_n_tot, 1)))
 
         story.append(PageBreak())
         story.append(Paragraph("DEMO ANALISI", EY))
@@ -6049,8 +6049,8 @@ def main():
                                           key="_ib_cap_az")
                 _ib_hor = st.slider("Orizzonte (anni)", 1, 30, 10, key="_ib_hor_az")
             with _c2:
-                _ib_rel   = round(55 + 30 * (_ib_n_ok / max(_ib_n_tot, 1)))
-                _ib_badge = "🟢" if _ib_rel >= 75 else ("🟡" if _ib_rel >= 60 else "🟠")
+                _ib_rel   = round(40 + 35 * (_ib_n_ok / max(_ib_n_tot, 1)))
+                _ib_badge = "🟢" if _ib_rel >= 65 else ("🟡" if _ib_rel >= 50 else "🟠")
                 st.metric("Attendibilità stima", f"{_ib_badge} {_ib_rel}%",
                           help=f"σ disponibile per {_ib_n_ok}/{_ib_n_tot} fondi. "
                                "μ sempre stimato da prior categoriali (non dati storici).")
