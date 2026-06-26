@@ -2806,7 +2806,9 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
 
     def get_fb(nome: str, key: str) -> str:
         """Return factbook value for fund `nome` and metric `key`, or ''."""
-        if key not in _PERF_KEYS or not _fb:
+        if not _fb:
+            return ""
+        if key not in _PERF_KEYS and key not in ("vol_1y", "vol_3y", "vol_5y"):
             return ""
         norm = _normalize_for_unp(nome)
         norm = _FUND_ALIASES.get(norm, norm)
