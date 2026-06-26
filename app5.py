@@ -3345,9 +3345,9 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _ib_hdr_row = [
             Paragraph(f"<b>{h}</b>", CONE_HD)
             for h in ["Anni",
-                       "Scenario\nsfavorevole\n(16° perc.)",
-                       "Caso centrale\n(mediana\n50° perc.)",
-                       "Scenario\nfavorevole\n(84° perc.)"]
+                       "Scenario\nsfavorevole\n(1 su 6 finisce sotto)",
+                       "Caso centrale\n(1 su 2 finisce sotto)",
+                       "Scenario\nfavorevole\n(1 su 6 finisce sopra)"]
         ]
         _ib_tbl_rows = [_ib_hdr_row]
         for _yr, _d2, _d1, _md, _u1, _u2 in _ib_rows:
@@ -6106,9 +6106,9 @@ def main():
                 _ib_df = pd.DataFrame(
                     [[r[0], r[2], r[3], r[4]] for r in _ib_scen_rows],
                     columns=["Anni",
-                             "Scenario sfavorevole (16° perc.)",
-                             "Caso centrale — mediana (50° perc.)",
-                             "Scenario favorevole (84° perc.)"])
+                             "Scenario sfavorevole (1 su 6 finisce sotto)",
+                             "Caso centrale (1 su 2 finisce sotto)",
+                             "Scenario favorevole (1 su 6 finisce sopra)"])
                 for _col in _ib_df.columns[1:]:
                     _ib_df[_col] = _ib_df[_col].apply(lambda v: f"€ {v:,.0f}".replace(",","."))
                 _ib_df["Anni"] = _ib_df["Anni"].astype(str)
