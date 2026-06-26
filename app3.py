@@ -2344,17 +2344,27 @@ def _az_portfolio_mu_sigma(
                     pass
         return default, False
 
+    def _vol_missing_reason(nome: str) -> str:
+        fd = (fund_data or {}).get(nome)
+        if not fd:
+            return "non censito su FondiDoc"
+        ana = fd.get("analysis", {})
+        v1 = str(ana.get("vol_1y", "") or "").strip()
+        if not v1 or v1 in ("-", "n.d.", "N/D", "nd"):
+            return "fondo con storico inferiore a 1 anno"
+        return "dati di volatilità non disponibili"
+
     mu_vec  = np.array([_az_subcat_prior(nm, mc) for nm, mc in zip(nomi, macro)])
     vol_vec = []
     n_with_vol = 0
-    missing_vol: list[str] = []
+    missing_vol: list[tuple[str, str]] = []
     for nm, mc in zip(nomi, macro):
         v, ok = _get_vol(nm, mc)
         vol_vec.append(v)
         if ok:
             n_with_vol += 1
         else:
-            missing_vol.append(nm)
+            missing_vol.append((nm, _vol_missing_reason(nm)))
     vol_vec = np.array(vol_vec)
 
     # Matrice covarianza con correlazioni categoriali
@@ -3290,13 +3300,11 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             "Non costituisce previsione garantita.",
             CONE_NT))
         if _ib_missing:
-            _miss_str = "; ".join(_ib_missing)
+            _miss_str = "; ".join(f"{n} ({c})" for n, c in _ib_missing)
             story.append(Paragraph(
                 f"&#9888; Fondi privi di dati di volatilita' storica ({len(_ib_missing)} su {_ib_n_tot}): "
                 f"{_miss_str}. "
-                "Per questi fondi la volatilita' e' sostituita dal valore di default categoriale. "
-                "Causa probabile: fondo di recente istituzione (storia < 1 anno) o non ancora "
-                "censito su FondiDoc. Utilizzare 'Aggiorna Dati' per recuperare eventuali dati disponibili.",
+                "Per questi fondi la volatilita' e' sostituita dal valore di default categoriale.",
                 CONE_NT))
     except Exception:
         pass
@@ -5901,12 +5909,8 @@ def main():
                         "— la volatilità è sostituita dal default di categoria "
                         f"(abbassa l'attendibilità a {_ib_rel}% invece del massimo 75%):<br>"
                         "<ul style='margin:4px 0 0 16px;'>"
-                        + "".join(f"<li>{n}</li>" for n in _ib_missing)
-                        + "</ul>"
-                        "<span style='font-size:.72rem;'>"
-                        "Causa probabile: fondo di recente istituzione (storico &lt; 1 anno) o non ancora "
-                        "censito su FondiDoc. Premere <b>«Aggiorna Dati»</b> per recuperare i dati disponibili."
-                        "</span></div>"
+                        + "".join(f"<li><b>{n}</b> — {causa}</li>" for n, causa in _ib_missing)
+                        + "</ul></div>"
                     )
                     st.markdown(_miss_html, unsafe_allow_html=True)
 
