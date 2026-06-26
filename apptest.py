@@ -2125,25 +2125,37 @@ def _mpl_portfolio_pie(df, wcol, profile) -> io.BytesIO:
 
 
 def _mpl_macro_pie(df, wcol) -> io.BytesIO | None:
-    """Asset allocation donut Azionario/Obbligazionario — leggenda in ReportLab."""
+    """Asset allocation donut — figura larga con legenda integrata (centrata in ReportLab)."""
     w_az  = (df[wcol] * df["az_pct"]).sum()
     w_obb = (df[wcol] * df["obb_pct"]).sum()
     if w_az + w_obb < 0.001:
         return None
-    fig, ax = plt.subplots(figsize=(5.5, 5.5))
+    fig, (ax, ax_leg) = plt.subplots(1, 2, figsize=(8.5, 3.8),
+                                     gridspec_kw={"width_ratios": [1, 0.7]})
     _, _, autotexts = ax.pie(
         [w_az, w_obb], colors=["#1B4FBB", "#2D9D78"],
         autopct=lambda p: f"{p:.1f}%" if p >= 5 else "",
         pctdistance=0.70,
-        wedgeprops=dict(width=0.58, edgecolor="white", linewidth=2.5),
+        wedgeprops=dict(width=0.60, edgecolor="white", linewidth=2.5),
         startangle=90,
     )
     for at in autotexts:
-        at.set_fontsize(10); at.set_color("white"); at.set_fontweight("bold")
+        at.set_fontsize(11); at.set_color("white"); at.set_fontweight("bold")
     ax.text(0, 0, "Asset\nAlloc.", ha="center", va="center",
             fontsize=11, fontweight="bold", color="#0D1B2A")
+    ax_leg.axis("off")
+    ax_leg.add_patch(plt.Rectangle((0.02, 0.56), 0.12, 0.12,
+                                   color="#1B4FBB", transform=ax_leg.transAxes))
+    ax_leg.add_patch(plt.Rectangle((0.02, 0.30), 0.12, 0.12,
+                                   color="#2D9D78", transform=ax_leg.transAxes))
+    ax_leg.text(0.19, 0.62, f"Azionario  {w_az*100:.1f}%",
+                transform=ax_leg.transAxes, fontsize=12,
+                fontweight="bold", color="#0D1B2A", va="center")
+    ax_leg.text(0.19, 0.36, f"Obbligazionario  {w_obb*100:.1f}%",
+                transform=ax_leg.transAxes, fontsize=12,
+                fontweight="bold", color="#0D1B2A", va="center")
     fig.patch.set_facecolor("#FFFFFF")
-    plt.tight_layout(pad=0.3)
+    plt.tight_layout(pad=0.2)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig); buf.seek(0)
@@ -2616,34 +2628,21 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     combo1 = Table([[pie_img, leg_tbl]], colWidths=[PIE_W, LEG_W])
     combo1.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
 
-    # — Grafico 2: asset allocation — piccola, affiancata alla legenda (sotto la torta) —
-    PIE_W2 = 5.0 * cm
+    # — Grafico 2: asset allocation — figura matplotlib larga (donut + legenda integrata) —
     macro_buf = _mpl_macro_pie(d_act, wcol)
     macro_block = []
     if macro_buf:
-        macro_img = RLImage(macro_buf, width=PIE_W2, height=PIE_W2)
-        w_az_v  = (d_act[wcol] * d_act["az_pct"]).sum()
-        w_obb_v = (d_act[wcol] * d_act["obb_pct"]).sum()
-        macro_leg_rows = [
-            [_dot("#1B4FBB"), Paragraph(f'Azionario  <b>{w_az_v*100:.1f}%</b>', LG)],
-            [_dot("#2D9D78"), Paragraph(f'Obbligazionario  <b>{w_obb_v*100:.1f}%</b>', LG)],
+        _M_W = 14.0 * cm
+        _M_H = _M_W * (3.8 / 8.5)
+        _M_PAD = (PW - _M_W) / 2
+        macro_img = RLImage(macro_buf, width=_M_W, height=_M_H)
+        from reportlab.platypus import Indenter
+        macro_block = [
+            Spacer(1, 8),
+            Indenter(left=_M_PAD),
+            macro_img,
+            Indenter(left=-_M_PAD),
         ]
-        macro_leg_inner = Table(macro_leg_rows, colWidths=[DOT_W, 5*cm])
-        macro_leg_inner.setStyle(TableStyle([
-            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 4),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-            ("LEFTPADDING",   (1,0), (1,-1),  5),
-            ("LEFTPADDING",   (0,0), (0,-1),  0),
-        ]))
-        # Torta macro + legenda affiancate, allineate sinistra
-        macro_row = Table([[macro_img, macro_leg_inner]],
-                          colWidths=[PIE_W2, PW - PIE_W2])
-        macro_row.setStyle(TableStyle([
-            ("VALIGN",  (0,0), (-1,-1), "MIDDLE"),
-            ("PADDING", (0,0), (-1,-1), 0),
-        ]))
-        macro_block = [Spacer(1, 6), macro_row]
 
     # Tutto il blocco grafici in KeepTogether → rimane sulla stessa pagina
     story.append(KeepTogether([combo1] + macro_block))
