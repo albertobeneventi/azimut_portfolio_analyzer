@@ -2347,11 +2347,14 @@ def _az_portfolio_mu_sigma(
     mu_vec  = np.array([_az_subcat_prior(nm, mc) for nm, mc in zip(nomi, macro)])
     vol_vec = []
     n_with_vol = 0
+    missing_vol: list[str] = []
     for nm, mc in zip(nomi, macro):
         v, ok = _get_vol(nm, mc)
         vol_vec.append(v)
         if ok:
             n_with_vol += 1
+        else:
+            missing_vol.append(nm)
     vol_vec = np.array(vol_vec)
 
     # Matrice covarianza con correlazioni categoriali
@@ -2367,7 +2370,7 @@ def _az_portfolio_mu_sigma(
     mu_ptf    = float(w @ mu_vec)
     var_ptf   = float(w @ cov @ w)
     sigma_ptf = float(np.sqrt(max(var_ptf, 0.0)))
-    return mu_ptf, sigma_ptf, n_with_vol, n
+    return mu_ptf, sigma_ptf, n_with_vol, n, missing_vol
 
 
 def _ibbotson_cone_png(mu: float, sigma: float, capitale: float,
@@ -3203,7 +3206,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # CONO DI IBBOTSON
     # ════════════════════════════════════════════════════════
     try:
-        _ib_mu, _ib_sig, _ib_n_ok, _ib_n_tot = _az_portfolio_mu_sigma(
+        _ib_mu, _ib_sig, _ib_n_ok, _ib_n_tot, _ib_missing = _az_portfolio_mu_sigma(
             d_sorted, wcol, fund_data, factbook_data, get_fb)
         _ib_cap = 100_000.0
         _ib_hor = 10
@@ -3286,6 +3289,15 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             "la covarianza di portafoglio usa correlazioni categoriali (non empiriche). "
             "Non costituisce previsione garantita.",
             CONE_NT))
+        if _ib_missing:
+            _miss_str = "; ".join(_ib_missing)
+            story.append(Paragraph(
+                f"&#9888; Fondi privi di dati di volatilita' storica ({len(_ib_missing)} su {_ib_n_tot}): "
+                f"{_miss_str}. "
+                "Per questi fondi la volatilita' e' sostituita dal valore di default categoriale. "
+                "Causa probabile: fondo di recente istituzione (storia < 1 anno) o non ancora "
+                "censito su FondiDoc. Utilizzare 'Aggiorna Dati' per recuperare eventuali dati disponibili.",
+                CONE_NT))
     except Exception:
         pass
 
@@ -5776,7 +5788,7 @@ def main():
 
         # ── Cono di Ibbotson ─────────────────────────────────────────────────
         with st.expander("📐 Cono di Ibbotson — Proiezione futura", expanded=False):
-            _ib_mu, _ib_sig, _ib_n_ok, _ib_n_tot = _az_portfolio_mu_sigma(
+            _ib_mu, _ib_sig, _ib_n_ok, _ib_n_tot, _ib_missing = _az_portfolio_mu_sigma(
                 _df_sorted, wcol, _fd_live, factbook_data,
                 lambda nome, key: _fb_metric(nome, key) or "")
 
@@ -5790,8 +5802,12 @@ def main():
                 _ib_rel   = round(40 + 35 * (_ib_n_ok / max(_ib_n_tot, 1)))
                 _ib_badge = "🟢" if _ib_rel >= 65 else ("🟡" if _ib_rel >= 50 else "🟠")
                 st.metric("Attendibilità stima", f"{_ib_badge} {_ib_rel}%",
-                          help=f"σ disponibile per {_ib_n_ok}/{_ib_n_tot} fondi. "
-                               "μ sempre stimato da prior categoriali (non dati storici).")
+                          help=(
+                              f"σ storica disponibile per {_ib_n_ok}/{_ib_n_tot} fondi. "
+                              "μ sempre stimato da prior forward-looking per categoria (non rendimenti storici). "
+                              "Il massimo raggiungibile è 75%, anche con tutti i dati di volatilità disponibili, "
+                              "perché il rendimento atteso è sempre una stima qualitativa."
+                          ))
                 st.caption(
                     f"Rendimento atteso portafoglio: **{_ib_mu*100:+.2f}%** &nbsp;·&nbsp; "
                     f"Volatilità: **{_ib_sig*100:.2f}%** &nbsp;·&nbsp; "
@@ -5876,6 +5892,23 @@ def main():
                     f"è matematicamente corretta ma non significa che i casi estremi siano probabili. "
                     f"Rendimento atteso: prior forward-looking per categoria (non dati storici recenti). "
                     f"Non costituisce previsione garantita.")
+                if _ib_missing:
+                    _miss_html = (
+                        "<div style='margin-top:10px;padding:10px 14px;"
+                        "background:#FFF7ED;border-left:3px solid #F59E0B;"
+                        "border-radius:4px;font-size:.78rem;color:#78350F;'>"
+                        f"<b>⚠️ {len(_ib_missing)} fondo/i privo/i di dati di volatilità storica</b> "
+                        "— la volatilità è sostituita dal default di categoria "
+                        f"(abbassa l'attendibilità a {_ib_rel}% invece del massimo 75%):<br>"
+                        "<ul style='margin:4px 0 0 16px;'>"
+                        + "".join(f"<li>{n}</li>" for n in _ib_missing)
+                        + "</ul>"
+                        "<span style='font-size:.72rem;'>"
+                        "Causa probabile: fondo di recente istituzione (storico &lt; 1 anno) o non ancora "
+                        "censito su FondiDoc. Premere <b>«Aggiorna Dati»</b> per recuperare i dati disponibili."
+                        "</span></div>"
+                    )
+                    st.markdown(_miss_html, unsafe_allow_html=True)
 
     # ── TAB 3 — RISCHIO ──────────────────────────────────────────────────────
     with tab3:
