@@ -3345,9 +3345,9 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
         _ib_hdr_row = [
             Paragraph(f"<b>{h}</b>", CONE_HD)
             for h in ["Anni",
-                       "Scenario\nsfavorevole\n(1 su 6 finisce sotto)",
-                       "Caso centrale\n(1 su 2 finisce sotto)",
-                       "Scenario\nfavorevole\n(1 su 6 finisce sopra)"]
+                       "Scenario sfavorevole\n5 su 6 finiscono\nsopra questa soglia",
+                       "Caso centrale\n3 su 6 finiscono\nsopra questa soglia",
+                       "Scenario favorevole\n1 su 6 finisce\nsopra questa soglia"]
         ]
         _ib_tbl_rows = [_ib_hdr_row]
         for _yr, _d2, _d1, _md, _u1, _u2 in _ib_rows:
@@ -3359,7 +3359,7 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                 Paragraph(_fmt(_u1), CONE_SM),
             ])
         _ib_tbl = Table(_ib_tbl_rows,
-            colWidths=[1.6*cm, 5.6*cm, 5.6*cm, 5.6*cm])
+            colWidths=[1.4*cm, 5.8*cm, 5.8*cm, 5.8*cm])
         _ib_tbl.setStyle(TableStyle([
             ("BACKGROUND",  (0, 0), (-1, 0), rl_colors.HexColor("#0D1B2A")),
             ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
@@ -6106,9 +6106,9 @@ def main():
                 _ib_df = pd.DataFrame(
                     [[r[0], r[2], r[3], r[4]] for r in _ib_scen_rows],
                     columns=["Anni",
-                             "Scenario sfavorevole (1 su 6 finisce sotto)",
-                             "Caso centrale (1 su 2 finisce sotto)",
-                             "Scenario favorevole (1 su 6 finisce sopra)"])
+                             "Scenario sfavorevole — 5 su 6 finiscono sopra questa soglia",
+                             "Caso centrale — 3 su 6 finiscono sopra questa soglia",
+                             "Scenario favorevole — 1 su 6 finisce sopra questa soglia"])
                 for _col in _ib_df.columns[1:]:
                     _ib_df[_col] = _ib_df[_col].apply(lambda v: f"€ {v:,.0f}".replace(",","."))
                 _ib_df["Anni"] = _ib_df["Anni"].astype(str)
