@@ -2687,9 +2687,15 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             ("LEFTPADDING",   (1,0), (1,-1),  7),
             ("LEFTPADDING",   (0,0), (0,-1),  0),
         ]))
+        _macro_inner = Table([[macro_img, macro_leg_inner]],
+                             colWidths=[PIE_W2, LEG2_W])
+        _macro_inner.setStyle(TableStyle([
+            ("VALIGN",  (0,0), (-1,-1), "MIDDLE"),
+            ("PADDING", (0,0), (-1,-1), 0),
+        ]))
         macro_row = Table(
-            [["", macro_img, macro_leg_inner, ""]],
-            colWidths=[PAD2, PIE_W2, LEG2_W, PAD2],
+            [[None, _macro_inner, None]],
+            colWidths=[PAD2, PIE_W2 + LEG2_W, PAD2],
         )
         macro_row.setStyle(TableStyle([
             ("VALIGN",  (0,0), (-1,-1), "MIDDLE"),
