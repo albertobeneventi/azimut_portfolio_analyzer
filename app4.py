@@ -2447,52 +2447,75 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     w_az  = (d_act[wcol]*d_act["az_pct"]).sum()*100
     w_obb = (d_act[wcol]*d_act["obb_pct"]).sum()*100
 
-    # ── ACCENT BAR ──────────────────────────────────────────
-    story.append(Table([[""]], colWidths=[PW], rowHeights=[10],
-        style=TableStyle([
-            ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#0D1B2A")),
-            ("LINEBELOW",(0,0),(-1,-1),3,rl_colors.HexColor("#C9A84C")),
-        ])))
-    story.append(Spacer(1,14))
-
-    # ── TITLE BLOCK ─────────────────────────────────────────
-    story.append(Paragraph("DEMO ANALISI", EY))
-    story.append(Spacer(1,4))
-    story.append(Paragraph(f"Portafoglio {ptf_name}", T))
-    story.append(Paragraph(
-        f"{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()}  ·  "
-        f"Dati al {datetime.date.today().strftime('%d %B %Y')}", SU))
-    story.append(HRFlowable(width="100%",thickness=0.8,color=rl_colors.HexColor("#E2E8F0"),spaceAfter=14))
+    # ── HEADER BAND (navy, titolo incluso) ──────────────────
+    _NAVY = rl_colors.HexColor("#0D1B2A")
+    _GOLD = rl_colors.HexColor("#C9A84C")
+    _EY_H = S("EYH", fontName="Helvetica", fontSize=7.5,
+               textColor=_GOLD, letterSpacing=2.0)
+    _T_H  = S("TH",  fontName="Helvetica-Bold", fontSize=21,
+               textColor=rl_colors.white, leading=25, spaceBefore=5)
+    _SU_H = S("SUH", fontName="Helvetica", fontSize=9.5,
+               textColor=rl_colors.HexColor("#94A3B8"), spaceBefore=7)
+    _hdr_inner = Table(
+        [[Paragraph("DEMO ANALISI", _EY_H)],
+         [Paragraph(f"Portafoglio {ptf_name}", _T_H)],
+         [Paragraph(
+             f"{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()}  ·  "
+             f"Dati al {datetime.date.today().strftime('%d %B %Y')}", _SU_H)]],
+        colWidths=[PW - 3.2*cm],
+    )
+    _hdr_inner.setStyle(TableStyle([
+        ("TOPPADDING",    (0,0),(-1,-1), 0),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 0),
+        ("LEFTPADDING",   (0,0),(-1,-1), 0),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 0),
+    ]))
+    _hdr_outer = Table([[_hdr_inner]], colWidths=[PW])
+    _hdr_outer.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0),(-1,-1), _NAVY),
+        ("TOPPADDING",    (0,0),(-1,-1), 16),
+        ("LEFTPADDING",   (0,0),(-1,-1), 18),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 18),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 16),
+        ("LINEBELOW",     (0,0),(-1,-1), 3, _GOLD),
+    ]))
+    story.append(_hdr_outer)
+    story.append(Spacer(1, 12))
 
     # ── KPI ─────────────────────────────────────────────────
     KC = S("KC", fontName="Helvetica", fontSize=8.5,
            textColor=rl_colors.HexColor("#1E293B"), leading=13, alignment=1)
-    def kpi_cell(v,l):
-        return Paragraph(f'<font size="18"><b>{v}</b></font><br/>'
+    def kpi_cell(v, l):
+        return Paragraph(f'<font size="20"><b>{v}</b></font><br/>'
                          f'<font size="8" color="#64748B">{l}</font>', KC)
     kpi = Table(
-        [[kpi_cell(str(n_fondi),"Fondi"),kpi_cell(f"{w_az:.1f}%","Quota Azionaria"),
-          kpi_cell(f"{w_obb:.1f}%","Quota Obbligazionaria"),
-          kpi_cell(datetime.date.today().strftime("%m/%Y"),"Data Report")]],
+        [[kpi_cell(str(n_fondi), "Fondi"),
+          kpi_cell(f"{w_az:.1f}%", "Quota Azionaria"),
+          kpi_cell(f"{w_obb:.1f}%", "Quota Obbligazionaria"),
+          kpi_cell(datetime.date.today().strftime("%m/%Y"), "Data Report")]],
         colWidths=[PW/4]*4,
-        rowHeights=[1.9*cm],
+        rowHeights=[2.0*cm],
     )
     kpi.setStyle(TableStyle([
-        ("BOX",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
-        ("INNERGRID",(0,0),(-1,-1),0.8,rl_colors.HexColor("#E2E8F0")),
-        ("BACKGROUND",(0,0),(-1,-1),rl_colors.HexColor("#F8FAFC")),
-        ("PADDING",(0,0),(-1,-1),12),("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ("BOX",       (0,0),(-1,-1), 0.8, rl_colors.HexColor("#E2E8F0")),
+        ("INNERGRID", (0,0),(-1,-1), 0.8, rl_colors.HexColor("#E2E8F0")),
+        ("BACKGROUND",(0,0),(-1,-1), rl_colors.HexColor("#F8FAFC")),
+        ("LINEABOVE", (0,0),(-1, 0), 2.5, _GOLD),
+        ("PADDING",   (0,0),(-1,-1), 12),
+        ("ALIGN",     (0,0),(-1,-1), "CENTER"),
+        ("VALIGN",    (0,0),(-1,-1), "MIDDLE"),
     ]))
     story.append(kpi)
 
     # ── PIE CHARTS con legende ReportLab ────────────────────
-    # Titolo sezione con meno spazio sopra per avvicinare il grafico al KPI
     SC_PIE = S("SCPIE", fontName="Helvetica-Bold", fontSize=11,
-               textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=6, spaceAfter=5)
+               textColor=rl_colors.HexColor("#0D1B2A"), spaceBefore=10, spaceAfter=5)
+    story.append(HRFlowable(width="100%", thickness=0.5,
+                            color=rl_colors.HexColor("#E2E8F0"), spaceAfter=0))
     story.append(Paragraph("Allocazione del Portafoglio", SC_PIE))
 
-    PIE_W  = 6.5 * cm          # torta fondi
-    LEG_W  = PW - PIE_W        # 11.5 cm per la legenda
+    PIE_W  = 7.5 * cm          # torta fondi
+    LEG_W  = PW - PIE_W        # legenda
     DOT_W  = 0.32 * cm
     # Ogni colonna di legenda (2 colonne affiancate)
     GAP_W  = 0.4 * cm          # gap tra le due colonne
