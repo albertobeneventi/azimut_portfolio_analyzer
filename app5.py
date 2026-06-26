@@ -6101,18 +6101,34 @@ def main():
                 )
                 st.plotly_chart(_fig_ib, use_container_width=True)
 
-                # Tabella ±1σ (percentili 16°–84°)
+                # Tabella ±1σ — HTML per header su due righe
                 _ib_scen_rows = _ibbotson_table_rows(_ib_mu, _ib_sig, float(_ib_cap), years=(1,3,5,10))
-                _ib_df = pd.DataFrame(
-                    [[r[0], r[2], r[3], r[4]] for r in _ib_scen_rows],
-                    columns=["Anni",
-                             "Scenario sfavorevole — 5 su 6 finiscono sopra questa soglia",
-                             "Caso centrale — 3 su 6 finiscono sopra questa soglia",
-                             "Scenario favorevole — 1 su 6 finisce sopra questa soglia"])
-                for _col in _ib_df.columns[1:]:
-                    _ib_df[_col] = _ib_df[_col].apply(lambda v: f"€ {v:,.0f}".replace(",","."))
-                _ib_df["Anni"] = _ib_df["Anni"].astype(str)
-                st.dataframe(_ib_df, hide_index=True, use_container_width=True)
+                _TH_IB = ("background:#0D1B2A;color:#fff;font-size:.75rem;font-weight:600;"
+                          "padding:8px 10px;text-align:center;line-height:1.35;")
+                _TD_IB = ("font-size:.82rem;padding:7px 10px;text-align:center;"
+                          "border-bottom:1px solid #E2E8F0;")
+                _ib_html = (
+                    "<table style='width:100%;border-collapse:collapse;margin-top:6px;'>"
+                    "<thead><tr>"
+                    f"<th style='{_TH_IB}width:8%;'>Anni</th>"
+                    f"<th style='{_TH_IB}'>Scenario sfavorevole<br><span style='font-weight:400;font-size:.7rem;'>5 su 6 finiscono sopra questa soglia</span></th>"
+                    f"<th style='{_TH_IB}'>Caso centrale<br><span style='font-weight:400;font-size:.7rem;'>3 su 6 finiscono sopra questa soglia</span></th>"
+                    f"<th style='{_TH_IB}'>Scenario favorevole<br><span style='font-weight:400;font-size:.7rem;'>1 su 6 finisce sopra questa soglia</span></th>"
+                    "</tr></thead><tbody>"
+                )
+                for _i, (_yr, _d2, _d1, _md, _u1, _u2) in enumerate(_ib_scen_rows):
+                    _bg = "#F8FAFC" if _i % 2 else "#ffffff"
+                    def _fv(v): return f"€ {v:,.0f}".replace(",",".")
+                    _ib_html += (
+                        f"<tr style='background:{_bg};'>"
+                        f"<td style='{_TD_IB}font-weight:600;'>{_yr}</td>"
+                        f"<td style='{_TD_IB}'>{_fv(_d1)}</td>"
+                        f"<td style='{_TD_IB}'>{_fv(_md)}</td>"
+                        f"<td style='{_TD_IB}'>{_fv(_u1)}</td>"
+                        f"</tr>"
+                    )
+                _ib_html += "</tbody></table>"
+                st.markdown(_ib_html, unsafe_allow_html=True)
                 st.caption(
                     f"**Come leggere la tabella** — Caso centrale: rendimento annuo composto "
                     f"{_ib_mu*100:+.1f}% (prior categoriale) meno il costo della varianza "
