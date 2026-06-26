@@ -3340,34 +3340,31 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                                      label=f"Portafoglio {ptf_name}")
         _ib_img = RLImage(io.BytesIO(_ib_png), width=18*cm, height=6.5*cm)
 
+        # Tabella: solo ±1σ (percentili 16°–84°)
         _ib_rows = _ibbotson_table_rows(_ib_mu, _ib_sig, _ib_cap, years=(1, 3, 5, 10))
         _ib_hdr_row = [
             Paragraph(f"<b>{h}</b>", CONE_HD)
             for h in ["Anni",
-                       "Scenario molto\nsfavorevole",
-                       "Scenario\nsfavorevole",
-                       "Caso centrale\n(più probabile)",
-                       "Scenario\nfavorevole",
-                       "Scenario molto\nfavorevole"]
+                       "Scenario\nsfavorevole\n(16° perc.)",
+                       "Caso centrale\n(mediana\n50° perc.)",
+                       "Scenario\nfavorevole\n(84° perc.)"]
         ]
         _ib_tbl_rows = [_ib_hdr_row]
         for _yr, _d2, _d1, _md, _u1, _u2 in _ib_rows:
             def _fmt(v): return f"€ {v:,.0f}".replace(",", ".")
             _ib_tbl_rows.append([
                 Paragraph(str(_yr), CONE_SM),
-                Paragraph(_fmt(_d2), CONE_SM),
                 Paragraph(_fmt(_d1), CONE_SM),
                 Paragraph(_fmt(_md), CONE_SM),
                 Paragraph(_fmt(_u1), CONE_SM),
-                Paragraph(_fmt(_u2), CONE_SM),
             ])
         _ib_tbl = Table(_ib_tbl_rows,
-            colWidths=[1.4*cm, 3.2*cm, 3.2*cm, 3.2*cm, 3.2*cm, 3.2*cm])
+            colWidths=[1.6*cm, 5.6*cm, 5.6*cm, 5.6*cm])
         _ib_tbl.setStyle(TableStyle([
             ("BACKGROUND",  (0, 0), (-1, 0), rl_colors.HexColor("#0D1B2A")),
             ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTSIZE",    (0, 0), (-1,-1), 8),
-            ("PADDING",     (0, 0), (-1,-1), 5),
+            ("PADDING",     (0, 0), (-1,-1), 6),
             ("ALIGN",       (0, 0), (-1,-1), "CENTER"),
             ("VALIGN",      (0, 0), (-1,-1), "MIDDLE"),
             ("ROWBACKGROUNDS",(0,1),(-1,-1),[rl_colors.white, rl_colors.HexColor("#F8FAFC")]),
@@ -3384,22 +3381,29 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
             f"Cono di Ibbotson — Proiezione futura  |  Attendibilita' della stima: {_ib_rel}%",
             CONE_H1))
         story.append(Paragraph(
-            f"Proiezione statistica del valore del portafoglio nel tempo, "
-            f"basata su rendimento atteso {_ib_mu*100:+.1f}% e volatilita' {_ib_sig*100:.1f}%. "
-            f"La banda chiara mostra il 95% dei possibili percorsi, "
-            f"quella scura il 68%. Il capitale di riferimento e' € {_ib_cap:,.0f}.".replace(",", "."),
+            f"Rendimento atteso: {_ib_mu*100:+.1f}% annuo  ·  "
+            f"Volatilita' annua: {_ib_sig*100:.1f}%  ·  "
+            f"Capitale di riferimento: € {_ib_cap:,.0f}".replace(",", "."),
             CONE_NT))
         story.append(Spacer(1, 6))
         story.append(_ib_img)
-        story.append(Spacer(1, 10))
+        story.append(Spacer(1, 8))
         story.append(_ib_tbl)
         story.append(Spacer(1, 6))
         story.append(Paragraph(
-            "La proiezione si basa su un modello log-normale (Ibbotson). "
-            "Non costituisce previsione garantita. "
-            "Rendimento atteso: prior forward-looking per categoria (non rendimenti storici recenti). "
-            "Volatilita': dati storici con floor categoriali. "
-            "Correlazioni tra fondi: stima categoriale (non empirica).",
+            "Come leggere il grafico: la linea centrale e' la mediana statistica dei percorsi simulati "
+            f"(rendimento annuo composto {_ib_mu*100:+.1f}% meno il costo della varianza). "
+            "La banda scura copre il 68% dei percorsi (±1 deviazione standard): "
+            "in 2 anni su 3 il valore finale si collocherebbe in quell'intervallo. "
+            "La banda chiara copre il 95% dei percorsi (±2 dev. std.): "
+            "solo il 5% degli scenari cade al di fuori. "
+            "La tabella mostra gli stessi tre scenari centrali (±1 dev. std.) per leggibilita'. "
+            "Metodologia: modello log-normale di Ibbotson. "
+            "Il rendimento atteso e' un prior forward-looking per categoria di fondo "
+            f"(es. azionario globale ~7.5%, obbligazionario ~3%), non i rendimenti passati recenti. "
+            "La volatilita' e' stimata da dati storici con soglia minima per categoria; "
+            "la covarianza di portafoglio usa correlazioni categoriali (non empiriche). "
+            "Non costituisce previsione garantita.",
                 CONE_NT))
     except Exception:
         pass
@@ -6097,19 +6101,29 @@ def main():
                 )
                 st.plotly_chart(_fig_ib, use_container_width=True)
 
+                # Tabella ±1σ (percentili 16°–84°)
                 _ib_scen_rows = _ibbotson_table_rows(_ib_mu, _ib_sig, float(_ib_cap), years=(1,3,5,10))
                 _ib_df = pd.DataFrame(
-                    _ib_scen_rows,
-                    columns=["Anni","Scenario molto sfavorevole","Scenario sfavorevole",
-                             "Caso centrale (più probabile)","Scenario favorevole","Scenario molto favorevole"])
+                    [[r[0], r[2], r[3], r[4]] for r in _ib_scen_rows],
+                    columns=["Anni",
+                             "Scenario sfavorevole (16° perc.)",
+                             "Caso centrale — mediana (50° perc.)",
+                             "Scenario favorevole (84° perc.)"])
                 for _col in _ib_df.columns[1:]:
                     _ib_df[_col] = _ib_df[_col].apply(lambda v: f"€ {v:,.0f}".replace(",","."))
                 _ib_df["Anni"] = _ib_df["Anni"].astype(str)
                 st.dataframe(_ib_df, hide_index=True, use_container_width=True)
                 st.caption(
-                    "Le proiezioni si basano sul modello log-normale di Ibbotson. "
-                    "Non costituiscono previsione garantita — i valori reali dipenderanno "
-                    "dall'andamento di mercato futuro.")
+                    f"**Come leggere la tabella** — Caso centrale: rendimento annuo composto "
+                    f"{_ib_mu*100:+.1f}% (prior categoriale) meno il costo della varianza "
+                    f"(drag = σ²/2 = {_ib_sig**2/2*100:.2f}%). "
+                    f"Sfavorevole/Favorevole = percorsi a ±1σ: in 2 anni su 3 il valore reale "
+                    f"si collocherebbe tra questi due valori. "
+                    f"Il grafico mostra anche la banda esterna ±2σ (95% dei percorsi). "
+                    f"La dispersione cresce con il tempo per effetto del compounding: "
+                    f"è matematicamente corretta ma non significa che i casi estremi siano probabili. "
+                    f"Rendimento atteso: prior forward-looking per categoria (non dati storici recenti). "
+                    f"Non costituisce previsione garantita.")
 
     # ── TAB 3 — RISCHIO ──────────────────────────────────────────────────────
     with tab3:
