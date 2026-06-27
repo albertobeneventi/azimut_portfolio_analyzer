@@ -2517,9 +2517,16 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
                textColor=rl_colors.white, leading=25, spaceBefore=5)
     _SU_H = S("SUH", fontName="Helvetica", fontSize=9.5,
                textColor=rl_colors.HexColor("#94A3B8"), spaceBefore=7)
+    if "SUGGERITO" in ptf_name:
+        _pdf_title = ptf_name.replace("SUGGERITO",
+            'SUGGERITO<font size="11" color="#94A3B8"> da Global Persp.</font>', 1)
+    elif ptf_name in ("PTF FULL", "PTF SHORT"):
+        _pdf_title = f'{ptf_name}<font size="11" color="#94A3B8"> ispirato da Global Persp.</font>'
+    else:
+        _pdf_title = ptf_name
     _hdr_inner = Table(
         [[Paragraph("DEMO ANALISI", _EY_H)],
-         [Paragraph(f"Portafoglio {ptf_name}", _T_H)],
+         [Paragraph(f"Portafoglio {_pdf_title}", _T_H)],
          [Paragraph(
              f"{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()}  ·  "
              f"Dati al {datetime.date.today().strftime('%d %B %Y')}", _SU_H)]],
@@ -4852,7 +4859,9 @@ def main():
     _is_suggerito = "SUGGERITO" in ptf_choice
     if _is_suggerito:
         _sc_key_hdr = st.session_state.get("_gp_sc_key", "Base")
-        ptf_label   = f"SUGGERITO — Scenario {_sc_key_hdr}"
+        ptf_label   = f"SUGGERITO <span style='font-size:0.42em;font-weight:normal;opacity:0.65;vertical-align:middle;'>da Global Persp.</span> — Scenario {_sc_key_hdr}"
+    elif ptf_label in ("PTF FULL", "PTF SHORT"):
+        ptf_label   = f"{ptf_label} <span style='font-size:0.42em;font-weight:normal;opacity:0.65;vertical-align:middle;'>ispirato da Global Persp.</span>"
 
     # ── Auto-fetch GP links quando si entra in SUGGERITO con fondi mancanti ──
     # Scatta solo la prima volta (o dopo un nuovo PDF). Dopo qualsiasi fetch
