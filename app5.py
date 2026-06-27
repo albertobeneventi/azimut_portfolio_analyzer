@@ -2626,7 +2626,12 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     # ── TITLE BLOCK ─────────────────────────────────────────
     story.append(Paragraph("DEMO ANALISI", EY))
     story.append(Spacer(1,4))
-    story.append(Paragraph(f"Portafoglio {ptf_name}", T))
+    if "SUGGERITO" in ptf_name:
+        _pdf_title = ptf_name.replace("SUGGERITO",
+            'SUGGERITO<font size="11" color="#94A3B8"> da Global Persp.</font>', 1)
+    else:
+        _pdf_title = ptf_name
+    story.append(Paragraph(f"Portafoglio {_pdf_title}", T))
     story.append(Paragraph(
         f"{PROFILE_ICONS.get(profile,'●')} Profilo {profile.title()}  ·  "
         f"Dati al {datetime.date.today().strftime('%d %B %Y')}", SU))
@@ -5095,7 +5100,7 @@ def main():
     _is_suggerito = "SUGGERITO" in ptf_choice
     if _is_suggerito:
         _sc_key_hdr = st.session_state.get("_gp_sc_key", "Base")
-        ptf_label   = f"SUGGERITO — Scenario {_sc_key_hdr}"
+        ptf_label   = f"SUGGERITO <span style='font-size:0.42em;font-weight:normal;opacity:0.65;vertical-align:middle;'>da Global Persp.</span> — Scenario {_sc_key_hdr}"
 
     # ── Auto-fetch GP links quando si entra in SUGGERITO con fondi mancanti ──
     # Scatta solo la prima volta (o dopo un nuovo PDF). Dopo qualsiasi fetch
