@@ -4856,12 +4856,14 @@ def main():
                     st.caption(f"📊 {_sc_info}")
 
     ptf_label = ptf_choice.split("  ",1)[1] if "  " in ptf_choice else ptf_choice
+    ptf_label_pdf = ptf_label
     _is_suggerito = "SUGGERITO" in ptf_choice
     if _is_suggerito:
-        _sc_key_hdr = st.session_state.get("_gp_sc_key", "Base")
-        ptf_label   = f"SUGGERITO <span style='font-size:0.42em;font-weight:normal;opacity:0.65;vertical-align:middle;'>da Global Persp.</span> — Scenario {_sc_key_hdr}"
+        _sc_key_hdr   = st.session_state.get("_gp_sc_key", "Base")
+        ptf_label_pdf = f"SUGGERITO — Scenario {_sc_key_hdr}"
+        ptf_label     = f"SUGGERITO <span style='font-size:0.42em;font-weight:normal;opacity:0.65;vertical-align:middle;'>da Global Persp.</span> — Scenario {_sc_key_hdr}"
     elif ptf_label in ("PTF FULL", "PTF SHORT"):
-        ptf_label   = f"{ptf_label} <span style='font-size:0.42em;font-weight:normal;opacity:0.65;vertical-align:middle;'>ispirato da Global Persp.</span>"
+        ptf_label     = f"{ptf_label} <span style='font-size:0.42em;font-weight:normal;opacity:0.65;vertical-align:middle;'>ispirato da Global Persp.</span>"
 
     # ── Auto-fetch GP links quando si entra in SUGGERITO con fondi mancanti ──
     # Scatta solo la prima volta (o dopo un nuovo PDF). Dopo qualsiasi fetch
@@ -5452,7 +5454,7 @@ def main():
             f"</table></div>"
         )
 
-    _ptf_row_label = f"◆ PORTAFOGLIO {ptf_label.upper()}"
+    _ptf_row_label = f"◆ PORTAFOGLIO {ptf_label_pdf.upper()}"
 
     # URL lookup: Excel hyperlinks first, FondiDoc cache as enriched fallback
     _fida_urls_raw = raw.get("fida_urls") or dict(MANUAL_URL_OVERRIDES)
@@ -6159,14 +6161,14 @@ def main():
     # ── Auto-generate PDF for stable portfolios (FULL/SHORT/SUGGERITO) ──────
     # For LIBERO the weights change on every interaction, so we keep the button.
     if not _is_free and st.session_state.get("_pdf_cache_key") != _pdf_cache_key:
-        _fname_auto = (f"Azimut_{ptf_label.replace(' ','_').replace('—','')}"
+        _fname_auto = (f"Azimut_{ptf_label_pdf.replace(' ','_').replace('—','')}"
                        f"_{profile}_{datetime.date.today().strftime('%Y%m%d')}.pdf")
         _pb_auto = st.progress(0, text="⚡ Genero PDF…")
         def _upd_auto(v, txt="⚡ Genero PDF…"):
             _pb_auto.progress(min(float(v), 1.0), text=txt)
         try:
             _pdf_auto = generate_pdf(
-                df_act, wcol, profile, ptf_label, _fd_live,
+                df_act, wcol, profile, ptf_label_pdf, _fd_live,
                 fida_df=fida_df, factbook_data=factbook_data,
                 cache_date=cache_date, print_unp=_print_unp,
                 qtl_charts=_qtl_charts_pdf,
@@ -6253,12 +6255,12 @@ def main():
                     pb.progress(min(float(v), 1.0), text=txt)
                 try:
                     pdf_bytes = generate_pdf(
-                        df_act, wcol, profile, ptf_label, fund_data,
+                        df_act, wcol, profile, ptf_label_pdf, fund_data,
                         fida_df=fida_df, factbook_data=factbook_data,
                         cache_date=cache_date, print_unp=_print_unp,
                         qtl_charts=_qtl_charts_pdf,
                         _progress_cb=_upd_pdf)
-                    fname = (f"Azimut_{ptf_label.replace(' ','_')}_{profile}_"
+                    fname = (f"Azimut_{ptf_label_pdf.replace(' ','_')}_{profile}_"
                              f"{datetime.date.today().strftime('%Y%m%d')}.pdf")
                     st.session_state["_pdf_bytes_ready"]  = pdf_bytes
                     st.session_state["_pdf_fname_ready"]  = fname
