@@ -2629,6 +2629,8 @@ def generate_pdf(df: pd.DataFrame, wcol: str, profile: str,
     if "SUGGERITO" in ptf_name:
         _pdf_title = ptf_name.replace("SUGGERITO",
             'SUGGERITO<font size="11" color="#94A3B8"> da Global Persp.</font>', 1)
+    elif ptf_name in ("PTF FULL", "PTF SHORT"):
+        _pdf_title = f'{ptf_name}<font size="11" color="#94A3B8"> ispirato da Global Persp.</font>'
     else:
         _pdf_title = ptf_name
     story.append(Paragraph(f"Portafoglio {_pdf_title}", T))
@@ -5101,6 +5103,8 @@ def main():
     if _is_suggerito:
         _sc_key_hdr = st.session_state.get("_gp_sc_key", "Base")
         ptf_label   = f"SUGGERITO <span style='font-size:0.42em;font-weight:normal;opacity:0.65;vertical-align:middle;'>da Global Persp.</span> — Scenario {_sc_key_hdr}"
+    elif ptf_label in ("PTF FULL", "PTF SHORT"):
+        ptf_label   = f"{ptf_label} <span style='font-size:0.42em;font-weight:normal;opacity:0.65;vertical-align:middle;'>ispirato da Global Persp.</span>"
 
     # ── Auto-fetch GP links quando si entra in SUGGERITO con fondi mancanti ──
     # Scatta solo la prima volta (o dopo un nuovo PDF). Dopo qualsiasi fetch
