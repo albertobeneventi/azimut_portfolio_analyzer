@@ -5830,40 +5830,81 @@ def main():
                 import numpy as np
                 import plotly.graph_objects as go
 
-                _t  = np.linspace(0, _ib_hor, 300)
+                # Punti discreti anno per anno (stile Quantalys)
+                _t_pts  = np.arange(0, _ib_hor + 1, dtype=float)
                 _mu_log = _ib_mu - _ib_sig ** 2 / 2
-                _med    = _ib_cap * np.exp(_mu_log * _t)
-                _up1    = _ib_cap * np.exp((_mu_log + _ib_sig) * _t)
-                _dn1    = _ib_cap * np.exp((_mu_log - _ib_sig) * _t)
-                _up2    = _ib_cap * np.exp((_mu_log + 2 * _ib_sig) * _t)
-                _dn2    = _ib_cap * np.exp((_mu_log - 2 * _ib_sig) * _t)
+                _med_v  = _ib_cap * np.exp(_mu_log * _t_pts)
+                _up1_v  = _ib_cap * np.exp((_mu_log + _ib_sig)   * _t_pts)
+                _dn1_v  = _ib_cap * np.exp((_mu_log - _ib_sig)   * _t_pts)
+                _up2_v  = _ib_cap * np.exp((_mu_log + 2*_ib_sig) * _t_pts)
+                _dn2_v  = _ib_cap * np.exp((_mu_log - 2*_ib_sig) * _t_pts)
+
+                _lbl_step = 1 if _ib_hor <= 12 else (2 if _ib_hor <= 20 else 5)
+
+                def _lbl(arr):
+                    out = []
+                    for i, v in enumerate(arr):
+                        if int(_t_pts[i]) % _lbl_step == 0:
+                            if v >= 1_000_000:
+                                out.append(f"{v/1_000_000:.1f}M")
+                            elif v >= 1_000:
+                                out.append(f"{v/1_000:.0f}K")
+                            else:
+                                out.append(f"{v:.0f}")
+                        else:
+                            out.append("")
+                    return out
 
                 _fig_ib = go.Figure()
                 _fig_ib.add_trace(go.Scatter(
-                    x=np.concatenate([_t, _t[::-1]]),
-                    y=np.concatenate([_up2, _dn2[::-1]]),
-                    fill="toself", fillcolor="rgba(191,219,254,0.45)",
+                    x=np.concatenate([_t_pts, _t_pts[::-1]]),
+                    y=np.concatenate([_up2_v, _dn2_v[::-1]]),
+                    fill="toself", fillcolor="rgba(191,219,254,0.25)",
                     line=dict(width=0), name="95% dei percorsi (±2σ)"))
                 _fig_ib.add_trace(go.Scatter(
-                    x=np.concatenate([_t, _t[::-1]]),
-                    y=np.concatenate([_up1, _dn1[::-1]]),
-                    fill="toself", fillcolor="rgba(59,130,246,0.30)",
+                    x=np.concatenate([_t_pts, _t_pts[::-1]]),
+                    y=np.concatenate([_up1_v, _dn1_v[::-1]]),
+                    fill="toself", fillcolor="rgba(59,130,246,0.18)",
                     line=dict(width=0), name="68% dei percorsi (±1σ)"))
                 _fig_ib.add_trace(go.Scatter(
-                    x=_t, y=_med, mode="lines",
-                    line=dict(color="#1B4FBB", width=2),
+                    x=_t_pts, y=_up1_v,
+                    mode="lines+markers+text",
+                    line=dict(color="#3B82F6", width=1.8),
+                    marker=dict(size=6, color="#3B82F6"),
+                    text=_lbl(_up1_v), textposition="top center",
+                    textfont=dict(size=10, color="#3B82F6"),
+                    name="Favorevole (±1σ)"))
+                _fig_ib.add_trace(go.Scatter(
+                    x=_t_pts, y=_med_v,
+                    mode="lines+markers+text",
+                    line=dict(color="#1B4FBB", width=2.5),
+                    marker=dict(size=7, color="#1B4FBB"),
+                    text=_lbl(_med_v), textposition="top center",
+                    textfont=dict(size=10, color="#1B4FBB"),
                     name="Percorso centrale (mediana)"))
-                _fig_ib.add_hline(y=_ib_cap, line_dash="dot", line_color="#94A3B8",
-                                  annotation_text=f"Capitale: € {_ib_cap:,.0f}".replace(",","."))
-                _y_min = min(_ib_cap * 0.40, float(_dn2.min()) * 0.92)
-                _y_max = float(_up2.max()) * 1.05
+                _fig_ib.add_trace(go.Scatter(
+                    x=_t_pts, y=_dn1_v,
+                    mode="lines+markers+text",
+                    line=dict(color="#64748B", width=1.8),
+                    marker=dict(size=6, color="#64748B"),
+                    text=_lbl(_dn1_v), textposition="bottom center",
+                    textfont=dict(size=10, color="#64748B"),
+                    name="Sfavorevole (±1σ)"))
+                _fig_ib.add_hline(y=_ib_cap, line_dash="dot", line_color="#CBD5E1",
+                                  annotation_text=f"Capitale: € {_ib_cap:,.0f}".replace(",","."),
+                                  annotation_font_size=9)
+                _y_min = float(_dn1_v.min()) * 0.82
+                _y_max = float(_up1_v.max()) * 1.18
                 _fig_ib.update_layout(
-                    height=380,
+                    height=430,
                     margin=dict(l=10, r=10, t=30, b=10),
                     legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
-                    xaxis=dict(title="Anni"),
-                    yaxis=dict(title="Valore (€)", range=[_y_min, _y_max], tickformat=",.0f"),
+                    xaxis=dict(title="Anni", tickmode="linear", tick0=0, dtick=_lbl_step,
+                               showgrid=True, gridcolor="#F1F5F9"),
+                    yaxis=dict(title="Valore (€)", range=[_y_min, _y_max],
+                               tickformat=",.0f", showgrid=True, gridcolor="#F1F5F9"),
                     plot_bgcolor="white", paper_bgcolor="white",
+                    hovermode="x unified",
                 )
                 st.plotly_chart(_fig_ib, use_container_width=True)
 
