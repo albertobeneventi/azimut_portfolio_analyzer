@@ -5337,8 +5337,9 @@ def main():
                     _existing = _fd_merged.get(_gk, {})
                     if _existing.get("analysis") and not (_gv or {}).get("analysis"):
                         _upd = dict(_existing)
-                        if (_gv or {}).get("url"):  _upd["url"]  = _gv["url"]
-                        if (_gv or {}).get("isin"): _upd["isin"] = _gv["isin"]
+                        if (_gv or {}).get("url"):      _upd["url"]      = _gv["url"]
+                        if (_gv or {}).get("isin"):     _upd["isin"]     = _gv["isin"]
+                        if (_gv or {}).get("overview"): _upd["overview"] = _gv["overview"]
                         _fd_merged[_gk] = _upd
                     else:
                         _fd_merged[_gk] = _gv
