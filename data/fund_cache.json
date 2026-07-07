@@ -1345,48 +1345,6 @@
         }
       }
     },
-    "AZ F.1 Bd Aggregate Bond Euro A Cap EUR": {
-      "url": "https://www.fondidoc.it/d/Index/AZLOBOA/LU0194809330_az-f1-bd-aggregate-bond-euro-a-cap-eur",
-      "isin": "LU0194809330",
-      "overview": {
-        "cat_assog": "International Government Bond",
-        "srri": "2",
-        "start_date": "6/18/2004",
-        "income": "Accumulation",
-        "fida_rating": "1",
-        "fida_score": "-",
-        "fida_cat": "Bond World - Euro (EUR) - Corporate & Government",
-        "mgmt_fee": "1.20%",
-        "sub_fee": "1.50%",
-        "perf_fee": "20.00%"
-      },
-      "analysis": {
-        "nav": "6.332",
-        "last_update": "7/2/2026",
-        "daily_change": "-0.09%",
-        "ytd": "0.44%",
-        "perf_1y": "-0.27%",
-        "perf_3y": "2.76%",
-        "perf_5y": "-13.74%",
-        "vol_1y": "3.57%",
-        "vol_3y": "4.20%",
-        "vol_5y": "5.74%",
-        "neg_vol_1y": "3.28%",
-        "neg_vol_3y": "3.29%",
-        "neg_vol_5y": "4.79%",
-        "sharpe_1y": "Neg",
-        "sharpe_3y": "Neg",
-        "sharpe_5y": "Neg",
-        "sortino_1y": "Neg",
-        "annual_perf": {
-          "2021": "-3.51%",
-          "2022": "-16.35%",
-          "2023": "5.26%",
-          "2024": "0.09%",
-          "2025": "-0.97%"
-        }
-      }
-    },
     "AZ F.1 All. Global Balanced A Cap EUR": {
       "url": "https://www.fondidoc.it/d/Index/AZSTRAAZ/LU0262757841_az-f1-all-global-balanced-a-cap-eur",
       "isin": "LU0262757841",

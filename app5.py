@@ -1859,13 +1859,14 @@ def fetch_fund_data(index_url: str) -> dict:
     html_ana = _raw_get(_ana_en)
     ana = _parse_analysis(html_ana) if html_ana else {}
 
-    # Fallback italiano se la versione EN non produce dati utili
-    if not ana.get("perf_1y") and not ana.get("vol_1y") and _ana_it != _ana_en:
+    # Fallback italiano se mancano campi chiave (merge, non sostituzione)
+    if not ana.get("vol_1y") and _ana_it != _ana_en:
         html_ana_it = _raw_get(_ana_it)
         if html_ana_it:
             ana_it = _parse_analysis(html_ana_it)
-            if ana_it.get("perf_1y") or ana_it.get("vol_1y"):
-                ana = ana_it
+            for k, v in ana_it.items():
+                if v and not ana.get(k):
+                    ana[k] = v
 
     if ana:
         result["analysis"] = ana
