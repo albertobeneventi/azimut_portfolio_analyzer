@@ -3993,10 +3993,33 @@ def parse_global_perspectives(pdf_bytes: bytes):
         info = (f"Equity {info_m.group(1)}% · Bond {info_m.group(2)}%"
                 f" · Private Markets {info_m.group(3)}%") if info_m else ""
 
+        # ── 4e. Estrai paragrafi di modifica portafoglio ──────────────────────
+        _SC_NOTE_START = {
+            "Base": (r"Pertanto[,\s]+nello\s+scenario\s+base"
+                     r"|Sulla\s+base\s+dello\s+scenario\s+descritto\s+sopra"
+                     r"|l.esposizione\s+azionaria\s+del\s+portafoglio\s+consigliato\s+sale"),
+            "Bear": r"Sul\s+portafoglio\s+bilanciato\s+per\s+il\s+bear\s+case",
+            "Bull": r"Il\s+portafoglio\s+bilanciato\s+nel\s+bull\s+case\s+scenario\s+vede",
+        }
+        _NOTE_END_PAT = r"Il\s+portafoglio\s+consigliato\s+per\s+un\s+profilo\s+bilanciato"
+        note_text = ""
+        _ns_pat = _SC_NOTE_START.get(sc_name, "")
+        if _ns_pat:
+            _ns_m = re.search(_ns_pat, sect, re.IGNORECASE)
+            _ne_m = re.search(_NOTE_END_PAT, sect, re.IGNORECASE)
+            if _ns_m and _ne_m and _ns_m.start() < _ne_m.start():
+                _raw = sect[_ns_m.start():_ne_m.start()]
+                _raw = re.sub(r'Pagina\s+\d+\s+di\s+\d+[^\n]*\n?', '', _raw)
+                _raw = re.sub(r'Global\s+Perspectives\s*[-–][^\n]*\n?', '', _raw, flags=re.I)
+                _raw = re.sub(r'AZIMUT\s+VIEW\s+SCENARIO\s+\w+\s*\n?', '', _raw, flags=re.I)
+                _raw = re.sub(r'\n{3,}', '\n\n', _raw)
+                note_text = _raw.strip()
+
         result[sc_name] = {
             "info":           info,
             "funds":          records,
             "subcat_weights": sw,
+            "note_modifiche": note_text,
         }
 
     # ── 5. Estrai edizione / trimestre dalla prima pagina ────────────────────────
@@ -4156,6 +4179,15 @@ def suggerito_portfolio_ui(sc_name: str, gp_scenario: dict,
         "sottocategoria.  Modifica liberamente i valori e l'analisi si "
         "aggiorna automaticamente quando la somma raggiunge 100 %."
     )
+
+    # ── Note modifiche dal PDF ─────────────────────────────────────────────────
+    _note_mod = gp_scenario.get("note_modifiche", "")
+    if _note_mod:
+        with st.expander("📋 Modifiche rispetto al trimestre precedente", expanded=False):
+            for _para in _note_mod.split("\n\n"):
+                _para = _para.strip()
+                if _para:
+                    st.markdown(_para)
 
     # ── Carica ratings Quantalys ──────────────────────────────────────────────
     _qtlr = load_quantalys_ratings()   # {ISIN: {"score": N, "globes": N}}
