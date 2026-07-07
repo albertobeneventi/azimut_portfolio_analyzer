@@ -1844,19 +1844,30 @@ def fetch_fund_data(index_url: str) -> dict:
         result["isin"] = isin
     html_idx = _fetch_html(index_url)
     if html_idx: result["overview"] = _parse_overview(html_idx)
-    # Prova prima URL inglese, poi fallback italiano se non produce dati
-    html_ana = _fetch_html(_to_ana_url(index_url))
-    if html_ana:
-        ana = _parse_analysis(html_ana)
-        if not ana.get("perf_1y") and not ana.get("vol_1y"):
-            # Nessun dato utile — riprova con URL italiana (senza /en/)
-            _it_url = _to_ana_url(index_url).replace("/en/d/", "/d/")
-            if _it_url != _to_ana_url(index_url):
-                html_ana_it = _fetch_html(_it_url)
-                if html_ana_it:
-                    ana_it = _parse_analysis(html_ana_it)
-                    if ana_it.get("perf_1y") or ana_it.get("vol_1y"):
-                        ana = ana_it
+
+    def _raw_get(url):
+        try:
+            r = requests.get(url, headers=FONDIDOC_HEADERS, timeout=8)
+            return r.text if r.status_code == 200 else None
+        except Exception:
+            return None
+
+    # Prova URL inglese (/en/d/Ana/...)
+    _ana_en = _to_en_url(_to_ana_url(index_url))
+    _ana_it = _to_ana_url(index_url)          # versione italiana (senza /en/)
+
+    html_ana = _raw_get(_ana_en)
+    ana = _parse_analysis(html_ana) if html_ana else {}
+
+    # Fallback italiano se la versione EN non produce dati utili
+    if not ana.get("perf_1y") and not ana.get("vol_1y") and _ana_it != _ana_en:
+        html_ana_it = _raw_get(_ana_it)
+        if html_ana_it:
+            ana_it = _parse_analysis(html_ana_it)
+            if ana_it.get("perf_1y") or ana_it.get("vol_1y"):
+                ana = ana_it
+
+    if ana:
         result["analysis"] = ana
     return result
 
