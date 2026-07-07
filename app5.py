@@ -1749,8 +1749,15 @@ def _parse_analysis(html: str) -> dict:
         if not rows: continue
         header = [td.get_text(strip=True) for td in rows[0].find_all(["th","td"])]
 
+        # Normalizza header: supporta sia inglese che italiano
+        def _norm_hdr(h):
+            _map = {"Anno corrente": "YTD", "1 anno": "1 year", "3 anni": "3 years",
+                    "5 anni": "5 years", "Analisi al": ""}
+            return _map.get(h, h)
+        header_n = [_norm_hdr(h) for h in header]
+
         # Performance table (has YTD column)
-        if "YTD" in header and "1 year" in header:
+        if "YTD" in header_n and "1 year" in header_n:
             def sg(cells, key, hdr):
                 try: return cells[hdr.index(key)] if hdr.index(key)<len(cells) else "—"
                 except ValueError: return "—"
@@ -1758,32 +1765,32 @@ def _parse_analysis(html: str) -> dict:
                 cells = [td.get_text(strip=True) for td in row.find_all("td")]
                 if not cells: continue
                 lbl = cells[0].lower()
-                if "performance" in lbl:
-                    d["ytd"]     = sg(cells,"YTD",header)
-                    d["perf_1y"] = sg(cells,"1 year",header)
-                    d["perf_3y"] = sg(cells,"3 years",header)
-                    d["perf_5y"] = sg(cells,"5 years",header)
+                if "performance" in lbl or "rendimento" in lbl:
+                    d["ytd"]     = sg(cells,"YTD",header_n)
+                    d["perf_1y"] = sg(cells,"1 year",header_n)
+                    d["perf_3y"] = sg(cells,"3 years",header_n)
+                    d["perf_5y"] = sg(cells,"5 years",header_n)
 
         # Risk table (1 year / 3 years / 5 years, NO YTD)
-        elif "1 year" in header and "YTD" not in header and len(header) >= 4:
+        elif "1 year" in header_n and "YTD" not in header_n and len(header_n) >= 4:
             for row in rows[1:]:
                 cells = [td.get_text(strip=True) for td in row.find_all("td")]
                 if not cells: continue
                 lbl = cells[0].lower()
                 def gv(idx): return cells[idx] if idx<len(cells) else "—"
-                if "volatility" in lbl and "negative" not in lbl:
+                if ("volatility" in lbl or "volatilit" in lbl) and "negat" not in lbl:
                     d["vol_1y"],d["vol_3y"],d["vol_5y"] = gv(1),gv(2),gv(3)
-                elif "negative" in lbl:
+                elif "negat" in lbl or "negativa" in lbl:
                     d["neg_vol_1y"] = gv(1)
-                    if len(header) > 2: d["neg_vol_3y"] = gv(2)
-                    if len(header) > 3: d["neg_vol_5y"] = gv(3)
+                    if len(header_n) > 2: d["neg_vol_3y"] = gv(2)
+                    if len(header_n) > 3: d["neg_vol_5y"] = gv(3)
                 elif "sharpe" in lbl:
                     d["sharpe_1y"],d["sharpe_3y"],d["sharpe_5y"] = gv(1),gv(2),gv(3)
                 elif "sortino" in lbl:
                     d["sortino_1y"] = gv(1)
                 elif "var" in lbl or "value at risk" in lbl:
                     d["var_1y"] = gv(1)
-                    if len(header) > 2: d["var_3y"] = gv(2)
+                    if len(header_n) > 2: d["var_3y"] = gv(2)
 
         # Annual performance (header contains year digits)
         elif any(h.isdigit() and len(h)==4 for h in header):
@@ -1837,8 +1844,20 @@ def fetch_fund_data(index_url: str) -> dict:
         result["isin"] = isin
     html_idx = _fetch_html(index_url)
     if html_idx: result["overview"] = _parse_overview(html_idx)
+    # Prova prima URL inglese, poi fallback italiano se non produce dati
     html_ana = _fetch_html(_to_ana_url(index_url))
-    if html_ana: result["analysis"] = _parse_analysis(html_ana)
+    if html_ana:
+        ana = _parse_analysis(html_ana)
+        if not ana.get("perf_1y") and not ana.get("vol_1y"):
+            # Nessun dato utile — riprova con URL italiana (senza /en/)
+            _it_url = _to_ana_url(index_url).replace("/en/d/", "/d/")
+            if _it_url != _to_ana_url(index_url):
+                html_ana_it = _fetch_html(_it_url)
+                if html_ana_it:
+                    ana_it = _parse_analysis(html_ana_it)
+                    if ana_it.get("perf_1y") or ana_it.get("vol_1y"):
+                        ana = ana_it
+        result["analysis"] = ana
     return result
 
 try:
