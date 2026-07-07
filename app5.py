@@ -248,6 +248,40 @@ def save_ms_cache(ms_data: dict):
         pass
 
 
+def save_quantalys_ratings(ratings: dict):
+    """Persist quantalys ratings a data/quantalys_ratings.json e lo pusha su GitHub."""
+    try:
+        fp = Path(__file__).parent / "data" / "quantalys_ratings.json"
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        fp.write_text(json.dumps(ratings, ensure_ascii=False, indent=2), encoding="utf-8")
+        _push_json_to_repo(ratings, "data/quantalys_ratings.json",
+                           f"auto: aggiorna quantalys_ratings {datetime.date.today().isoformat()}")
+    except Exception:
+        pass
+
+
+def _fetch_qtl_ratings_batch(isin_url_map: dict) -> dict:
+    """Fetch score e globes Quantalys per {ISIN: url}. Puro HTTP, niente Playwright."""
+    import re as _re
+    _SCORE_RE  = _re.compile(r'title="\s*(\d+)\s*/\s*100')
+    _GLOBES_RE = _re.compile(r'sprite-(\d)g\s+icon')
+    _H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept-Language": "it-IT,it;q=0.9"}
+    results = {}
+    for isin, url in isin_url_map.items():
+        try:
+            r = requests.get(url, headers=_H, timeout=12)
+            sm = _SCORE_RE.search(r.text)
+            gm = _GLOBES_RE.search(r.text)
+            results[isin] = {
+                "score":  int(sm.group(1)) if sm else None,
+                "globes": int(gm.group(1)) if gm else None,
+            }
+        except Exception:
+            pass
+    return results
+
+
 # ── EXCEL / GP PERSISTENT CACHE ──────────────────────────────────────────────
 # Persiste i dati parsed tra sessioni diverse: zero upload nel normale utilizzo,
 # ricaricamento solo quando ci sono aggiornamenti (mensile Excel, trimestrale GP).
@@ -5042,7 +5076,8 @@ def main():
         _has_excel   = bool(uploaded or _xl_cache_raw)
         _can_update  = bool(_has_excel or _gp_loaded_now)
         _is_fetching = any(st.session_state.get(k) for k in (
-            "_fetch_fd_requested", "_fetch_ms_requested", "_fetch_gp_requested"))
+            "_fetch_fd_requested", "_fetch_ms_requested", "_fetch_gp_requested",
+            "_fetch_qtl_requested"))
 
         if _is_fetching:
             # Tasto "in corso" — arancio pulsante, non cliccabile
@@ -5098,8 +5133,9 @@ def main():
                               "Morningstar e — se il GP è caricato — dati fondi GP."):
                 st.session_state["_session_needs_update"] = False
                 if _has_excel:
-                    st.session_state["_fetch_fd_requested"] = True
-                    st.session_state["_fetch_ms_requested"] = True
+                    st.session_state["_fetch_fd_requested"]  = True
+                    st.session_state["_fetch_ms_requested"]  = True
+                    st.session_state["_fetch_qtl_requested"] = True
                 if _gp_loaded_now:
                     st.session_state["_fetch_gp_requested"] = True
                 # NON chiamare st.rerun() qui: il click del bottone causa già un
@@ -5317,8 +5353,9 @@ def main():
             else:
                 st.warning("⚠️ Nessun fondo trovato — verifica il file Excel.")
     else:
-        st.session_state.pop("_fetch_fd_requested", None)
-        st.session_state.pop("_fetch_ms_requested", None)
+        st.session_state.pop("_fetch_fd_requested",  None)
+        st.session_state.pop("_fetch_ms_requested",  None)
+        st.session_state.pop("_fetch_qtl_requested", None)
 
     # ── GP fund FondiDoc lookup (runs with or without Excel) ─────────────────
     if st.session_state.pop("_fetch_gp_requested", False):
@@ -5370,6 +5407,27 @@ def main():
                     "Potrebbe essere un problema di rete o di nomi.")
             st.session_state["_gp_fetch_done"] = True
             _fetch_ran = True
+
+    # ── Quantalys ratings refresh ─────────────────────────────────────────────
+    if st.session_state.pop("_fetch_qtl_requested", False):
+        _qtl_cache_now = load_quantalys_cache()
+        _fd_for_qtl    = st.session_state.get("_scomp_fd") or load_fund_cache()[0]
+        _isin_to_url   = {
+            _fd_for_qtl[_fn].get("isin"): _qtl_cache_now[_fd_for_qtl[_fn].get("isin")]
+            for _fn in _fd_for_qtl
+            if _fd_for_qtl[_fn].get("isin") and _fd_for_qtl[_fn].get("isin") in _qtl_cache_now
+        }
+        if _isin_to_url:
+            with st.spinner(f"Quantalys: scarico rating per {len(_isin_to_url)} fondi…"):
+                _qtl_new = _fetch_qtl_ratings_batch(_isin_to_url)
+            if _qtl_new:
+                _qtl_existing = load_quantalys_ratings()
+                _qtl_merged   = {**_qtl_existing, **_qtl_new}
+                save_quantalys_ratings(_qtl_merged)
+                load_quantalys_ratings.clear()
+                _n_qtl = sum(1 for v in _qtl_new.values() if v.get("score") is not None)
+                st.success(f"Quantalys: {_n_qtl}/{len(_qtl_new)} rating aggiornati")
+                _fetch_ran = True
 
     # ── Unico rerun finale dopo tutti i fetch ─────────────────────────────────
     # Aggiorna sidebar (contatori, stato cache) senza svuotare i file uploader
