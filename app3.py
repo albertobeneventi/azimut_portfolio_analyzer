@@ -5038,8 +5038,9 @@ def main():
                         _fd_merged_new[_fk] = _fv
                     elif _fv and not _fv.get("analysis") and _fd_merged_new.get(_fk, {}).get("analysis"):
                         _upd2 = dict(_fd_merged_new[_fk])
-                        if _fv.get("url"):  _upd2["url"]  = _fv["url"]
-                        if _fv.get("isin"): _upd2["isin"] = _fv["isin"]
+                        if _fv.get("url"):      _upd2["url"]      = _fv["url"]
+                        if _fv.get("isin"):     _upd2["isin"]     = _fv["isin"]
+                        if _fv.get("overview"): _upd2["overview"] = _fv["overview"]
                         _fd_merged_new[_fk] = _upd2
                     elif not _fv:
                         pass
@@ -6347,8 +6348,9 @@ def main():
                     _existing_pdf = _fd_merged_pdf.get(_fk, {})
                     if _existing_pdf.get("analysis") and not (_fv or {}).get("analysis"):
                         _upd_pdf2 = dict(_existing_pdf)
-                        if (_fv or {}).get("url"):  _upd_pdf2["url"]  = _fv["url"]
-                        if (_fv or {}).get("isin"): _upd_pdf2["isin"] = _fv["isin"]
+                        if (_fv or {}).get("url"):      _upd_pdf2["url"]      = _fv["url"]
+                        if (_fv or {}).get("isin"):     _upd_pdf2["isin"]     = _fv["isin"]
+                        if (_fv or {}).get("overview"): _upd_pdf2["overview"] = _fv["overview"]
                         _fd_merged_pdf[_fk] = _upd_pdf2
                     else:
                         _fd_merged_pdf[_fk] = _fv
