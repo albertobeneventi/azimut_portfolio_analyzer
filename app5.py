@@ -302,7 +302,17 @@ def _records_to_df(records: list) -> pd.DataFrame:
     """Ricostruisce un DataFrame da una lista di dizionari."""
     if not records:
         return pd.DataFrame()
-    return pd.DataFrame(records)
+    df = pd.DataFrame(records)
+    if "gruppo" in df.columns:
+        _GRUPPO_TO_MACRO = {
+            "ALLOCATION":      "Bilanciati/Flessibili",
+            "AZIONARI (LONG)": "Azionari",
+            "BOND":            "Obbligazionari",
+        }
+        cat_col = df["categoria"] if "categoria" in df.columns else pd.Series([""] * len(df))
+        df["macro_cat"] = df["gruppo"].map(_GRUPPO_TO_MACRO).fillna(cat_col.apply(get_macro))
+        df = assign_colors(df)
+    return df
 
 
 def load_excel_cache() -> tuple:
