@@ -1546,7 +1546,18 @@ def _parse_ptf(wb, sheet_name: str) -> pd.DataFrame:
     for wcol, mcol in [("w_cons","mc"),("w_equil","me"),("w_accr","ma")]:
         raw = df["r_weight"]*df[mcol]
         df[wcol] = raw/raw.sum() if raw.sum()>0 else raw
-    df["macro_cat"] = df["categoria"].apply(get_macro)
+    # Usa il gruppo Excel (ALLOCATION/AZIONARI LONG/BOND) come fonte primaria
+    # per macro_cat: è sempre corretto e coerente con la struttura del portafoglio.
+    # La categoria Fida/Morningstar in col B può contenere "azionari" per fondi
+    # bilanciati o non matchare "bond" per i fondi BOND, dando classificazioni errate.
+    _GRUPPO_TO_MACRO = {
+        "ALLOCATION":      "Bilanciati/Flessibili",
+        "AZIONARI (LONG)": "Azionari",
+        "BOND":            "Obbligazionari",
+    }
+    df["macro_cat"] = df["gruppo"].map(_GRUPPO_TO_MACRO).fillna(
+        df["categoria"].apply(get_macro)
+    )
     df = assign_colors(df)
     return df
 
