@@ -2158,23 +2158,50 @@ def make_fund_pie(df, wcol, profile):
 
 
 def make_macro_bar(df, wcol):
-    agg = df[df[wcol]>0.001].groupby("macro_cat")[wcol].sum().reset_index().sort_values(wcol)
-    agg["pct"] = agg[wcol]*100
-    agg["color"] = agg["macro_cat"].map(MACRO_COLORS)
-    fig = go.Figure(go.Bar(
-        x=agg["pct"], y=agg["macro_cat"], orientation="h",
-        marker=dict(color=agg["color"].tolist(), line=dict(color="#fff",width=1)),
-        hovertemplate="<b>%{y}</b>: %{x:.1f}%<extra></extra>",
-        text=agg["pct"].apply(lambda v:f"{v:.1f}%"),
+    """Stacked bar: per ogni macro-categoria mostra componente azionaria (blu)
+    + obbligazionaria (verde). Barre sommano al 100%; segmenti blu sommano
+    alla Quota Azionaria e verdi alla Quota Obbligazionaria, coerenti con i KPI."""
+    df2 = df[df[wcol]>0.001].copy()
+    df2["az_c"]  = df2[wcol] * df2["az_pct"]
+    df2["obb_c"] = df2[wcol] * df2["obb_pct"]
+    agg = df2.groupby("macro_cat").agg(
+        az_c =("az_c",  "sum"),
+        obb_c=("obb_c", "sum"),
+        w    =(wcol,    "sum"),
+    ).reset_index()
+    agg = agg[agg["w"]>0.001].sort_values("w", ascending=True)
+
+    def _lbl(v): return f"{v*100:.1f}%" if v*100 >= 3.5 else ""
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=agg["macro_cat"], x=agg["obb_c"]*100, orientation="h",
+        name="Obbligazionario",
+        marker=dict(color=MACRO_COLORS["Obbligazionari"], line=dict(color="#fff",width=1)),
+        hovertemplate="<b>%{y}</b> — Obbligazionario: %{x:.1f}%<extra></extra>",
+        text=agg["obb_c"].apply(_lbl),
         textposition="inside", insidetextanchor="middle",
-        textfont=dict(color="#fff",size=11,family="DM Sans"),
+        textfont=dict(color="#fff", size=10, family="DM Sans"),
+    ))
+    fig.add_trace(go.Bar(
+        y=agg["macro_cat"], x=agg["az_c"]*100, orientation="h",
+        name="Azionario",
+        marker=dict(color=MACRO_COLORS["Azionari"], line=dict(color="#fff",width=1)),
+        hovertemplate="<b>%{y}</b> — Azionario: %{x:.1f}%<extra></extra>",
+        text=agg["az_c"].apply(_lbl),
+        textposition="inside", insidetextanchor="middle",
+        textfont=dict(color="#fff", size=10, family="DM Sans"),
     ))
     fig.update_layout(
-        margin=dict(t=10,b=10,l=10,r=10), paper_bgcolor="rgba(0,0,0,0)",
+        barmode="stack",
+        margin=dict(t=10, b=30, l=10, r=10), paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=False,showticklabels=False,range=[0,105]),
-        yaxis=dict(showgrid=False,tickfont=dict(size=11,family="DM Sans")),
-        height=max(160,len(agg)*48), bargap=0.28,
+        xaxis=dict(showgrid=False, showticklabels=False, range=[0,105]),
+        yaxis=dict(showgrid=False, tickfont=dict(size=11, family="DM Sans")),
+        height=max(170, len(agg)*56), bargap=0.28,
+        legend=dict(orientation="h", y=-0.18, x=0.5, xanchor="center",
+                    font=dict(size=10, family="DM Sans"), bgcolor="rgba(0,0,0,0)"),
+        showlegend=True,
     )
     return fig
 
