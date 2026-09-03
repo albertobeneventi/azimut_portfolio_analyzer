@@ -1718,6 +1718,36 @@
           "2025": "-0.97%"
         }
       }
+    },
+    "AZ F.1 Bd Target 2028 B Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM3746/LU2622175235_az-f1-bd-target-2028-b-cap-eur",
+      "isin": "LU2622175235",
+      "overview": {}
+    },
+    "AZ F.1 Eq. Emerging Asia FoF A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZMARKET/LU0107999889_az-f1-eq-emerging-asia-fof-a-cap-eur",
+      "isin": "LU0107999889",
+      "overview": {}
+    },
+    "AZ F.1 Bd Target 2029 B Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDFM9070/LU2951610190_az-f1-bd-target-2029-b-cap-eur",
+      "isin": "LU2951610190",
+      "overview": {}
+    },
+    "AZ F.1 Bd Total Return Bond I Cap EUR(i)": {
+      "url": "https://www.fondidoc.it/d/Index/ATUT4189/LU2168561988_az-f1-bd-total-return-bond-i-cap-eur",
+      "isin": "LU2168561988",
+      "overview": {}
+    },
+    "AZ F.1 Bd Enhanced Yield A Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/AZF125/LU0677519067_az-f1-bd-enhanced-yield-a-cap-eur",
+      "isin": "LU0677519067",
+      "overview": {}
+    },
+    "AZ F.1 Eq. Emerging Markets Technology B Cap EUR": {
+      "url": "https://www.fondidoc.it/d/Index/FDM03351/LU3081726278_az-f1-eq-emerging-markets-technology-b-cap-eur",
+      "isin": "LU3081726278",
+      "overview": {}
     }
   },
   "ms_data": {
